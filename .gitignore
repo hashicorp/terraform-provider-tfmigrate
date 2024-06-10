@@ -24,6 +24,12 @@ website/node_modules
 *.iml
 *.test
 *.iml
+.vscode/
+
+# Ignore the local dev requirements
+/main.tf
+terraform-provider-tfm
+UnitTestWorkingDir/.terraform.lock.hcl
 
 website/vendor
 

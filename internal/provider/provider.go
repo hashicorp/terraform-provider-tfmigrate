@@ -2,8 +2,9 @@ package provider
 
 import (
 	"context"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"os"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -42,7 +43,7 @@ type tfmProviderModel struct {
 
 // Metadata returns the provider type name.
 func (p *tfmProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "tfm"
+	resp.TypeName = "tfmigrate"
 	resp.Version = p.version
 }
 
@@ -121,7 +122,8 @@ func (p *tfmProvider) DataSources(_ context.Context) []func() datasource.DataSou
 // Resources defines the resources implemented in the provider.
 func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewExampleResource,
+		NewTerraformInitResource,
+		NewTerraformPlanResource,
 		NewDirectoryActionResource,
 	}
 }
