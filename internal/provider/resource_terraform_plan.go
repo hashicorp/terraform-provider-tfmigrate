@@ -2,7 +2,7 @@ package provider
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 	"terraform-provider-tfmigrate/internal/terraform"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -33,14 +33,14 @@ func (r *terraformPlan) Metadata(_ context.Context, req resource.MetadataRequest
 
 func (r *terraformPlan) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "TFM Migrate directory action resource",
+		MarkdownDescription: "Terraform Init Resource: This resource is used to execute terraform plan command in the said directory.",
 		Attributes: map[string]schema.Attribute{
 			"directory_path": schema.StringAttribute{
-				MarkdownDescription: "directory_path",
+				MarkdownDescription: "The directory path where terraform init needs to be executed.",
 				Required:            true,
 			},
 			"summary": schema.StringAttribute{
-				MarkdownDescription: "summary",
+				MarkdownDescription: "Capture the summary of the terraform plan executed at the target directory.",
 				Computed:            true,
 			},
 		},
@@ -65,7 +65,7 @@ func (r *terraformPlan) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.AddError("Error executing terraform plan:", err.Error())
 		data.Summary = types.StringValue("PLAN FAILED")
 	} else {
-		result_string := "Add " + strconv.Itoa(summary.Add) + ", Change " + strconv.Itoa(summary.Change) + ", Remove " + strconv.Itoa(summary.Remove)
+		result_string := fmt.Sprintf("Add %d, Change %d, Remove %d", summary.Add, summary.Change, summary.Remove)
 		tflog.Info(ctx, "\n\n\n Terraform Plan Summary:"+result_string)
 		data.Summary = types.StringValue(result_string)
 		tflog.Trace(ctx, "Terraform plan completed")

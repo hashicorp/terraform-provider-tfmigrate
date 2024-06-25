@@ -14,6 +14,11 @@ import (
 type terraformInit struct {
 }
 
+const (
+	TERRAFORM_INIT_SUCCESS = "Terraform Init Completed"
+	TERRAFORM_INIT_FAILED  = "Terraform Init Failed"
+)
+
 var (
 	_ resource.Resource = &terraformInit{}
 )
@@ -33,14 +38,14 @@ func (r *terraformInit) Metadata(_ context.Context, req resource.MetadataRequest
 
 func (r *terraformInit) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "TFM Migrate directory action resource",
+		MarkdownDescription: "Terraform Init Resource: This resource is used to execute terraform init command in the said directory.",
 		Attributes: map[string]schema.Attribute{
 			"directory_path": schema.StringAttribute{
-				MarkdownDescription: "directory_path",
+				MarkdownDescription: "The directory path where terraform init needs to be executed.",
 				Required:            true,
 			},
 			"summary": schema.StringAttribute{
-				MarkdownDescription: "summary",
+				MarkdownDescription: "On Success, it will return '" + TERRAFORM_INIT_SUCCESS,
 				Computed:            true,
 			},
 		},
@@ -62,18 +67,18 @@ func (r *terraformInit) Create(ctx context.Context, req resource.CreateRequest, 
 	if err != nil {
 		tflog.Error(ctx, "Error executing terraform init: Specified Dir Path doess not exist")
 		resp.Diagnostics.AddError("Error executing terraform init: Specified Dir Path doess not exist", "")
-		data.Summary = types.StringValue("INIT FAILED")
+		data.Summary = types.StringValue(TERRAFORM_INIT_FAILED)
+		return
 	}
-
 	tflog.Info(ctx, "Executing terraform init")
 	err = terraformOperation.ExecuteTerraformInit(ctx)
 	if err != nil {
 		tflog.Error(ctx, "Error executing terraform init: "+err.Error())
 		resp.Diagnostics.AddError("Error executing terraform init:", err.Error())
-		data.Summary = types.StringValue("INIT FAILED")
+		data.Summary = types.StringValue(TERRAFORM_INIT_FAILED)
 	} else {
-		data.Summary = types.StringValue("Terraform init completed")
-		tflog.Trace(ctx, "Terraform init completed")
+		data.Summary = types.StringValue(TERRAFORM_INIT_SUCCESS)
+		tflog.Trace(ctx, TERRAFORM_INIT_SUCCESS)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
