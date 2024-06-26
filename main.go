@@ -8,8 +8,9 @@ import (
 	"flag"
 	"log"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"terraform-provider-tfmigrate/internal/provider"
+
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
 // Run "go generate" to format example terraform files and generate the docs for the registry/website
@@ -20,7 +21,7 @@ import (
 
 // Run the docs generation tool, check its repository for more information on how it works and how docs
 // can be customized.
-//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name scaffolding
+//go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name tfmigrate
 
 var (
 	// these will be set by the goreleaser configuration
@@ -43,7 +44,7 @@ func main() {
 		// provider address is used in these tutorials in conjunction with a
 		// specific Terraform CLI configuration for manual development testing
 		// of this provider.
-		Address: "hashicorp.com/edu/tfm",
+		Address: "hashicorp.com/edu/tfmigrate",
 		Debug:   debug,
 	}
 
