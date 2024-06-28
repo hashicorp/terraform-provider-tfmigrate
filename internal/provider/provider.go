@@ -99,21 +99,18 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	// errors with provider-specific guidance.
 
 	if githubToken == "" {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("github_token"),
-			"Missing Github PAT Token",
-			"The provider cannot create the Github API client as there is a missing or empty value for the Github API client. "+
-				"Set the password value in the configuration or use the TFM_GITHUB_TOKEN environment variable. "+
-				"If either is already set, ensure the value is not empty.",
-		)
+		resp.Diagnostics.AddAttributeError(path.Root("github_token"), PROVIDER_PAT_TOKEN_MISSING,
+			PROVIDER_PAT_TOKEN_MISSING_DETAILED)
 	}
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Required to pass this information into the resources.
+	resp.ResourceData = githubToken
 }
 
-// DataSources defines the data sources implemented in the provider.
 // DataSources defines the data sources implemented in the provider.
 func (p *tfmProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return nil
@@ -124,6 +121,9 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewTerraformInitResource,
 		NewTerraformPlanResource,
+		NewGitResetResource,
+		NewGitCommitPushResource,
+		NewGithubPrResource,
 		NewDirectoryActionResource,
 	}
 }
