@@ -28,4 +28,4 @@ resource "tfmigrate_terraform_init" "init_example" {
 
 ### Read-Only
 
-- `summary` (String) On Success, it will return 'Terraform Init Completed
+- `summary` (String) On Success, it will return 'Terraform Init Completed.

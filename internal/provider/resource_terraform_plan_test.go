@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	validPlanTestDir   = `./../../UnitTestWorkingDir`
+	validPlanTestDir   = `./test-fixures/terraform-plan/`
 	invalidPlanTestDir = `/Some/Invalid/Path`
 )
 
-func TestValidPlanResource(t *testing.T) {
+func TestCreateUpdateOnPlanResource_Valid(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -24,17 +24,24 @@ func TestValidPlanResource(t *testing.T) {
 					resource.TestCheckResourceAttr("tfmigrate_terraform_plan.test", "summary", "Add 1, Change 0, Remove 0"),
 				),
 			},
+			{
+				Config: getPlanConfigsForDirPath(invalidPlanTestDir),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("tfmigrate_terraform_plan.test", "directory_path", invalidPlanTestDir),
+					resource.TestCheckResourceAttr("tfmigrate_terraform_plan.test", "summary", UPDATE_ACTION_NOT_SUPPORTED),
+				),
+			},
 		},
 	})
 }
 
-func TestInvalidPlanResource(t *testing.T) {
+func TestPathOnPlanResource_Invalid(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config:      getPlanConfigsForDirPath(invalidPlanTestDir),
-				ExpectError: regexp.MustCompile(`Error executing terraform init: Specified Dir Path doess not exist`),
+				ExpectError: regexp.MustCompile(DIR_PATH_DOES_NOT_EXIST),
 			},
 		},
 	})

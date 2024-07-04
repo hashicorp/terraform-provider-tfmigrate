@@ -63,12 +63,11 @@ func (r *terraformPlan) Create(ctx context.Context, req resource.CreateRequest, 
 	if err != nil {
 		tflog.Error(ctx, "Error executing terraform plan: "+err.Error())
 		resp.Diagnostics.AddError("Error executing terraform plan:", err.Error())
-		data.Summary = types.StringValue("PLAN FAILED")
+		data.Summary = types.StringValue(TERRAFORM_PLAN_FAILED)
 	} else {
-		result_string := fmt.Sprintf("Add %d, Change %d, Remove %d", summary.Add, summary.Change, summary.Remove)
-		tflog.Info(ctx, "\n\n\n Terraform Plan Summary:"+result_string)
+		result_string := fmt.Sprintf(TERRAFORM_PLAN_SUCCESS, summary.Add, summary.Change, summary.Remove)
+		tflog.Info(ctx, "Terraform Plan Summary:"+result_string)
 		data.Summary = types.StringValue(result_string)
-		tflog.Trace(ctx, "Terraform plan completed")
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -78,6 +77,14 @@ func (r *terraformPlan) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *terraformPlan) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data TerraformPlanModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
+	data.Summary = types.StringValue(UPDATE_ACTION_NOT_SUPPORTED)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *terraformPlan) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

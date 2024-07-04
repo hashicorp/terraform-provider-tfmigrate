@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	validInitTestDir   = `./../../UnitTestWorkingDir`
+	validInitTestDir   = `./test-fixures/terraform-init/`
 	invalidInitTestDir = `/Some/Invalid/Path`
 )
 
-func TestValidInitResource(t *testing.T) {
+func TestCreateUpdateOnInitResource_Valid(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -24,17 +24,24 @@ func TestValidInitResource(t *testing.T) {
 					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "summary", TERRAFORM_INIT_SUCCESS),
 				),
 			},
+			{
+				Config: getInitConfigsForDirPath(invalidInitTestDir),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "directory_path", invalidInitTestDir),
+					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "summary", UPDATE_ACTION_NOT_SUPPORTED),
+				),
+			},
 		},
 	})
 }
 
-func TestInvalidPathOnInitResource(t *testing.T) {
+func TestPathOnInitResource_Invalid(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config:      getInitConfigsForDirPath(invalidInitTestDir),
-				ExpectError: regexp.MustCompile(`Error executing terraform init: Specified Dir Path doess not exist`),
+				ExpectError: regexp.MustCompile(DIR_PATH_DOES_NOT_EXIST),
 			},
 		},
 	})

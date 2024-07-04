@@ -14,11 +14,6 @@ import (
 type terraformInit struct {
 }
 
-const (
-	TERRAFORM_INIT_SUCCESS = "Terraform Init Completed"
-	TERRAFORM_INIT_FAILED  = "Terraform Init Failed"
-)
-
 var (
 	_ resource.Resource = &terraformInit{}
 )
@@ -65,8 +60,8 @@ func (r *terraformInit) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	_, err := os.Stat(dirPath)
 	if err != nil {
-		tflog.Error(ctx, "Error executing terraform init: Specified Dir Path doess not exist")
-		resp.Diagnostics.AddError("Error executing terraform init: Specified Dir Path doess not exist", "")
+		tflog.Error(ctx, DIR_PATH_DOES_NOT_EXIST)
+		resp.Diagnostics.AddError(DIR_PATH_DOES_NOT_EXIST, DIR_PATH_DOES_NOT_EXIST_DETAILED)
 		data.Summary = types.StringValue(TERRAFORM_INIT_FAILED)
 		return
 	}
@@ -88,9 +83,16 @@ func (r *terraformInit) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *terraformInit) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	tflog.Warn(ctx, "Update in the configs detected, But this resource does not support update operation.")
+	var data TerraformInitModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
+	data.Summary = types.StringValue(UPDATE_ACTION_NOT_SUPPORTED)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *terraformInit) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	tflog.Warn(ctx, "Destroy in the configs detected, But this resource does not support destroy operation.")
+	tflog.Warn(ctx, DESTROY_ACTION_NOT_SUPPORTED)
 }
