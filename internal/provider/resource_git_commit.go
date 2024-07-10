@@ -27,9 +27,11 @@ func NewGitCommitPushResource() resource.Resource {
 type GitCommitPushModel struct {
 	DirectoryPath types.String `tfsdk:"directory_path"`
 	CommitMessage types.String `tfsdk:"commit_message"`
+	EnablePush    types.Bool   `tfsdk:"enable_push"`
 	RemoteName    types.String `tfsdk:"remote_name"`
 	BranchName    types.String `tfsdk:"branch_name"`
 	Summary       types.String `tfsdk:"summary"`
+	CommitHash    types.String `tfsdk:"commit_hash"`
 }
 
 func (r *gitCommitPush) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -48,6 +50,10 @@ func (r *gitCommitPush) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				MarkdownDescription: "The commit message that needs to be used for the commit.",
 				Required:            true,
 			},
+			"enable_push": schema.BoolAttribute{
+				MarkdownDescription: "Enable Push to remote branch after commit.",
+				Required:            true,
+			},
 			"remote_name": schema.StringAttribute{
 				MarkdownDescription: "The name of the remote to push to e.g origin.",
 				Required:            true,
@@ -55,6 +61,10 @@ func (r *gitCommitPush) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"branch_name": schema.StringAttribute{
 				MarkdownDescription: "The name of the remote branch to push to e.g. main.",
 				Required:            true,
+			},
+			"commit_hash": schema.StringAttribute{
+				MarkdownDescription: "The commit hash of the commit.",
+				Computed:            true,
 			},
 			"summary": schema.StringAttribute{
 				MarkdownDescription: "Summary of the Git Commit and Push Resource.",
@@ -80,22 +90,29 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	commitMessage := data.CommitMessage.ValueString()
 
-	tflog.Info(ctx, "Executing Git Commit Push")
+	tflog.Info(ctx, "Executing Git Commit")
 	commitHash, err := gitops.CreateCommit(dirPath, commitMessage)
 	if err != nil {
-		tflog.Error(ctx, "Error executing Git Commit Push: "+err.Error())
-		resp.Diagnostics.AddError("Error executing Git Commit Push:", err.Error())
+		tflog.Error(ctx, "Error executing Git Commit "+err.Error())
+		resp.Diagnostics.AddError("Error executing Git Commit", err.Error())
 		return
 	}
+	summary := "Git Commit with Commit Hash " + commitHash + " Completed."
+	data.CommitHash = types.StringValue(commitHash)
+	data.Summary = types.StringValue(summary)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
-	err = gitops.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.githubToken, true)
-	data.Summary = types.StringValue("Git Commit Push Completed with Commit Hash: " + commitHash)
-	if err != nil {
-		tflog.Error(ctx, "Error executing Git Commit Push: "+err.Error())
-		resp.Diagnostics.AddError("Error executing Git Commit Push:", err.Error())
-		return
+	if data.EnablePush.ValueBool() {
+		err = gitops.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.githubToken, true)
+		if err != nil {
+			tflog.Error(ctx, "Error executing Git Push: "+err.Error())
+			resp.Diagnostics.AddError("Error executing Git Push:", err.Error())
+			return
+		}
+		summary += "and Pushed"
 	}
 
+	data.Summary = types.StringValue(summary)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
