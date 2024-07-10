@@ -18,6 +18,7 @@ resource "tfmigrate_git_commit_push" "create_commit" {
   commit_message = "This is a sample Commit message"
   branch_name    = "feature-branch-name"
   remote_name    = "origin"
+  enable_push    = true
 }
 ```
 
@@ -29,8 +30,10 @@ resource "tfmigrate_git_commit_push" "create_commit" {
 - `branch_name` (String) The name of the remote branch to push to e.g. main.
 - `commit_message` (String) The commit message that needs to be used for the commit.
 - `directory_path` (String) The directory path where Git Commit needs to be executed.
+- `enable_push` (Boolean) Enable Push to remote branch after commit.
 - `remote_name` (String) The name of the remote to push to e.g origin.
 
 ### Read-Only
 
+- `commit_hash` (String) The commit hash of the commit.
 - `summary` (String) Summary of the Git Commit and Push Resource.
