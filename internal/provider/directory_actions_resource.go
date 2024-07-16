@@ -133,11 +133,13 @@ func RemoveBackendBlock(ctx context.Context, dirPath string, resp *resource.Crea
 	if err != nil {
 		tflog.Error(ctx, "[TFM] ERROR while reading terraform config", map[string]any{"error": err})
 		resp.Diagnostics.AddError("ERROR while reading terraform config", " Error "+err.Error())
+		return
 	}
 	file, diags := hclwrite.ParseConfig(content, filePath, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
 		tflog.Error(ctx, "[TFM] ERROR while parsing terraform config", map[string]any{"error": diags.Error()})
 		resp.Diagnostics.AddError("ERROR while parsing terraform config", " Error "+diags.Error())
+		return
 	}
 	for _, block := range file.Body().Blocks() {
 		if block.Type() == "terraform" {
@@ -162,11 +164,13 @@ func AddCloudBlock(ctx context.Context, data DirectoryActionResourceModel, resp 
 	if err != nil {
 		tflog.Error(ctx, "[TFM] ERROR while reading terraform config", map[string]any{"error": err})
 		resp.Diagnostics.AddError("ERROR while reading terraform config", " Error "+err.Error())
+		return
 	}
 	file, diags := hclwrite.ParseConfig(content, filePath, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
 		tflog.Error(ctx, "[TFM] ERROR while parsing terraform config", map[string]any{"error": diags.Error()})
 		resp.Diagnostics.AddError("ERROR while parsing terraform config", " Error "+diags.Error())
+		return
 	}
 	for _, block := range file.Body().Blocks() {
 		if block.Type() == "terraform" {

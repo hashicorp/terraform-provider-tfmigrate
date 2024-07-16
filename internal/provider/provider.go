@@ -61,7 +61,7 @@ func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 
 // Configure prepares a HashiCups API client for data sources and resources.
 func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	tflog.Info(ctx, "Configuring tfm provider")
+	tflog.Info(ctx, "Configuring tfmigrate provider")
 	// Retrieve provider data from configuration
 	var config tfmProviderModel
 	diags := req.Config.Get(ctx, &config)
@@ -125,5 +125,6 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewGitCommitPushResource,
 		NewGithubPrResource,
 		NewDirectoryActionResource,
+		NewStateMigrationResource,
 	}
 }
