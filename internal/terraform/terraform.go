@@ -57,6 +57,8 @@ type TerraformOuput struct {
 type TerraformOperationInterface interface {
 	ExecuteTerraformPlan(ctx context.Context) (*TerraformPlanSummary, error)
 	ExecuteTerraformInit(ctx context.Context) error
+	SelectWorkspace(ctx context.Context, workspace string) error
+	StatePull(ctx context.Context) ([]byte, error)
 }
 
 func (tOp *TerraformOperation) ExecuteTerraformPlan(ctx context.Context) (*TerraformPlanSummary, error) {
@@ -110,6 +112,38 @@ func (tOp *TerraformOperation) ExecuteTerraformInit(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (tOp *TerraformOperation) SelectWorkspace(ctx context.Context, workspace string) error {
+	var buffer, errBuffer bytes.Buffer
+
+	// Validate if the directory path exists
+
+	cmd := exec.Command("terraform", "workspace", "select", workspace, "-no-color")
+	cmd.Dir = tOp.DirectoryPath
+	cmd.Stdout = &buffer
+	cmd.Stderr = &errBuffer
+	err := cmd.Run()
+
+	if err != nil {
+		return errors.New(errBuffer.String())
+	}
+	return nil
+}
+
+func (tOp *TerraformOperation) StatePull(ctx context.Context) ([]byte, error) {
+	var buffer, errBuffer bytes.Buffer
+
+	cmd := exec.Command("terraform", "state", "pull")
+	cmd.Dir = tOp.DirectoryPath
+	cmd.Stdout = &buffer
+	cmd.Stderr = &errBuffer
+	err := cmd.Run()
+	if err != nil {
+		return nil, errors.New(errBuffer.String())
+	}
+
+	return buffer.Bytes(), nil
 }
 
 func parseTerraformOutput(buffer bytes.Buffer) []TerraformOuput {

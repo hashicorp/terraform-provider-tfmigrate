@@ -1,14 +1,27 @@
 terraform {
   required_providers {
-    tfm = {
-      source = "hashicorp.com/edu/tfm"
+    tfmigrate = {
+      source = "hashicorp.com/edu/tfmigrate"
     }
   }
 }
 
-provider "tfm" {
+provider "tfmigrate" {
   github_token = "token"
 }
+
+
+
+
+
+resource "tfmigrate_state_migration" "test-state" {
+  directory_path = "/Users/jitendra/hashi-code/terraform-migration-spikes"
+  local_workspace      = "default"
+  tfc_workspace_id = "ws-HKrNcFuuLDpCMLkR"
+  tfc_workspace = "prod-ws"
+}
+
+
 
 resource "tfm_directory_actions" "terraform-migration-spikes" {
   directory_path = "/Users/jitendra/hashi-code/terraform-migration-spikes"
