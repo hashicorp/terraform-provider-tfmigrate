@@ -35,6 +35,7 @@ func NewStateMigrationResource() resource.Resource {
 
 type stateMigrationModel struct {
 	DirectoryPath  types.String `tfsdk:"directory_path"`
+	Org            types.String `tfsdk:"org"`
 	LocalWorkspace types.String `tfsdk:"local_workspace"`
 	TFCWorkspaceID types.String `tfsdk:"tfc_workspace_id"`
 	TFCWorkspace   types.String `tfsdk:"tfc_workspace"`
@@ -52,13 +53,17 @@ func (r *stateMigration) Schema(_ context.Context, _ resource.SchemaRequest, res
 				MarkdownDescription: "The directory path where terraform root module is located",
 				Required:            true,
 			},
+			"org": schema.StringAttribute{
+				MarkdownDescription: "Org name",
+				Required:            true,
+			},
 			"local_workspace": schema.StringAttribute{
 				MarkdownDescription: "Terraform community workspace name",
 				Required:            true,
 			},
 			"tfc_workspace_id": schema.StringAttribute{
 				MarkdownDescription: "Terraform cloud workspace id",
-				Required:            true,
+				Required:            false,
 			},
 			"tfc_workspace": schema.StringAttribute{
 				MarkdownDescription: "Terraform cloud workspace name",
@@ -109,8 +114,18 @@ func (r *stateMigration) Create(ctx context.Context, req resource.CreateRequest,
 			return
 		}
 	}
+	workspaceId := data.TFCWorkspaceID.ValueString()
+	workspace := data.TFCWorkspace.ValueString()
+	if data.TFCWorkspaceID.IsNull() || data.TFCWorkspaceID.IsUnknown() {
+		workspaceDetails, err := tfeClient.Workspaces.Read(ctx, data.Org.ValueString(), workspace)
+		if err != nil {
+			tflog.Error(ctx, "Error fetching workspace data "+workspace, map[string]any{"error": err})
+			resp.Diagnostics.AddError("Error fetching workspace data "+workspace, err.Error())
+		}
+		workspaceId = workspaceDetails.ID
+	}
 
-	err = uploadState(ctx, state, data.TFCWorkspaceID.ValueString(), data.TFCWorkspace.ValueString(), tfeClient)
+	err = uploadState(ctx, state, workspaceId, workspace, tfeClient)
 	if err != nil {
 		tflog.Error(ctx, "Failed to  upload state", map[string]any{"error": err})
 		resp.Diagnostics.AddError("Failed to  upload state ", err.Error())
