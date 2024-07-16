@@ -47,5 +47,5 @@ jobs:
     with:
       # Update to tag name if switched to branch-based workflow
       product-version: '${{ github.ref_name }}'
-      release-notes: false
+      release-notes: true
       setup-go-version: '${{ needs.go-version.outputs.version }}'
