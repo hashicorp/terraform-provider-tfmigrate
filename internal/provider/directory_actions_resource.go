@@ -132,6 +132,18 @@ func (r *directoryActions) Read(ctx context.Context, req resource.ReadRequest, r
 
 // Update updates the resource and sets the updated Terraform state on success.
 func (r *directoryActions) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data DirectoryActionResourceModel
+
+	// Read Terraform plan data into the model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	data.Id = types.StringValue(data.DirectoryPath.ValueString())
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
