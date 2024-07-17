@@ -149,6 +149,5 @@ func (r *gitCommitPush) Configure(_ context.Context, req resource.ConfigureReque
 
 		return
 	}
-
 	r.githubToken = githubToken
 }

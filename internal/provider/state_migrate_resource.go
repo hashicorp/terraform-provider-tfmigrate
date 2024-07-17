@@ -3,18 +3,21 @@ package provider
 import (
 	"context"
 	"crypto/md5"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"terraform-provider-tfmigrate/internal/terraform"
+
 	"github.com/hashicorp/go-tfe"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"log"
-	"os"
-	"strings"
-	"terraform-provider-tfmigrate/internal/terraform"
 )
 
 type stateMigration struct {
@@ -191,6 +194,11 @@ func uploadState(ctx context.Context, state []byte, workspaceId string, workspac
 }
 
 func newTfeClient() (*tfe.Client, error) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
@@ -210,6 +218,7 @@ func newTfeClient() (*tfe.Client, error) {
 		Address:           TfcAddress,
 		Token:             tfeCredentials.Credentials.AppTerraformIo.Token,
 		RetryServerErrors: true,
+		HTTPClient:        client,
 	}
 	return tfe.NewClient(tfcConfig)
 }

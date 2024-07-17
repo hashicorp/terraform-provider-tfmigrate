@@ -2,8 +2,10 @@ package gitops
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
+	netHttp "net/http"
 	"os"
 	"regexp"
 	"slices"
@@ -208,13 +210,16 @@ func CreateCommit(repoPath, message string) (string, error) {
 	}
 
 	// Add all changes to the staging area.
-	_, err = worktree.Add(".")
+	err = worktree.AddWithOptions(&git.AddOptions{
+		All:  true,
+		Path: repoPath,
+	})
 	if err != nil {
 		return "", err
 	}
 
 	// Retrieve the author name and email from the Git config.
-	author := GlobalGitConfig()
+	author := GlobalGitConfig(repoPath)
 
 	// Commit the changes.
 	commit, err := worktree.Commit(message, &git.CommitOptions{
@@ -252,9 +257,10 @@ func PushCommit(repoPath string, remoteName string, branchName string, github_to
 	}
 
 	// Push the changes to the remote repository.
-	author := GlobalGitConfig()
+	author := GlobalGitConfig(repoPath)
 	err = repo.Push(&git.PushOptions{
-		RemoteName: remoteName,
+		InsecureSkipTLS: true,
+		RemoteName:      remoteName,
 		Auth: &http.BasicAuth{
 			Username: author.Name,
 			Password: authToken,
@@ -286,11 +292,23 @@ func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, g
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: authToken},
 	)
-	tc := oauth2.NewClient(ctx, ts)
+
+	ts2 := &oauth2.Transport{
+		Source: oauth2.ReuseTokenSource(nil, ts),
+		Base: &netHttp.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	tc := &netHttp.Client{
+		Transport: ts2,
+	}
 
 	client := github.NewClient(tc)
 
-	draft := true
+	draft := false
 	newPR := &github.NewPullRequest{
 		Title: github.String(title),
 		Head:  github.String(featureBranch),
@@ -327,9 +345,9 @@ func ListRemote(repoPath string) ([]string, error) {
 }
 
 // GetGitConfig retrieves a global Git configuration value.
-func GlobalGitConfig() GitUserConfig {
+func GlobalGitConfig(path string) GitUserConfig {
 	// Get the global git config file path
-	repo, err := git.PlainOpen(".")
+	repo, err := git.PlainOpen(path)
 	if err != nil {
 		return GitUserConfig{}
 	}
