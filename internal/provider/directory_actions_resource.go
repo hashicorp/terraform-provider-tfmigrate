@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"os"
+
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -11,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/zclconf/go-cty/cty"
-	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -226,10 +227,9 @@ func AddCloudBlock(ctx context.Context, data DirectoryActionResourceModel, backe
 				if isError {
 					return
 				}
-				cloudBlock.Body().SetAttributeValue("workspaces", cty.ObjectVal(map[string]cty.Value{
-					"project": cty.StringVal(data.Project.ValueString()),
-					"name":    cty.StringVal(workspace),
-				}))
+				workspacesBlock := cloudBlock.Body().AppendNewBlock("workspaces", nil)
+				workspacesBlock.Body().SetAttributeValue("project", cty.StringVal(data.Project.ValueString()))
+				workspacesBlock.Body().SetAttributeValue("name", cty.StringVal(workspace))
 			}
 			//----- multiple workspaces will write tags
 			if len(m.Elements()) > 1 {
@@ -249,10 +249,9 @@ func AddCloudBlock(ctx context.Context, data DirectoryActionResourceModel, backe
 					}
 					tags[i] = cty.StringVal(tag)
 				}
-				cloudBlock.Body().SetAttributeValue("workspaces", cty.ObjectVal(map[string]cty.Value{
-					"project": cty.StringVal(data.Project.ValueString()),
-					"tags":    cty.ListVal(tags),
-				}))
+				workspacesBlock := cloudBlock.Body().AppendNewBlock("workspaces", nil)
+				workspacesBlock.Body().SetAttributeValue("project", cty.StringVal(data.Project.ValueString()))
+				workspacesBlock.Body().SetAttributeValue("tags", cty.ListVal(tags))
 			}
 			break
 		}
