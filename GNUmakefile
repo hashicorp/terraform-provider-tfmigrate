@@ -39,7 +39,7 @@ build:
 run:
 	rm -rf .terraform .terraform.lock.hcl terraform.tfstate terraform.tfstate.backup
 	terraform init
-	terraform apply -auto-approve
+	TF_LOG=TRACE terraform apply -auto-approve
 
 .PHONY: runverb
 runverb:

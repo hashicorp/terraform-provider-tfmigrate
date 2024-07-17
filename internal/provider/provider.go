@@ -89,7 +89,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	// Default values to environment variables, but override
 	// with Terraform configuration value if set.
 
-	githubToken := os.Getenv("TFM_GITHUB_TOKEN")
+	githubToken := os.Getenv("GITHUB_TOKEN")
 
 	if !config.GithubToken.IsNull() {
 		githubToken = config.GithubToken.ValueString()
