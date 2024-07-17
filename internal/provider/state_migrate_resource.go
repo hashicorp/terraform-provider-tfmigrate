@@ -37,7 +37,6 @@ type stateMigrationModel struct {
 	DirectoryPath  types.String `tfsdk:"directory_path"`
 	Org            types.String `tfsdk:"org"`
 	LocalWorkspace types.String `tfsdk:"local_workspace"`
-	TFCWorkspaceID types.String `tfsdk:"tfc_workspace_id"`
 	TFCWorkspace   types.String `tfsdk:"tfc_workspace"`
 }
 
@@ -60,10 +59,6 @@ func (r *stateMigration) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"local_workspace": schema.StringAttribute{
 				MarkdownDescription: "Terraform community workspace name",
 				Required:            true,
-			},
-			"tfc_workspace_id": schema.StringAttribute{
-				MarkdownDescription: "Terraform cloud workspace id",
-				Required:            false,
 			},
 			"tfc_workspace": schema.StringAttribute{
 				MarkdownDescription: "Terraform cloud workspace name",
@@ -114,16 +109,14 @@ func (r *stateMigration) Create(ctx context.Context, req resource.CreateRequest,
 			return
 		}
 	}
-	workspaceId := data.TFCWorkspaceID.ValueString()
 	workspace := data.TFCWorkspace.ValueString()
-	if data.TFCWorkspaceID.IsNull() || data.TFCWorkspaceID.IsUnknown() {
-		workspaceDetails, err := tfeClient.Workspaces.Read(ctx, data.Org.ValueString(), workspace)
-		if err != nil {
-			tflog.Error(ctx, "Error fetching workspace data "+workspace, map[string]any{"error": err})
-			resp.Diagnostics.AddError("Error fetching workspace data "+workspace, err.Error())
-		}
-		workspaceId = workspaceDetails.ID
+	workspaceDetails, err := tfeClient.Workspaces.Read(ctx, data.Org.ValueString(), workspace)
+	if err != nil {
+		tflog.Error(ctx, "Error fetching workspace data "+workspace, map[string]any{"error": err})
+		resp.Diagnostics.AddError("Error fetching workspace data "+workspace, err.Error())
+		return
 	}
+	workspaceId := workspaceDetails.ID
 
 	err = uploadState(ctx, state, workspaceId, workspace, tfeClient)
 	if err != nil {
