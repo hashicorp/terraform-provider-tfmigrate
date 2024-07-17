@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -88,28 +87,29 @@ func (r *stateMigration) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError(DIR_PATH_DOES_NOT_EXIST, DIR_PATH_DOES_NOT_EXIST_DETAILED)
 		return
 	}
-	tflog.Info(ctx, "Migrating state")
-	err = tfOps.SelectWorkspace(ctx, data.LocalWorkspace.ValueString())
-	if err != nil {
-		tflog.Error(ctx, "Error selecting workspace ", map[string]any{"error": err})
-		resp.Diagnostics.AddError("Error selecting workspace "+data.LocalWorkspace.ValueString(), err.Error())
-		return
-	}
+
 	err = tfOps.ExecuteTerraformInit(ctx)
 	if err != nil {
 		tflog.Error(ctx, "Error initializing terraform ", map[string]any{"error": err})
 		resp.Diagnostics.AddError("Error initializing terraform "+data.LocalWorkspace.ValueString(), err.Error())
 		return
 	}
+
+	err = tfOps.SelectWorkspace(ctx, data.LocalWorkspace.ValueString())
+	if err != nil {
+		tflog.Error(ctx, "Error selecting workspace ", map[string]any{"error": err})
+		resp.Diagnostics.AddError("Error selecting workspace "+data.LocalWorkspace.ValueString(), err.Error())
+		return
+	}
+
 	state, err := tfOps.StatePull(ctx)
 	if err != nil {
 		tflog.Error(ctx, "Error downloading state ", map[string]any{"error": err})
 		resp.Diagnostics.AddError("Error downloading state "+data.LocalWorkspace.ValueString(), err.Error())
 		return
 	}
-
-	log.Println("State ", string(state[:]))
-
+	tflog.Info(ctx, "Migrating state from local ws : "+data.LocalWorkspace.ValueString()+" to tfc : "+data.TFCWorkspace.ValueString(),
+		map[string]interface{}{"state": string(state[:])})
 	if tfeClient == nil {
 		tfeClient, err = newTfeClient()
 		if err != nil {

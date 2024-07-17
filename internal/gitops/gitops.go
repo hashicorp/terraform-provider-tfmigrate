@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
-	netHttp "net/http"
 	"os"
 	"regexp"
 	"slices"
@@ -19,6 +18,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v45/github"
 	"golang.org/x/oauth2"
+
+	netHttp "net/http"
 )
 
 // create a separate file for the error messages
@@ -210,16 +211,13 @@ func CreateCommit(repoPath, message string) (string, error) {
 	}
 
 	// Add all changes to the staging area.
-	err = worktree.AddWithOptions(&git.AddOptions{
-		All:  true,
-		Path: repoPath,
-	})
+	_, err = worktree.Add(".")
 	if err != nil {
 		return "", err
 	}
 
 	// Retrieve the author name and email from the Git config.
-	author := GlobalGitConfig(repoPath)
+	author := GlobalGitConfig()
 
 	// Commit the changes.
 	commit, err := worktree.Commit(message, &git.CommitOptions{
@@ -257,7 +255,7 @@ func PushCommit(repoPath string, remoteName string, branchName string, github_to
 	}
 
 	// Push the changes to the remote repository.
-	author := GlobalGitConfig(repoPath)
+	author := GlobalGitConfig()
 	err = repo.Push(&git.PushOptions{
 		InsecureSkipTLS: true,
 		RemoteName:      remoteName,
@@ -293,6 +291,8 @@ func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, g
 		&oauth2.Token{AccessToken: authToken},
 	)
 
+	//tc := oauth2.NewClient(ctx, ts)
+
 	ts2 := &oauth2.Transport{
 		Source: oauth2.ReuseTokenSource(nil, ts),
 		Base: &netHttp.Transport{
@@ -308,7 +308,7 @@ func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, g
 
 	client := github.NewClient(tc)
 
-	draft := false
+	draft := true
 	newPR := &github.NewPullRequest{
 		Title: github.String(title),
 		Head:  github.String(featureBranch),
@@ -345,9 +345,9 @@ func ListRemote(repoPath string) ([]string, error) {
 }
 
 // GetGitConfig retrieves a global Git configuration value.
-func GlobalGitConfig(path string) GitUserConfig {
+func GlobalGitConfig() GitUserConfig {
 	// Get the global git config file path
-	repo, err := git.PlainOpen(path)
+	repo, err := git.PlainOpen(".")
 	if err != nil {
 		return GitUserConfig{}
 	}
