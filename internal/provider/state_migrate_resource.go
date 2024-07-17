@@ -92,6 +92,12 @@ func (r *stateMigration) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError("Error selecting workspace "+data.LocalWorkspace.ValueString(), err.Error())
 		return
 	}
+	err = tfOps.ExecuteTerraformInit(ctx)
+	if err != nil {
+		tflog.Error(ctx, "Error initializing terraform ", map[string]any{"error": err})
+		resp.Diagnostics.AddError("Error initializing terraform "+data.LocalWorkspace.ValueString(), err.Error())
+		return
+	}
 	state, err := tfOps.StatePull(ctx)
 	if err != nil {
 		tflog.Error(ctx, "Error downloading state ", map[string]any{"error": err})
