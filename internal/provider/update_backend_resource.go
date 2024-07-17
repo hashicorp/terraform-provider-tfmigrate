@@ -44,7 +44,7 @@ type DirectoryActionResourceModel struct {
 
 // Metadata returns the resource type name.
 func (r *directoryActions) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_directory_actions"
+	resp.TypeName = req.ProviderTypeName + "_update_backend"
 }
 
 // Schema defines the schema for the resource.
