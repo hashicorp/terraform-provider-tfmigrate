@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -41,7 +40,6 @@ type DirectoryActionResourceModel struct {
 	BackendFile   types.String `tfsdk:"backend_file_name"`
 	WorkspaceMap  types.Map    `tfsdk:"workspace_map"`
 	Tags          types.List   `tfsdk:"tags"`
-	GitCommitMsg  types.String `tfsdk:"git_commit_msg"`
 }
 
 // Metadata returns the resource type name.
@@ -58,11 +56,11 @@ func (r *directoryActions) Schema(_ context.Context, _ resource.SchemaRequest, r
 		Attributes: map[string]schema.Attribute{
 			"directory_path": schema.StringAttribute{
 				MarkdownDescription: "directory_path",
-				Optional:            true,
+				Required:            true,
 			},
 			"backend_file_name": schema.StringAttribute{
 				MarkdownDescription: "backend_file_name",
-				Optional:            true,
+				Required:            true,
 			},
 			"org": schema.StringAttribute{
 				MarkdownDescription: "Org name",
@@ -82,13 +80,6 @@ func (r *directoryActions) Schema(_ context.Context, _ resource.SchemaRequest, r
 				ElementType:         types.StringType,
 				Required:            true,
 			},
-			"git_commit_msg": schema.StringAttribute{
-				MarkdownDescription: "git commit message",
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("[SKIP CI] tfc migration commit"),
-			},
-
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "identifier",

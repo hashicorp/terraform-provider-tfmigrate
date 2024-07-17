@@ -362,7 +362,9 @@ func GlobalGitConfig() GitUserConfig {
 
 // Private helper function to open a repository.
 func openRepository(repoPath string) (*git.Repository, error) {
-	repo, err := git.PlainOpen(repoPath)
+	repo, err := git.PlainOpenWithOptions(repoPath, &git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open repository: %w", err)
 	}
