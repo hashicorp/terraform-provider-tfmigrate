@@ -17,14 +17,12 @@ TFM Migrate directory action resource
 
 ### Required
 
+- `backend_file_name` (String) backend_file_name
+- `directory_path` (String) directory_path
 - `org` (String) Org name
 - `project` (String) project name
-- `workspace` (String) workspace name
-
-### Optional
-
-- `directory_path` (String) directory_path
-- `git_commit_msg` (String) git commit message
+- `tags` (List of String) workspace tags
+- `workspace_map` (Map of String) Terraform cloud workspace mapping
 
 ### Read-Only
 
