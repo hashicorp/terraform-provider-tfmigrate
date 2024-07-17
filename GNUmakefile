@@ -32,6 +32,7 @@ build:
 	go build -o ${GOPATH}/bin/${BINARY_NAME} ${MAIN_PACKAGE_PATH}
 	rm -f ./${BINARY_NAME}
 	cp ${GOPATH}/bin/${BINARY_NAME} ${MAIN_PACKAGE_PATH}${BINARY_NAME}
+	cp ${GOPATH}/bin/${BINARY_NAME} ${HOME}/.terraform.d/plugins/registry.terraform.io/hashicorp/tfmigrate/0.1.0/darwin_arm64/${BINARY_NAME}
 
 .PHONY: run
 run:

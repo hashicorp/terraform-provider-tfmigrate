@@ -254,7 +254,8 @@ func PushCommit(repoPath string, remoteName string, branchName string, github_to
 	// Push the changes to the remote repository.
 	author := GlobalGitConfig()
 	err = repo.Push(&git.PushOptions{
-		RemoteName: remoteName,
+		InsecureSkipTLS: true,
+		RemoteName:      remoteName,
 		Auth: &http.BasicAuth{
 			Username: author.Name,
 			Password: authToken,
@@ -286,6 +287,7 @@ func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, g
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: authToken},
 	)
+
 	tc := oauth2.NewClient(ctx, ts)
 
 	client := github.NewClient(tc)
