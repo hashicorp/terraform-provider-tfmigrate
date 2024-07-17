@@ -137,6 +137,7 @@ func (r *stateMigration) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

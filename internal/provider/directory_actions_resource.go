@@ -140,7 +140,7 @@ func (r *directoryActions) Update(ctx context.Context, req resource.UpdateReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
+	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
 	data.Id = types.StringValue(data.DirectoryPath.ValueString())
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
