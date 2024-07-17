@@ -132,7 +132,13 @@ func (r *stateMigration) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *stateMigration) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-
+	var data stateMigrationModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *stateMigration) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
