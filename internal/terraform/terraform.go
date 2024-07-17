@@ -99,8 +99,6 @@ func (tOp *TerraformOperation) ExecuteTerraformPlan(ctx context.Context) (*Terra
 func (tOp *TerraformOperation) ExecuteTerraformInit(ctx context.Context) error {
 	var buffer, errBuffer bytes.Buffer
 
-	// Validate if the directory path exists
-
 	cmd := exec.Command("terraform", "init", "-no-color")
 	cmd.Dir = tOp.DirectoryPath
 	cmd.Stdout = &buffer
@@ -116,8 +114,6 @@ func (tOp *TerraformOperation) ExecuteTerraformInit(ctx context.Context) error {
 
 func (tOp *TerraformOperation) SelectWorkspace(ctx context.Context, workspace string) error {
 	var buffer, errBuffer bytes.Buffer
-
-	// Validate if the directory path exists
 
 	cmd := exec.Command("terraform", "workspace", "select", workspace, "-no-color")
 	cmd.Dir = tOp.DirectoryPath
