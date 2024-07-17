@@ -210,7 +210,10 @@ func CreateCommit(repoPath, message string) (string, error) {
 	}
 
 	// Add all changes to the staging area.
-	_, err = worktree.Add(".")
+	err = worktree.AddWithOptions(&git.AddOptions{
+		All:  true,
+		Path: repoPath,
+	})
 	if err != nil {
 		return "", err
 	}
