@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"log"
 	"os"
+	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -39,8 +41,8 @@ type GitUserConfig struct {
 
 // 1. CLONE A REMOTE REPOSITORY - not for implementation.
 func CloneRepository(repoURL, directory string) error {
-	url_regex := regexp.MustCompile(VALID_URL_REGEX)
-	if !url_regex.MatchString(repoURL) {
+	urlRegex := regexp.MustCompile(VALID_URL_REGEX)
+	if !urlRegex.MatchString(repoURL) {
 		return fmt.Errorf("invalid repository URL. It should be in the format: %s", VALID_REPO_URL_FORMAT)
 	}
 
@@ -187,11 +189,12 @@ func DeleteLocalBranch(repoPath, branchName string) error {
 
 // 6. CREATE A COMMIT IN LOCAL.
 func CreateCommit(repoPath, message string) (string, error) {
+
 	if len(message) > 255 {
 		return "", fmt.Errorf("commit message too long: must be 255 characters or less")
 	}
 
-	repo, err := git.PlainOpen(repoPath)
+	repo, err := openRepository(repoPath)
 	if err != nil {
 		return "", err
 	}
@@ -206,6 +209,7 @@ func CreateCommit(repoPath, message string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if status.IsClean() {
 		return "", fmt.Errorf("no changes to commit")
 	}
@@ -235,8 +239,8 @@ func CreateCommit(repoPath, message string) (string, error) {
 }
 
 // 7. PUSH COMMIT TO REMOTE.
-func PushCommit(repoPath string, remoteName string, branchName string, github_token string, force bool) error {
-	authToken := github_token
+func PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error {
+	authToken := githubToken
 	repo, err := openRepository(repoPath)
 	if err != nil {
 		return err
@@ -266,7 +270,7 @@ func PushCommit(repoPath string, remoteName string, branchName string, github_to
 		Force: force,
 	})
 	if err != nil {
-		fmt.Println("\n\n\n\n\n\n\n", github_token, "\n\n", author.Name, "\n\n\n\n\n\n ")
+		fmt.Println("\n\n\n\n\n\n\n", githubToken, "\n\n", author.Name, "\n\n\n\n\n\n ")
 		if err == git.NoErrAlreadyUpToDate {
 			log.Println("Everything is up-to-date")
 		} else {
@@ -277,7 +281,7 @@ func PushCommit(repoPath string, remoteName string, branchName string, github_to
 }
 
 // 8. Creates a pull request on GitHub.
-func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, github_token string) (string, error) {
+func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, githubToken string) (string, error) {
 
 	if len(strings.Split(repoIdentifier, "/")) != 2 {
 		return "", fmt.Errorf("invalid repository identifier. It should be in the format: owner/repository")
@@ -286,7 +290,7 @@ func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, g
 	repoOwner := strings.Split(repoIdentifier, "/")[0]
 	repoName := strings.Split(repoIdentifier, "/")[1]
 
-	authToken := github_token
+	authToken := githubToken
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: authToken},
@@ -370,4 +374,14 @@ func openRepository(repoPath string) (*git.Repository, error) {
 		return nil, fmt.Errorf("failed to open repository: %w", err)
 	}
 	return repo, nil
+}
+
+func PushCommitUsingGit(remoteName string, branchName string) error {
+	// execute git push command
+	out, err := exec.Command("git", "push", "-u", remoteName, branchName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to push the commit: %s", out)
+	}
+	tflog.Info(context.Background(), "Pushed the commit to remote", map[string]interface{}{"remote": remoteName, "branch": branchName})
+	return nil
 }
