@@ -217,7 +217,7 @@ func CreateCommit(repoPath, message string) (string, error) {
 	}
 
 	// Retrieve the author name and email from the Git config.
-	author := GlobalGitConfig()
+	author := GlobalGitConfig(repoPath)
 
 	// Commit the changes.
 	commit, err := worktree.Commit(message, &git.CommitOptions{
@@ -255,7 +255,7 @@ func PushCommit(repoPath string, remoteName string, branchName string, github_to
 	}
 
 	// Push the changes to the remote repository.
-	author := GlobalGitConfig()
+	author := GlobalGitConfig(repoPath)
 	err = repo.Push(&git.PushOptions{
 		InsecureSkipTLS: true,
 		RemoteName:      remoteName,
@@ -266,6 +266,7 @@ func PushCommit(repoPath string, remoteName string, branchName string, github_to
 		Force: force,
 	})
 	if err != nil {
+		fmt.Println("\n\n\n\n\n\n\n", github_token, "\n\n", author.Name, "\n\n\n\n\n\n ")
 		if err == git.NoErrAlreadyUpToDate {
 			log.Println("Everything is up-to-date")
 		} else {
@@ -308,7 +309,7 @@ func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, g
 
 	client := github.NewClient(tc)
 
-	draft := true
+	draft := false
 	newPR := &github.NewPullRequest{
 		Title: github.String(title),
 		Head:  github.String(featureBranch),
@@ -345,9 +346,9 @@ func ListRemote(repoPath string) ([]string, error) {
 }
 
 // GetGitConfig retrieves a global Git configuration value.
-func GlobalGitConfig() GitUserConfig {
+func GlobalGitConfig(repoPath string) GitUserConfig {
 	// Get the global git config file path
-	repo, err := git.PlainOpen(".")
+	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
 		return GitUserConfig{}
 	}
