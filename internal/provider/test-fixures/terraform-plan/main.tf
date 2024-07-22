@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 
 // Some resource without a provider since it is a unit test and 
 // handling creds is not needed
