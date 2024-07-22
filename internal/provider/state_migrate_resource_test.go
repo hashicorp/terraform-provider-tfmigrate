@@ -43,6 +43,9 @@ func TestStateMigrateResource(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("tfmigrate_state_migration.state-migration", "local_workspace", "default"),
+					resource.TestCheckResourceAttr("tfmigrate_state_migration.state-migration", "tfc_workspace", "test-workspace"),
+					resource.TestCheckResourceAttr("tfmigrate_state_migration.state-migration", "directory_path", "./test-fixures/terraform-init"),
+					resource.TestCheckResourceAttr("tfmigrate_state_migration.state-migration", "org", "absl"),
 				),
 			},
 		},
