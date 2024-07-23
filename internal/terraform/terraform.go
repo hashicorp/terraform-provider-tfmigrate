@@ -135,7 +135,10 @@ func (tOp *TerraformOperation) StatePull(ctx context.Context) ([]byte, error) {
 		log.Fatalf("error running NewTerraform: %s", err)
 		return nil, err
 	}
-	res, err := tf.StatePull(ctx)
+	res, pullEr := tf.StatePull(ctx)
+	if pullEr != nil {
+		return nil, pullEr
+	}
 	return []byte(res), nil
 }
 
