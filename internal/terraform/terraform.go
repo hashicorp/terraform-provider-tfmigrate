@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/hashicorp/terraform-exec/tfexec"
-	"log"
 	"os/exec"
 	"strings"
 	"time"
@@ -132,7 +131,6 @@ func (tOp *TerraformOperation) SelectWorkspace(ctx context.Context, workspace st
 func (tOp *TerraformOperation) StatePull(ctx context.Context) ([]byte, error) {
 	tf, err := tfexec.NewTerraform(tOp.DirectoryPath, "terraform")
 	if err != nil {
-		log.Fatalf("error running NewTerraform: %s", err)
 		return nil, err
 	}
 	res, pullEr := tf.StatePull(ctx)
