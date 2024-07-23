@@ -131,11 +131,11 @@ func (tOp *TerraformOperation) SelectWorkspace(ctx context.Context, workspace st
 func (tOp *TerraformOperation) StatePull(ctx context.Context) ([]byte, error) {
 	tf, err := tfexec.NewTerraform(tOp.DirectoryPath, "terraform")
 	if err != nil {
-		return nil, err
+		return nil, errors.New(err.Error())
 	}
 	res, pullEr := tf.StatePull(ctx)
 	if pullEr != nil {
-		return nil, pullEr
+		return nil, errors.New(pullEr.Error())
 	}
 	return []byte(res), nil
 }
