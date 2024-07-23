@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/hashicorp/terraform-exec/tfexec"
 	"os/exec"
 	"strings"
 	"time"
@@ -128,18 +129,15 @@ func (tOp *TerraformOperation) SelectWorkspace(ctx context.Context, workspace st
 }
 
 func (tOp *TerraformOperation) StatePull(ctx context.Context) ([]byte, error) {
-	var buffer, errBuffer bytes.Buffer
-
-	cmd := exec.Command("terraform", "state", "pull")
-	cmd.Dir = tOp.DirectoryPath
-	cmd.Stdout = &buffer
-	cmd.Stderr = &errBuffer
-	err := cmd.Run()
+	tf, err := tfexec.NewTerraform(tOp.DirectoryPath, "terraform")
 	if err != nil {
-		return nil, errors.New(errBuffer.String())
+		return nil, errors.New(err.Error())
 	}
-
-	return buffer.Bytes(), nil
+	res, pullEr := tf.StatePull(ctx)
+	if pullEr != nil {
+		return nil, errors.New(pullEr.Error())
+	}
+	return []byte(res), nil
 }
 
 func parseTerraformOutput(buffer bytes.Buffer) []TerraformOuput {
