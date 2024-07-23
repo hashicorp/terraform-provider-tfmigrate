@@ -121,6 +121,7 @@ func (r *stateMigration) Create(ctx context.Context, req resource.CreateRequest,
 	workspace := data.TFCWorkspace.ValueString()
 	workspaceDetails, err := tfeClient.Workspaces.Read(ctx, data.Org.ValueString(), workspace)
 	if err != nil {
+		tflog.Error(ctx, "Error fetching workspace data "+workspace, map[string]any{"error": err})
 		resp.Diagnostics.AddError("Error fetching workspace data "+workspace, err.Error())
 		return
 	}
