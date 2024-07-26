@@ -7,12 +7,13 @@ require (
 	github.com/google/go-github/v45 v45.2.0
 	github.com/hashicorp/go-tfe v1.56.0
 	github.com/hashicorp/hcl/v2 v2.21.0
+	github.com/hashicorp/terraform-exec v0.21.0
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
 	github.com/hashicorp/terraform-plugin-framework v1.10.0
 	github.com/hashicorp/terraform-plugin-go v0.23.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.9.0
-	github.com/zclconf/go-cty v1.14.4
+	github.com/zclconf/go-cty v1.15.0
 	golang.org/x/oauth2 v0.21.0
 )
 
@@ -56,7 +57,6 @@ require (
 	github.com/hashicorp/hc-install v0.7.0 // indirect
 	github.com/hashicorp/jsonapi v1.3.1 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
-	github.com/hashicorp/terraform-exec v0.21.0 // indirect
 	github.com/hashicorp/terraform-json v0.22.1 // indirect
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.34.0 // indirect
 	github.com/hashicorp/terraform-registry-address v0.2.3 // indirect
