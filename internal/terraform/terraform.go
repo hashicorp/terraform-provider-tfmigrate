@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/hashicorp/terraform-exec/tfexec"
 	"os/exec"
 	"strings"
 	"time"
@@ -57,6 +58,8 @@ type TerraformOuput struct {
 type TerraformOperationInterface interface {
 	ExecuteTerraformPlan(ctx context.Context) (*TerraformPlanSummary, error)
 	ExecuteTerraformInit(ctx context.Context) error
+	SelectWorkspace(ctx context.Context, workspace string) error
+	StatePull(ctx context.Context) ([]byte, error)
 }
 
 func (tOp *TerraformOperation) ExecuteTerraformPlan(ctx context.Context) (*TerraformPlanSummary, error) {
@@ -97,8 +100,6 @@ func (tOp *TerraformOperation) ExecuteTerraformPlan(ctx context.Context) (*Terra
 func (tOp *TerraformOperation) ExecuteTerraformInit(ctx context.Context) error {
 	var buffer, errBuffer bytes.Buffer
 
-	// Validate if the directory path exists
-
 	cmd := exec.Command("terraform", "init", "-no-color")
 	cmd.Dir = tOp.DirectoryPath
 	cmd.Stdout = &buffer
@@ -110,6 +111,33 @@ func (tOp *TerraformOperation) ExecuteTerraformInit(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (tOp *TerraformOperation) SelectWorkspace(ctx context.Context, workspace string) error {
+	var buffer, errBuffer bytes.Buffer
+
+	cmd := exec.Command("terraform", "workspace", "select", workspace, "-no-color")
+	cmd.Dir = tOp.DirectoryPath
+	cmd.Stdout = &buffer
+	cmd.Stderr = &errBuffer
+	err := cmd.Run()
+
+	if err != nil {
+		return errors.New(errBuffer.String())
+	}
+	return nil
+}
+
+func (tOp *TerraformOperation) StatePull(ctx context.Context) ([]byte, error) {
+	tf, err := tfexec.NewTerraform(tOp.DirectoryPath, "terraform")
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+	res, pullEr := tf.StatePull(ctx)
+	if pullEr != nil {
+		return nil, errors.New(pullEr.Error())
+	}
+	return []byte(res), nil
 }
 
 func parseTerraformOutput(buffer bytes.Buffer) []TerraformOuput {

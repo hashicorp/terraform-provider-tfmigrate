@@ -19,6 +19,10 @@ var (
 	_ provider.Provider = &tfmProvider{}
 )
 
+const (
+	GITHUB_TOKEN_ENV_NAME = "GITHUB_TOKEN"
+)
+
 // New is a helper function to simplify provider server and testing implementation.
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
@@ -61,7 +65,7 @@ func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 
 // Configure prepares a HashiCups API client for data sources and resources.
 func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	tflog.Info(ctx, "Configuring tfm provider")
+	tflog.Info(ctx, "Configuring tfmigrate provider")
 	// Retrieve provider data from configuration
 	var config tfmProviderModel
 	diags := req.Config.Get(ctx, &config)
@@ -89,7 +93,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	// Default values to environment variables, but override
 	// with Terraform configuration value if set.
 
-	githubToken := os.Getenv("TFM_GITHUB_TOKEN")
+	githubToken := os.Getenv(GITHUB_TOKEN_ENV_NAME)
 
 	if !config.GithubToken.IsNull() {
 		githubToken = config.GithubToken.ValueString()
@@ -125,5 +129,6 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewGitCommitPushResource,
 		NewGithubPrResource,
 		NewDirectoryActionResource,
+		NewStateMigrationResource,
 	}
 }
