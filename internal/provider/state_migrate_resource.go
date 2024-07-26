@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
+	"path/filepath"
 	"terraform-provider-tfmigrate/internal/terraform"
 
 	"github.com/hashicorp/go-tfe"
@@ -48,14 +48,14 @@ func (r *stateMigration) Metadata(_ context.Context, req resource.MetadataReques
 
 func (r *stateMigration) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "TF-Migrate state migration resource",
+		MarkdownDescription: "Resource that downloads state from current backend and uploads it to HCP Terraform",
 		Attributes: map[string]schema.Attribute{
 			"directory_path": schema.StringAttribute{
 				MarkdownDescription: "The directory path where terraform root module is located",
 				Required:            true,
 			},
 			"org": schema.StringAttribute{
-				MarkdownDescription: "Org name",
+				MarkdownDescription: "Organization name where the state should be uploaded.",
 				Required:            true,
 			},
 			"local_workspace": schema.StringAttribute{
@@ -203,7 +203,7 @@ func newTfeClient() (*tfe.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	credsFilePath := strings.Join([]string{homeDir, TfcTokenPath}, "/") //nolint:typecheck
+	credsFilePath := filepath.Join(homeDir, TfcTokenPath)
 	credsJson, err := os.ReadFile(credsFilePath)
 	if err != nil {
 		return nil, err

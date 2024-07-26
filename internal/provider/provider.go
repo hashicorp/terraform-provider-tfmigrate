@@ -19,6 +19,10 @@ var (
 	_ provider.Provider = &tfmProvider{}
 )
 
+const (
+	GITHUB_TOKEN_ENV_NAME = "GITHUB_TOKEN"
+)
+
 // New is a helper function to simplify provider server and testing implementation.
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
@@ -89,7 +93,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	// Default values to environment variables, but override
 	// with Terraform configuration value if set.
 
-	githubToken := os.Getenv("GITHUB_TOKEN")
+	githubToken := os.Getenv(GITHUB_TOKEN_ENV_NAME)
 
 	if !config.GithubToken.IsNull() {
 		githubToken = config.GithubToken.ValueString()

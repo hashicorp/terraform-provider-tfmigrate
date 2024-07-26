@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"log"
 	"os"
 	"os/exec"
@@ -12,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -270,7 +271,6 @@ func PushCommit(repoPath string, remoteName string, branchName string, githubTok
 		Force: force,
 	})
 	if err != nil {
-		fmt.Println("\n\n\n\n\n\n\n", githubToken, "\n\n", author.Name, "\n\n\n\n\n\n ")
 		if err == git.NoErrAlreadyUpToDate {
 			log.Println("Everything is up-to-date")
 		} else {
@@ -295,8 +295,6 @@ func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, g
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: authToken},
 	)
-
-	//tc := oauth2.NewClient(ctx, ts)
 
 	ts2 := &oauth2.Transport{
 		Source: oauth2.ReuseTokenSource(nil, ts),

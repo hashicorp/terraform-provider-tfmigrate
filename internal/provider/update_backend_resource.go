@@ -6,8 +6,6 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclwrite"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -33,7 +31,6 @@ type directoryActions struct {
 
 // DirectoryActionResourceModel describes the resource data model.
 type DirectoryActionResourceModel struct {
-	Id            types.String `tfsdk:"id"`
 	Org           types.String `tfsdk:"org"`
 	Project       types.String `tfsdk:"project"`
 	DirectoryPath types.String `tfsdk:"directory_path"`
@@ -51,41 +48,34 @@ func (r *directoryActions) Metadata(_ context.Context, req resource.MetadataRequ
 func (r *directoryActions) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		// This description is used by the documentation generator and the language server.
-		MarkdownDescription: "TFM Migrate directory action resource",
+		MarkdownDescription: "`tfmigrate_update_backend` will remove the existing backend block from the terraform configuration file and add the cloud block with the provided workspace mapping and tags.",
 
 		Attributes: map[string]schema.Attribute{
 			"directory_path": schema.StringAttribute{
-				MarkdownDescription: "directory_path",
+				MarkdownDescription: "Path where the backend file can be found.",
 				Required:            true,
 			},
 			"backend_file_name": schema.StringAttribute{
-				MarkdownDescription: "backend_file_name",
+				MarkdownDescription: "Name of the file containing the terraform backend configuration.",
 				Required:            true,
 			},
 			"org": schema.StringAttribute{
-				MarkdownDescription: "Org name",
+				MarkdownDescription: "Organization name required in the cloud block.",
 				Required:            true,
 			},
 			"project": schema.StringAttribute{
-				MarkdownDescription: "project name",
+				MarkdownDescription: "Project Name required in the cloud block.",
 				Required:            true,
 			},
 			"workspace_map": schema.MapAttribute{
-				MarkdownDescription: "Terraform cloud workspace mapping",
+				MarkdownDescription: "Terraform cloud workspace to local workspace mapping.",
 				ElementType:         types.StringType,
 				Required:            true,
 			},
 			"tags": schema.ListAttribute{
-				MarkdownDescription: "workspace tags",
+				MarkdownDescription: "Tags used when there are multiple workspaces.",
 				ElementType:         types.StringType,
 				Required:            true,
-			},
-			"id": schema.StringAttribute{
-				Computed:            true,
-				MarkdownDescription: "identifier",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 		},
 	}
@@ -95,26 +85,15 @@ func (r *directoryActions) Schema(_ context.Context, _ resource.SchemaRequest, r
 func (r *directoryActions) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data DirectoryActionResourceModel
 
-	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	data.Id = types.StringValue(data.DirectoryPath.ValueString())
-
 	RemoveBackendBlock(ctx, data.DirectoryPath.ValueString(), data.BackendFile.ValueString(), resp)
-
+	tflog.Trace(ctx, "Completed Removing backend block.")
 	AddCloudBlock(ctx, data, data.BackendFile.ValueString(), resp)
-
-	//raise PR
-
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "created a resource")
-
-	// Save data into Terraform state
+	tflog.Trace(ctx, "Completed Appending a cloud block.")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -126,14 +105,11 @@ func (r *directoryActions) Read(ctx context.Context, req resource.ReadRequest, r
 func (r *directoryActions) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data DirectoryActionResourceModel
 
-	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
-	data.Id = types.StringValue(data.DirectoryPath.ValueString())
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 }
