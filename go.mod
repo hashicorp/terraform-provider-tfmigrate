@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/google/go-github/v45 v45.2.0
-	github.com/hashicorp/go-tfe v1.60.0
+	github.com/hashicorp/go-tfe v1.61.0
 	github.com/hashicorp/hcl/v2 v2.21.0
 	github.com/hashicorp/terraform-exec v0.21.0
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
