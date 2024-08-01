@@ -224,7 +224,7 @@ func CreateCommit(repoPath, message string) (string, error) {
 	}
 
 	// Retrieve the author name and email from the Git config.
-	author := GlobalGitConfig(repoPath)
+	author, _ := GlobalGitConfig(repoPath)
 
 	// Commit the changes.
 	commit, err := worktree.Commit(message, &git.CommitOptions{
@@ -262,7 +262,7 @@ func PushCommit(repoPath string, remoteName string, branchName string, githubTok
 	}
 
 	// Push the changes to the remote repository.
-	author := GlobalGitConfig(repoPath)
+	author, _ := GlobalGitConfig(repoPath)
 	err = repo.Push(&git.PushOptions{
 		InsecureSkipTLS: true,
 		RemoteName:      remoteName,
@@ -350,18 +350,18 @@ func ListRemote(repoPath string) ([]string, error) {
 }
 
 // GetGitConfig retrieves a global Git configuration value.
-func GlobalGitConfig(repoPath string) GitUserConfig {
+func GlobalGitConfig(repoPath string) (GitUserConfig, error) {
 	// Get the global git config file path
 	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
-		return GitUserConfig{}
+		return GitUserConfig{}, err
 	}
 
 	cfg, err := repo.ConfigScoped(config.GlobalScope)
 	if err != nil {
-		return GitUserConfig{}
+		return GitUserConfig{}, err
 	}
-	return cfg.User
+	return cfg.User, err
 
 }
 
