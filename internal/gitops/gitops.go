@@ -28,10 +28,6 @@ import (
 	netHttp "net/http"
 )
 
-// create a separate file for the error messages
-// custom error handling
-// create a struct for repopath, remoteName, PAT, ?
-
 const (
 	VALID_REPO_URL_FORMAT = "https://github.com/username/repository.git"
 	VALID_URL_REGEX       = `^(https?|git)://.*\.git$`
@@ -43,7 +39,7 @@ type GitUserConfig struct {
 	Email string
 }
 
-// 1. CLONE A REMOTE REPOSITORY - not for implementation.
+// 1. clone a repository - not for implementation
 func CloneRepository(repoURL, directory string) error {
 	urlRegex := regexp.MustCompile(VALID_URL_REGEX)
 	if !urlRegex.MatchString(repoURL) {
@@ -60,7 +56,7 @@ func CloneRepository(repoURL, directory string) error {
 	return nil
 }
 
-// 2. RESET THE WORKSPACE TO LAST COMMIT VERSION.
+// 2. reset the workspace to last commit version
 func ResetToLastCommittedVersion(repoPath string) error {
 	repo, err := openRepository(repoPath)
 	if err != nil {
@@ -92,7 +88,7 @@ func ResetToLastCommittedVersion(repoPath string) error {
 	return nil
 }
 
-// 3. LIST BRANCHES.
+// 3. list branches
 func ListBranches(repoPath string) ([]string, error) {
 	var branches []string
 
@@ -117,7 +113,7 @@ func ListBranches(repoPath string) ([]string, error) {
 	return branches, nil
 }
 
-// 4. CREATE AND SWITCH TO A LOCAL BRANCH.
+// 4. create and switch to a local branch
 func CreateAndSwitchBranch(repoPath, branchName string) error {
 	repo, err := openRepository(repoPath)
 	if err != nil {
@@ -134,9 +130,11 @@ func CreateAndSwitchBranch(repoPath, branchName string) error {
 		return err
 	}
 
-	// Check if the branch already exists.
-	if slices.Contains(branches, branchName) {
-		return fmt.Errorf("branch '%s' already exists", branchName)
+	// Check if the branch already exists
+	var createBranch bool
+	if !slices.Contains(branches, "refs/heads/"+branchName) {
+		// return fmt.Errorf("branch '%s' already exists", branchName)
+		createBranch = true
 	}
 
 	// Check if the branch name is valid.
@@ -145,10 +143,11 @@ func CreateAndSwitchBranch(repoPath, branchName string) error {
 		return fmt.Errorf("invalid branch name '%s'. Branch names can only contain letters, digits, '_', '-', and '/'", branchName)
 	}
 
-	// Create and switch to the new branch.
+	// Create and switch to the new branch
 	err = worktree.Checkout(&git.CheckoutOptions{
 		Branch: plumbing.NewBranchReferenceName(branchName),
-		Create: true,
+		Create: createBranch,
+		Keep:   true,
 	})
 	if err != nil {
 		return err
@@ -156,7 +155,7 @@ func CreateAndSwitchBranch(repoPath, branchName string) error {
 	return nil
 }
 
-// 5. DELETE A LOCAL BRANCH.
+// 5. delete a local branch
 func DeleteLocalBranch(repoPath, branchName string) error {
 	repo, err := openRepository(repoPath)
 	if err != nil {
@@ -191,7 +190,7 @@ func DeleteLocalBranch(repoPath, branchName string) error {
 	return nil
 }
 
-// 6. CREATE A COMMIT IN LOCAL.
+// 6. create a commit
 func CreateCommit(repoPath, message string) (string, error) {
 
 	if len(message) > 255 {
@@ -242,7 +241,7 @@ func CreateCommit(repoPath, message string) (string, error) {
 	return commit.String(), nil
 }
 
-// 7. PUSH COMMIT TO REMOTE.
+// 7. push commit
 func PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error {
 	authToken := githubToken
 	repo, err := openRepository(repoPath)
