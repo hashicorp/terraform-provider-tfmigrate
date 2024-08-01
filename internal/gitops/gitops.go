@@ -313,7 +313,7 @@ func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, g
 
 	client := github.NewClient(tc)
 
-	draft := false
+	draft := true
 	newPR := &github.NewPullRequest{
 		Title: github.String(title),
 		Head:  github.String(featureBranch),
