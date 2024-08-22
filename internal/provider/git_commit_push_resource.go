@@ -143,15 +143,15 @@ func (r *gitCommitPush) Configure(_ context.Context, req resource.ConfigureReque
 		return
 	}
 
-	githubToken, ok := req.ProviderData.(string)
+	providerResourceData, ok := req.ProviderData.(ProviderResourceData)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Github Token Found",
-			fmt.Sprintf("Expected string, got %T.", req.ProviderData),
+			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
 		)
 
 		return
 	}
-	r.githubToken = githubToken
+	r.githubToken = providerResourceData.GithubToken
 }
