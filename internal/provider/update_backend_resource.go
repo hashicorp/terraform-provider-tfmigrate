@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/hashicorp/hcl/v2"
@@ -30,6 +31,7 @@ func NewDirectoryActionResource() resource.Resource {
 
 // directoryActions is the resource implementation.
 type directoryActions struct {
+	Hostname string
 }
 
 // DirectoryActionResourceModel describes the resource data model.
@@ -95,7 +97,7 @@ func (r *directoryActions) Create(ctx context.Context, req resource.CreateReques
 
 	RemoveBackendBlock(ctx, data.DirectoryPath.ValueString(), data.BackendFile.ValueString(), resp)
 	tflog.Trace(ctx, "Completed Removing backend block.")
-	AddCloudBlock(ctx, data, data.BackendFile.ValueString(), resp)
+	AddCloudBlock(ctx, data, data.BackendFile.ValueString(), r.Hostname, resp)
 	tflog.Trace(ctx, "Completed Appending a cloud block.")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -152,7 +154,7 @@ func RemoveBackendBlock(ctx context.Context, dirPath string, backendFile string,
 	}
 }
 
-func AddCloudBlock(ctx context.Context, data DirectoryActionResourceModel, backendFile string, resp *resource.CreateResponse) {
+func AddCloudBlock(ctx context.Context, data DirectoryActionResourceModel, backendFile string, hostname string, resp *resource.CreateResponse) {
 	tflog.Info(ctx, "[TFM] Adding cloud block")
 	filePath := data.DirectoryPath.ValueString() + "/" + backendFile
 	content, err := os.ReadFile(filePath)
@@ -177,6 +179,7 @@ func AddCloudBlock(ctx context.Context, data DirectoryActionResourceModel, backe
 			}
 			cloudBlock := block.Body().AppendNewBlock("cloud", nil)
 			cloudBlock.Body().SetAttributeValue("organization", cty.StringVal(data.Org.ValueString()))
+			cloudBlock.Body().SetAttributeValue("hostname", cty.StringVal(hostname))
 
 			m, d := data.WorkspaceMap.ToMapValue(ctx)
 			if d.HasError() {
@@ -251,4 +254,22 @@ func getTFCWorkspace(ctx context.Context, m basetypes.MapValue, resp *resource.C
 		return workspace, false
 	}
 	return workspace, false
+}
+
+func (r *directoryActions) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	providerResourceData, ok := req.ProviderData.(ProviderResourceData)
+
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Github Token Found",
+			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
+		)
+
+		return
+	}
+	r.Hostname = providerResourceData.Hostname
 }

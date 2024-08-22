@@ -24,6 +24,7 @@ var (
 
 const (
 	GITHUB_TOKEN_ENV_NAME = "GITHUB_TOKEN"
+	HCP_TERRAFORM_HOST    = "app.terraform.io"
 )
 
 // New is a helper function to simplify provider server and testing implementation.
@@ -46,6 +47,13 @@ type tfmProvider struct {
 // tfmProviderModel maps provider schema data to a Go type.
 type tfmProviderModel struct {
 	GithubToken types.String `tfsdk:"github_token"`
+	Hostname    types.String `tfsdk:"hostname"`
+}
+
+// ProviderResourceData is a struct to hold the provider configuration data.
+type ProviderResourceData struct {
+	GithubToken string
+	Hostname    string
 }
 
 // Metadata returns the provider type name.
@@ -59,8 +67,14 @@ func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"github_token": schema.StringAttribute{
-				Optional:  true,
-				Sensitive: true,
+				Optional:    true,
+				Sensitive:   true,
+				Description: "The Github PAT token to be used for creating Pull-Requests",
+			},
+			"hostname": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   false,
+				Description: "The Hostname of the TFE instance to connect to, if empty will default to HCP Terraform at app.terraform.io",
 			},
 		},
 	}
@@ -89,6 +103,15 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		)
 	}
 
+	if config.Hostname.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("hostname"),
+			"Unknown Hostname",
+			"The provider cannot initialize the TFE API client as there is an unknown configuration value for the Hostname. "+
+				"Please set the value statically in the configuration.",
+		)
+	}
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -97,9 +120,14 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	// with Terraform configuration value if set.
 
 	githubToken := os.Getenv(GITHUB_TOKEN_ENV_NAME)
+	hostname := HCP_TERRAFORM_HOST
 
 	if !config.GithubToken.IsNull() {
 		githubToken = config.GithubToken.ValueString()
+	}
+
+	if !config.Hostname.IsNull() {
+		hostname = config.Hostname.ValueString()
 	}
 
 	// If any of the expected configurations are missing, return
@@ -114,8 +142,11 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
+	providerResourceData := ProviderResourceData{
+		githubToken, hostname}
+
 	// Required to pass this information into the resources.
-	resp.ResourceData = githubToken
+	resp.ResourceData = providerResourceData
 }
 
 // DataSources defines the data sources implemented in the provider.

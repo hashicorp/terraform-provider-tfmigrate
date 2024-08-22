@@ -23,6 +23,7 @@ import (
 )
 
 type stateMigration struct {
+	Hostname string
 }
 
 var (
@@ -30,7 +31,7 @@ var (
 )
 
 const TfcTokenPath = ".terraform.d/credentials.tfrc.json"
-const TfcAddress = "https://app.terraform.io"
+const TfcScheme = "https"
 
 var tfeClient *tfe.Client
 
@@ -114,7 +115,7 @@ func (r *stateMigration) Create(ctx context.Context, req resource.CreateRequest,
 	tflog.Info(ctx, "Migrating state from local ws : "+data.LocalWorkspace.ValueString()+" to tfc : "+data.TFCWorkspace.ValueString(),
 		map[string]interface{}{"state": string(state[:])})
 	if tfeClient == nil {
-		tfeClient, err = newTfeClient()
+		tfeClient, err = newTfeClient(r.Hostname)
 		if err != nil {
 			tflog.Error(ctx, "Error initializing client", map[string]any{"error": err})
 			resp.Diagnostics.AddError("Error initializing client ", err.Error())
@@ -196,7 +197,7 @@ func uploadState(ctx context.Context, state []byte, workspaceId string, workspac
 	return nil
 }
 
-func newTfeClient() (*tfe.Client, error) {
+func newTfeClient(hostname string) (*tfe.Client, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -212,29 +213,47 @@ func newTfeClient() (*tfe.Client, error) {
 		return nil, err
 	}
 
-	var tfeCredentials TFECredentials
-	if err := json.Unmarshal(credsJson, &tfeCredentials); err != nil {
+	var tfCredentials TfCredentials
+	if err := json.Unmarshal(credsJson, &tfCredentials); err != nil {
 		return nil, errors.New("failed to parse credential file" + err.Error())
 	}
 
 	tfcConfig := &tfe.Config{
-		Address:           TfcAddress,
-		Token:             tfeCredentials.Credentials.AppTerraformIo.Token,
+		Address:           TfcScheme + "://" + hostname + "/",
+		Token:             tfCredentials.Creds[hostname].Token,
 		RetryServerErrors: true,
 		HTTPClient:        client,
 	}
 	return tfe.NewClient(tfcConfig)
 }
 
-type TFECredentials struct {
-	Credentials struct {
-		AppTerraformIo struct {
-			Token string `json:"token"`
-		} `json:"app.terraform.io"`
-	} `json:"credentials"`
+type TfRemote struct {
+	Token string `json:"token"`
+}
+
+type TfCredentials struct {
+	Creds map[string]TfRemote `json:"credentials"`
 }
 
 type stateMeta struct {
 	Serial  int64
 	Lineage string
+}
+
+func (r *stateMigration) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	providerResourceData, ok := req.ProviderData.(ProviderResourceData)
+
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Github Token Found",
+			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
+		)
+
+		return
+	}
+	r.Hostname = providerResourceData.Hostname
 }
