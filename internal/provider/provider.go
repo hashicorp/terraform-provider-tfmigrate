@@ -127,7 +127,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	}
 
 	if !config.Hostname.IsNull() {
-		hostname = config.GithubToken.ValueString()
+		hostname = config.Hostname.ValueString()
 	}
 
 	// If any of the expected configurations are missing, return
