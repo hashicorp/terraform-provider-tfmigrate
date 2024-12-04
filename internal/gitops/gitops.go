@@ -5,7 +5,6 @@ package gitops
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"os"
@@ -15,22 +14,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-log/tflog"
-
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v45/github"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/xanzy/go-gitlab"
 	"golang.org/x/oauth2"
-
-	netHttp "net/http"
 )
-
-// create a separate file for the error messages
-// custom error handling
-// create a struct for repopath, remoteName, PAT, ?
 
 const (
 	VALID_REPO_URL_FORMAT = "https://github.com/username/repository.git"
@@ -43,7 +36,7 @@ type GitUserConfig struct {
 	Email string
 }
 
-// 1. CLONE A REMOTE REPOSITORY - not for implementation.
+// CloneRepository clones a repository from the given URL to the specified directory.
 func CloneRepository(repoURL, directory string) error {
 	urlRegex := regexp.MustCompile(VALID_URL_REGEX)
 	if !urlRegex.MatchString(repoURL) {
@@ -60,7 +53,7 @@ func CloneRepository(repoURL, directory string) error {
 	return nil
 }
 
-// 2. RESET THE WORKSPACE TO LAST COMMIT VERSION.
+// ResetToLastCommittedVersion resets the working directory to the last committed version.
 func ResetToLastCommittedVersion(repoPath string) error {
 	repo, err := openRepository(repoPath)
 	if err != nil {
@@ -92,7 +85,7 @@ func ResetToLastCommittedVersion(repoPath string) error {
 	return nil
 }
 
-// 3. LIST BRANCHES.
+// ListBranches lists all the branches in a repository.
 func ListBranches(repoPath string) ([]string, error) {
 	var branches []string
 
@@ -117,7 +110,7 @@ func ListBranches(repoPath string) ([]string, error) {
 	return branches, nil
 }
 
-// 4. CREATE AND SWITCH TO A LOCAL BRANCH.
+// CreateAndSwitchBranch creates a new branch and switches to it.
 func CreateAndSwitchBranch(repoPath, branchName string) error {
 	repo, err := openRepository(repoPath)
 	if err != nil {
@@ -156,7 +149,7 @@ func CreateAndSwitchBranch(repoPath, branchName string) error {
 	return nil
 }
 
-// 5. DELETE A LOCAL BRANCH.
+// DeleteLocalBranch deletes a local branch.
 func DeleteLocalBranch(repoPath, branchName string) error {
 	repo, err := openRepository(repoPath)
 	if err != nil {
@@ -191,7 +184,7 @@ func DeleteLocalBranch(repoPath, branchName string) error {
 	return nil
 }
 
-// 6. CREATE A COMMIT IN LOCAL.
+// CreateCommit creates a new commit with the given message.
 func CreateCommit(repoPath, message string) (string, error) {
 
 	if len(message) > 255 {
@@ -242,7 +235,7 @@ func CreateCommit(repoPath, message string) (string, error) {
 	return commit.String(), nil
 }
 
-// 7. PUSH COMMIT TO REMOTE.
+// PushCommit pushes the changes to the remote repository.
 func PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error {
 	authToken := githubToken
 	repo, err := openRepository(repoPath)
@@ -283,51 +276,54 @@ func PushCommit(repoPath string, remoteName string, branchName string, githubTok
 	return nil
 }
 
-// 8. Creates a pull request on GitHub.
-func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, githubToken string) (string, error) {
+// CreateRequest creates a pull request or merge request based on the serviceProvider (GitHub or GitLab).
+
+func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, githubToken, gitlabToken string) (string, error) {
 
 	if len(strings.Split(repoIdentifier, "/")) != 2 {
 		return "", fmt.Errorf("invalid repository identifier. It should be in the format: owner/repository")
 	}
-
 	repoOwner := strings.Split(repoIdentifier, "/")[0]
 	repoName := strings.Split(repoIdentifier, "/")[1]
 
-	authToken := githubToken
-	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: authToken},
-	)
+	if githubToken != "" {
+		ctx := context.Background()
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: githubToken},
+		)
+		tc := oauth2.NewClient(ctx, ts)
+		client := github.NewClient(tc)
 
-	ts2 := &oauth2.Transport{
-		Source: oauth2.ReuseTokenSource(nil, ts),
-		Base: &netHttp.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
+		newPR := &github.NewPullRequest{
+			Title: github.String(title),
+			Head:  github.String(featureBranch),
+			Base:  github.String(baseBranch),
+			Body:  github.String(body),
+		}
+		pr, _, err := client.PullRequests.Create(ctx, repoOwner, repoName, newPR)
+		if err != nil {
+			return "", fmt.Errorf("failed to create GitHub pull request: %w", err)
+		}
+		return pr.GetHTMLURL(), nil
+	} else if gitlabToken != "" {
+		git, err := gitlab.NewClient(gitlabToken)
+		if err != nil {
+			return "", fmt.Errorf("failed to create GitLab client: %w", err)
+		}
+		mrOptions := &gitlab.CreateMergeRequestOptions{
+			SourceBranch: &featureBranch,
+			TargetBranch: &baseBranch,
+			Title:        &title,
+			Description:  &body,
+		}
+		mr, _, err := git.MergeRequests.CreateMergeRequest(repoIdentifier, mrOptions)
+		if err != nil {
+			return "", fmt.Errorf("failed to create GitLab merge request: %w", err)
+		}
+		return mr.WebURL, nil
+	} else {
+		return "", fmt.Errorf("no valid token provided")
 	}
-
-	tc := &netHttp.Client{
-		Transport: ts2,
-	}
-
-	client := github.NewClient(tc)
-
-	draft := false
-	newPR := &github.NewPullRequest{
-		Title: github.String(title),
-		Head:  github.String(featureBranch),
-		Base:  github.String(baseBranch),
-		Body:  github.String(body),
-		Draft: &draft,
-	}
-
-	pr, _, err := client.PullRequests.Create(ctx, repoOwner, repoName, newPR)
-	if err != nil {
-		return "", err
-	}
-	return pr.GetHTMLURL(), nil
 }
 
 // List remote references in a repository.
@@ -385,4 +381,54 @@ func PushCommitUsingGit(remoteName string, branchName string) error {
 	}
 	tflog.Info(context.Background(), "Pushed the commit to remote", map[string]interface{}{"remote": remoteName, "branch": branchName})
 	return nil
+}
+
+func GetRemoteName() (string, error) {
+	output, err := exec.
+		Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").
+		CombinedOutput()
+
+	if strings.Contains(string(output), "no upstream configured for branch") {
+		return "origin", nil
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("error getting remote name: %s", string(output))
+		return "", fmt.Errorf(errorMessage, err)
+	}
+
+	upstream := strings.TrimSpace(string(output))
+	remoteName := strings.Split(upstream, "/")[0]
+	if remoteName == "" {
+		return "", fmt.Errorf("error fetching remote name")
+	}
+
+	return remoteName, nil
+}
+
+// GetRemoteProvider returns the service provider name (e.g., GitHub, GitLab, Bitbucket)
+func GetServiceProvider() (string, error) {
+	remoteName, err := GetRemoteName()
+	if err != nil {
+		return "", fmt.Errorf("error getting remote name: %w", err)
+	}
+	// Get the remote URL
+	cmd := exec.Command("git", "remote", "get-url", remoteName)
+	out, err := cmd.Output()
+	if err != nil {
+		errorMessage := fmt.Sprintf("error getting remote URL: %s", string(out))
+		return "", fmt.Errorf(errorMessage, err)
+	}
+
+	// Trim whitespace and parse the URL
+	remoteURL := strings.TrimSpace(string(out))
+
+	var provider string
+	// Extract the provider name directly from the hostname
+	if strings.Contains(remoteURL, "github.com") {
+		provider = "github"
+	} else if strings.Contains(remoteURL, "gitlab.com") {
+		provider = "gitlab"
+	}
+
+	return provider, nil
 }

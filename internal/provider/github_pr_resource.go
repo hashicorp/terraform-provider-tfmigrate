@@ -16,6 +16,7 @@ import (
 
 type githubPr struct {
 	githubToken string
+	gitlabToken string
 }
 
 var (
@@ -89,12 +90,24 @@ func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp 
 	sourceBranch := data.SourceBranch.ValueString()
 	destinBranch := data.DestinBranch.ValueString()
 	githubToken := r.githubToken
+	gitlabToken := r.gitlabToken
 
 	tflog.Info(ctx, "Executing Git Commit")
-	prUrl, err := gitops.CreatePullRequest(repoIdentifier, destinBranch, sourceBranch, prTitle, prBody, githubToken)
+	remoteProvider, err := gitops.GetServiceProvider()
+	if err != nil {
+		tflog.Error(ctx, "Error getting remote provider: "+err.Error())
+		resp.Diagnostics.AddError("Error getting remote provider: ", err.Error())
+		return
+	}
 
-	data.Summary = types.StringValue("Github PR Created: " + prUrl)
-	data.PrUrl = types.StringValue(prUrl)
+	var prURL string
+	if remoteProvider == "github" {
+		prURL, err = gitops.CreatePullRequest(repoIdentifier, destinBranch, sourceBranch, prTitle, prBody, githubToken, "")
+	} else if remoteProvider == "gitlab" {
+		prURL, err = gitops.CreatePullRequest(repoIdentifier, destinBranch, sourceBranch, prTitle, prBody, "", gitlabToken)
+	}
+	data.Summary = types.StringValue("Github PR Created: " + prURL)
+	data.PrUrl = types.StringValue(prURL)
 	if err != nil {
 		tflog.Error(ctx, "Error creating PR: "+err.Error())
 		resp.Diagnostics.AddError("Error creating PR: ", err.Error())
@@ -138,4 +151,6 @@ func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, r
 		return
 	}
 	r.githubToken = providerResourceData.GithubToken
+	r.gitlabToken = providerResourceData.GitlabToken
+
 }

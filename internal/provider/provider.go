@@ -24,6 +24,7 @@ var (
 
 const (
 	GITHUB_TOKEN_ENV_NAME = "GITHUB_TOKEN"
+	GITLAB_TOKEN_ENV_NAME = "GITLAB_TOKEN"
 	HCP_TERRAFORM_HOST    = "app.terraform.io"
 )
 
@@ -38,21 +39,20 @@ func New(version string) func() provider.Provider {
 
 // tfmProvider is the provider implementation.
 type tfmProvider struct {
-	// version is set to the provider version on release, "dev" when the
-	// provider is built and ran locally, and "test" when running acceptance
-	// testing.
 	version string
 }
 
 // tfmProviderModel maps provider schema data to a Go type.
 type tfmProviderModel struct {
 	GithubToken types.String `tfsdk:"github_token"`
+	GitlabToken types.String `tfsdk:"gitlab_token"`
 	Hostname    types.String `tfsdk:"hostname"`
 }
 
-// ProviderResourceData is a struct to hold the provider configuration data.
+// ProviderResourceData holds the provider configuration data.
 type ProviderResourceData struct {
 	GithubToken string
+	GitlabToken string
 	Hostname    string
 }
 
@@ -69,20 +69,26 @@ func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 			"github_token": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "The Github PAT token to be used for creating Pull-Requests",
+				Description: "The GitHub PAT token to be used for creating pull requests.",
+			},
+			"gitlab_token": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "The GitLab PAT token to be used for creating merge requests.",
 			},
 			"hostname": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   false,
-				Description: "The Hostname of the TFE instance to connect to, if empty will default to HCP Terraform at app.terraform.io",
+				Description: "The hostname of the TFE instance to connect to. Defaults to HCP Terraform at app.terraform.io.",
 			},
 		},
 	}
 }
 
-// Configure prepares a HashiCups API client for data sources and resources.
+// Configure prepares the provider configuration.
 func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	tflog.Info(ctx, "Configuring tfmigrate provider")
+
 	// Retrieve provider data from configuration
 	var config tfmProviderModel
 	diags := req.Config.Get(ctx, &config)
@@ -91,24 +97,26 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	// If practitioner provided a configuration value for any of the
-	// attributes, it must be a known value.
-
+	// Handle unknown values
 	if config.GithubToken.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("github_token"),
-			"Unknown Github PAT Token",
-			"The provider cannot create the Github API client as there is an unknown configuration value for the Github Token. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the TFM_GITHUB_TOKEN environment variable.",
+			"Unknown GitHub PAT Token",
+			"The provider cannot initialize the GitHub client as the GitHub token is unknown. Set it in configuration or as an environment variable.",
 		)
 	}
-
+	if config.GitlabToken.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("gitlab_token"),
+			"Unknown GitLab PAT Token",
+			"The provider cannot initialize the GitLab client as the GitLab token is unknown. Set it in configuration or as an environment variable.",
+		)
+	}
 	if config.Hostname.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("hostname"),
 			"Unknown Hostname",
-			"The provider cannot initialize the TFE API client as there is an unknown configuration value for the Hostname. "+
-				"Please set the value statically in the configuration.",
+			"The provider cannot initialize the TFE API client as the hostname is unknown. Set it in configuration.",
 		)
 	}
 
@@ -117,35 +125,39 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	}
 
 	// Default values to environment variables, but override
-	// with Terraform configuration value if set.
-
+	// with Terraform configuration values if set
 	githubToken := os.Getenv(GITHUB_TOKEN_ENV_NAME)
+	gitlabToken := os.Getenv(GITLAB_TOKEN_ENV_NAME)
 	hostname := HCP_TERRAFORM_HOST
 
 	if !config.GithubToken.IsNull() {
 		githubToken = config.GithubToken.ValueString()
 	}
-
+	if !config.GitlabToken.IsNull() {
+		gitlabToken = config.GitlabToken.ValueString()
+	}
 	if !config.Hostname.IsNull() {
 		hostname = config.Hostname.ValueString()
 	}
 
-	// If any of the expected configurations are missing, return
-	// errors with provider-specific guidance.
-
-	if githubToken == "" {
-		resp.Diagnostics.AddAttributeError(path.Root("github_token"), PROVIDER_PAT_TOKEN_MISSING,
-			PROVIDER_PAT_TOKEN_MISSING_DETAILED)
+	// Validate configurations
+	if githubToken == "" && gitlabToken == "" {
+		resp.Diagnostics.AddError(
+			"Missing Authentication Tokens",
+			"The provider requires at least one of GitHub or GitLab tokens to be configured either as a Terraform variable or an environment variable.",
+		)
 	}
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
+	// Set the provider resource data
 	providerResourceData := ProviderResourceData{
-		githubToken, hostname}
-
-	// Required to pass this information into the resources.
+		GithubToken: githubToken,
+		GitlabToken: gitlabToken,
+		Hostname:    hostname,
+	}
 	resp.ResourceData = providerResourceData
 }
 
