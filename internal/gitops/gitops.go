@@ -405,7 +405,7 @@ func GetRemoteName() (string, error) {
 	return remoteName, nil
 }
 
-// GetRemoteProvider returns the service provider name (e.g., GitHub, GitLab, Bitbucket)
+// GetRemoteProvider returns the service provider name (e.g., GitHub, GitLab, Bitbucket).
 func GetServiceProvider() (string, error) {
 	remoteName, err := GetRemoteName()
 	if err != nil {
