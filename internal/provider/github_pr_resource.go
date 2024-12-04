@@ -80,32 +80,24 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
 	var data GithubPrModel
+
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	repoIdentifier := data.RepoIdentifier.ValueString()
-	prTitle := data.PrTitle.ValueString()
-	prBody := data.PrBody.ValueString()
-	sourceBranch := data.SourceBranch.ValueString()
-	destinBranch := data.DestinBranch.ValueString()
-	githubToken := r.githubToken
-	gitlabToken := r.gitlabToken
+	createPrParams := gitops.PullRequestParams{
+		RepoIdentifier: data.RepoIdentifier.ValueString(),
+		BaseBranch:     data.DestinBranch.ValueString(),
+		FeatureBranch:  data.SourceBranch.ValueString(),
+		Title:          data.PrTitle.ValueString(),
+		Body:           data.PrBody.ValueString(),
+		GithubToken:    r.githubToken,
+		GitlabToken:    r.gitlabToken,
+	}
 
 	tflog.Info(ctx, "Executing Git Commit")
-	remoteProvider, err := gitops.GetServiceProvider()
-	if err != nil {
-		tflog.Error(ctx, "Error getting remote provider: "+err.Error())
-		resp.Diagnostics.AddError("Error getting remote provider: ", err.Error())
-		return
-	}
 
-	var prURL string
-	if remoteProvider == "github" {
-		prURL, err = gitops.CreatePullRequest(repoIdentifier, destinBranch, sourceBranch, prTitle, prBody, githubToken, "")
-	} else if remoteProvider == "gitlab" {
-		prURL, err = gitops.CreatePullRequest(repoIdentifier, destinBranch, sourceBranch, prTitle, prBody, "", gitlabToken)
-	}
+	prURL, err := gitops.CreatePullRequest(createPrParams)
 	data.Summary = types.StringValue("Github PR Created: " + prURL)
 	data.PrUrl = types.StringValue(prURL)
 	if err != nil {

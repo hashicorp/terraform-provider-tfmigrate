@@ -36,6 +36,16 @@ type GitUserConfig struct {
 	Email string
 }
 
+type PullRequestParams struct {
+	RepoIdentifier string
+	BaseBranch     string
+	FeatureBranch  string
+	Title          string
+	Body           string
+	GithubToken    string
+	GitlabToken    string
+}
+
 // CloneRepository clones a repository from the given URL to the specified directory.
 func CloneRepository(repoURL, directory string) error {
 	urlRegex := regexp.MustCompile(VALID_URL_REGEX)
@@ -277,52 +287,55 @@ func PushCommit(repoPath string, remoteName string, branchName string, githubTok
 }
 
 // CreateRequest creates a pull request or merge request based on the serviceProvider (GitHub or GitLab).
+func CreatePullRequest(params PullRequestParams) (string, error) {
+	serviceProvider, err := GetServiceProvider()
+	if err != nil {
+		return "", fmt.Errorf("failed to get remote provider: %w", err)
+	}
 
-func CreatePullRequest(repoIdentifier, baseBranch, featureBranch, title, body, githubToken, gitlabToken string) (string, error) {
-
-	if len(strings.Split(repoIdentifier, "/")) != 2 {
+	if len(strings.Split(params.RepoIdentifier, "/")) != 2 {
 		return "", fmt.Errorf("invalid repository identifier. It should be in the format: owner/repository")
 	}
-	repoOwner := strings.Split(repoIdentifier, "/")[0]
-	repoName := strings.Split(repoIdentifier, "/")[1]
+	repoOwner := strings.Split(params.RepoIdentifier, "/")[0]
+	repoName := strings.Split(params.RepoIdentifier, "/")[1]
 
-	if githubToken != "" {
+	if serviceProvider == "github" {
 		ctx := context.Background()
 		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: githubToken},
+			&oauth2.Token{AccessToken: params.GithubToken},
 		)
 		tc := oauth2.NewClient(ctx, ts)
 		client := github.NewClient(tc)
 
 		newPR := &github.NewPullRequest{
-			Title: github.String(title),
-			Head:  github.String(featureBranch),
-			Base:  github.String(baseBranch),
-			Body:  github.String(body),
+			Title: github.String(params.Title),
+			Head:  github.String(params.FeatureBranch),
+			Base:  github.String(params.BaseBranch),
+			Body:  github.String(params.Body),
 		}
 		pr, _, err := client.PullRequests.Create(ctx, repoOwner, repoName, newPR)
 		if err != nil {
 			return "", fmt.Errorf("failed to create GitHub pull request: %w", err)
 		}
 		return pr.GetHTMLURL(), nil
-	} else if gitlabToken != "" {
-		git, err := gitlab.NewClient(gitlabToken)
+	} else if serviceProvider == "gitlab" {
+		git, err := gitlab.NewClient(params.GitlabToken)
 		if err != nil {
 			return "", fmt.Errorf("failed to create GitLab client: %w", err)
 		}
 		mrOptions := &gitlab.CreateMergeRequestOptions{
-			SourceBranch: &featureBranch,
-			TargetBranch: &baseBranch,
-			Title:        &title,
-			Description:  &body,
+			SourceBranch: &params.FeatureBranch,
+			TargetBranch: &params.BaseBranch,
+			Title:        &params.Title,
+			Description:  &params.Body,
 		}
-		mr, _, err := git.MergeRequests.CreateMergeRequest(repoIdentifier, mrOptions)
+		mr, _, err := git.MergeRequests.CreateMergeRequest(params.RepoIdentifier, mrOptions)
 		if err != nil {
 			return "", fmt.Errorf("failed to create GitLab merge request: %w", err)
 		}
 		return mr.WebURL, nil
 	} else {
-		return "", fmt.Errorf("no valid token provided")
+		return "", fmt.Errorf("unsupported service provider: %s", serviceProvider)
 	}
 }
 
