@@ -5,6 +5,7 @@ package gitops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -31,6 +32,12 @@ const (
 	VALID_BARNCH_NAME     = `^[a-zA-Z0-9/_-]+$`
 )
 
+const (
+	ProviderGitHub  ProviderType = "GitHub"
+	ProviderGitLab  ProviderType = "GitLab"
+	ProviderUnknown ProviderType = "Unknown"
+)
+
 type GitUserConfig struct {
 	Name  string
 	Email string
@@ -42,8 +49,33 @@ type PullRequestParams struct {
 	FeatureBranch  string
 	Title          string
 	Body           string
-	GithubToken    string
-	GitlabToken    string
+	GitPatToken    string
+}
+
+// ProviderType represents the type of a Git service provider.
+type ProviderType string
+
+// TokenRegex stores the regex patterns for identifying tokens.
+type TokenRegex struct {
+	Pattern string
+	Type    ProviderType
+}
+
+type ProviderConfig struct {
+	ProviderUrl string
+	Type        ProviderType
+}
+
+// providerConfigs contains the mapping of hostnames to provider types.
+var providerConfigs = []ProviderConfig{
+	{ProviderUrl: "github.com", Type: ProviderGitHub},
+	{ProviderUrl: "gitlab.com", Type: ProviderGitLab},
+}
+
+// tokenRegexList contains patterns for each token type
+var tokenRegexList = []TokenRegex{
+	{Pattern: `^ghp_[a-zA-Z0-9]{36}$`, Type: ProviderGitHub},    // GitHub PAT format
+	{Pattern: `^glpat-[a-zA-Z0-9-]{20}$`, Type: ProviderGitLab}, // GitLab PAT format
 }
 
 // CloneRepository clones a repository from the given URL to the specified directory.
@@ -293,16 +325,25 @@ func CreatePullRequest(params PullRequestParams) (string, error) {
 		return "", fmt.Errorf("failed to get remote provider: %w", err)
 	}
 
+	patTokentype, err := IdentifyTokenType(params.GitPatToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to identify token type: %w", err)
+	}
+
 	if len(strings.Split(params.RepoIdentifier, "/")) != 2 {
 		return "", fmt.Errorf("invalid repository identifier. It should be in the format: owner/repository")
 	}
 	repoOwner := strings.Split(params.RepoIdentifier, "/")[0]
 	repoName := strings.Split(params.RepoIdentifier, "/")[1]
 
-	if serviceProvider == "github" {
+	if serviceProvider == ProviderGitHub {
+		if patTokentype != ProviderGitHub {
+			return "", fmt.Errorf("your VCS provider is github but you have set a wrong PAT token: %s", patTokentype)
+		}
+
 		ctx := context.Background()
 		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: params.GithubToken},
+			&oauth2.Token{AccessToken: params.GitPatToken},
 		)
 		tc := oauth2.NewClient(ctx, ts)
 		client := github.NewClient(tc)
@@ -318,8 +359,11 @@ func CreatePullRequest(params PullRequestParams) (string, error) {
 			return "", fmt.Errorf("failed to create GitHub pull request: %w", err)
 		}
 		return pr.GetHTMLURL(), nil
-	} else if serviceProvider == "gitlab" {
-		git, err := gitlab.NewClient(params.GitlabToken)
+	} else if serviceProvider == ProviderGitLab {
+		if patTokentype != ProviderGitLab {
+			return "", fmt.Errorf("your VCS provider is gitlab but you have set a wrong PAT token: %s", patTokentype)
+		}
+		git, err := gitlab.NewClient(params.GitPatToken)
 		if err != nil {
 			return "", fmt.Errorf("failed to create GitLab client: %w", err)
 		}
@@ -418,30 +462,43 @@ func GetRemoteName() (string, error) {
 	return remoteName, nil
 }
 
-// GetRemoteProvider returns the service provider name (e.g., GitHub, GitLab, Bitbucket).
-func GetServiceProvider() (string, error) {
+// GetServiceProvider returns the service provider name based on the remote URL.
+func GetServiceProvider() (ProviderType, error) {
 	remoteName, err := GetRemoteName()
 	if err != nil {
-		return "", fmt.Errorf("error getting remote name: %w", err)
+		return ProviderUnknown, fmt.Errorf("error getting remote name: %w", err)
 	}
-	// Get the remote URL
+
+	// Execute git command to fetch the remote URL.
 	cmd := exec.Command("git", "remote", "get-url", remoteName)
 	out, err := cmd.Output()
 	if err != nil {
-		errorMessage := fmt.Sprintf("error getting remote URL: %s", string(out))
-		return "", fmt.Errorf(errorMessage, err)
+		return ProviderUnknown, fmt.Errorf("error getting remote URL: %w", err)
 	}
 
-	// Trim whitespace and parse the URL
-	remoteURL := strings.TrimSpace(string(out))
+	// Trim whitespace and extract the remote URL.
+	remoteUrl := strings.TrimSpace(string(out))
 
-	var provider string
-	// Extract the provider name directly from the hostname
-	if strings.Contains(remoteURL, "github.com") {
-		provider = "github"
-	} else if strings.Contains(remoteURL, "gitlab.com") {
-		provider = "gitlab"
+	// Match the remote URL with the known providers.
+	for _, config := range providerConfigs {
+		if strings.Contains(remoteUrl, config.ProviderUrl) {
+			return config.Type, nil
+		}
 	}
 
-	return provider, nil
+	return ProviderUnknown, errors.New("unknown service provider")
+}
+
+// IdentifyTokenType determines the type of the PAT token
+func IdentifyTokenType(token string) (ProviderType, error) {
+	for _, tokenRegex := range tokenRegexList {
+		matched, err := regexp.MatchString(tokenRegex.Pattern, token)
+		if err != nil {
+			return ProviderUnknown, fmt.Errorf("error processing regex for token type %s: %w", tokenRegex.Type, err)
+		}
+		if matched {
+			return tokenRegex.Type, nil
+		}
+	}
+	return ProviderUnknown, errors.New("unable to identify token type: invalid token format")
 }

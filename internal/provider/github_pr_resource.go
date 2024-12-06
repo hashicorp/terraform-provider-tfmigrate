@@ -15,8 +15,7 @@ import (
 )
 
 type githubPr struct {
-	githubToken string
-	gitlabToken string
+	gitPatToken string
 }
 
 var (
@@ -58,11 +57,11 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Required:            true,
 			},
 			"source_branch": schema.StringAttribute{
-				MarkdownDescription: "The feature branch from which the PR will be merged into",
+				MarkdownDescription: "The feature branch from which the PR will be merged into.",
 				Required:            true,
 			},
 			"destin_branch": schema.StringAttribute{
-				MarkdownDescription: "The Base branch into which the PR will be merged into",
+				MarkdownDescription: "The Base branch into which the PR will be merged into.",
 				Required:            true,
 			},
 			"pull_request_url": schema.StringAttribute{
@@ -78,39 +77,38 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 }
 
 func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-
 	var data GithubPrModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
 	createPrParams := gitops.PullRequestParams{
 		RepoIdentifier: data.RepoIdentifier.ValueString(),
 		BaseBranch:     data.DestinBranch.ValueString(),
 		FeatureBranch:  data.SourceBranch.ValueString(),
 		Title:          data.PrTitle.ValueString(),
 		Body:           data.PrBody.ValueString(),
-		GithubToken:    r.githubToken,
-		GitlabToken:    r.gitlabToken,
+		GitPatToken:    r.gitPatToken,
 	}
 
 	tflog.Info(ctx, "Executing Git Commit")
 
 	prURL, err := gitops.CreatePullRequest(createPrParams)
-	data.Summary = types.StringValue("Github PR Created: " + prURL)
-	data.PrUrl = types.StringValue(prURL)
 	if err != nil {
 		tflog.Error(ctx, "Error creating PR: "+err.Error())
 		resp.Diagnostics.AddError("Error creating PR: ", err.Error())
 		return
 	}
 
+	data.Summary = types.StringValue("Git PR Created: " + prURL)
+	data.PrUrl = types.StringValue(prURL)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *githubPr) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-}
+func (r *githubPr) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {}
 
 func (r *githubPr) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data GithubPrModel
@@ -133,16 +131,13 @@ func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, r
 	}
 
 	providerResourceData, ok := req.ProviderData.(ProviderResourceData)
-
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Github Token Found",
-			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
+			"Unexpected Git PAT Token Found",
+			fmt.Sprintf("providerResourceData from context is %v.", providerResourceData),
 		)
-
 		return
 	}
-	r.githubToken = providerResourceData.GithubToken
-	r.gitlabToken = providerResourceData.GitlabToken
 
+	r.gitPatToken = providerResourceData.GitPatToken
 }

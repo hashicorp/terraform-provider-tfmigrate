@@ -23,9 +23,8 @@ var (
 )
 
 const (
-	GITHUB_TOKEN_ENV_NAME = "GITHUB_TOKEN"
-	GITLAB_TOKEN_ENV_NAME = "GITLAB_TOKEN"
-	HCP_TERRAFORM_HOST    = "app.terraform.io"
+	GIT_TOKEN_ENV_NAME = "TF_GIT_PAT_TOKEN"
+	HCP_TERRAFORM_HOST = "app.terraform.io"
 )
 
 // New is a helper function to simplify provider server and testing implementation.
@@ -44,15 +43,13 @@ type tfmProvider struct {
 
 // tfmProviderModel maps provider schema data to a Go type.
 type tfmProviderModel struct {
-	GithubToken types.String `tfsdk:"github_token"`
-	GitlabToken types.String `tfsdk:"gitlab_token"`
+	GitPatToken types.String `tfsdk:"git_pat_token"`
 	Hostname    types.String `tfsdk:"hostname"`
 }
 
 // ProviderResourceData holds the provider configuration data.
 type ProviderResourceData struct {
-	GithubToken string
-	GitlabToken string
+	GitPatToken string
 	Hostname    string
 }
 
@@ -66,15 +63,10 @@ func (p *tfmProvider) Metadata(_ context.Context, _ provider.MetadataRequest, re
 func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"github_token": schema.StringAttribute{
+			"git_pat_token": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "The GitHub PAT token to be used for creating pull requests.",
-			},
-			"gitlab_token": schema.StringAttribute{
-				Optional:    true,
-				Sensitive:   true,
-				Description: "The GitLab PAT token to be used for creating merge requests.",
+				Description: "The Git Personal Access Token (PAT) to be used for creating pull or merge requests.",
 			},
 			"hostname": schema.StringAttribute{
 				Optional:    true,
@@ -98,18 +90,11 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	}
 
 	// Handle unknown values
-	if config.GithubToken.IsUnknown() {
+	if config.GitPatToken.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
-			path.Root("github_token"),
-			"Unknown GitHub PAT Token",
-			"The provider cannot initialize the GitHub client as the GitHub token is unknown. Set it in configuration or as an environment variable.",
-		)
-	}
-	if config.GitlabToken.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("gitlab_token"),
-			"Unknown GitLab PAT Token",
-			"The provider cannot initialize the GitLab client as the GitLab token is unknown. Set it in configuration or as an environment variable.",
+			path.Root("git_pat_token"),
+			"Unknown Git PAT Token",
+			"The provider cannot initialize the Git client as the Git PAT token is unknown. Set it in configuration or as an environment variable.",
 		)
 	}
 	if config.Hostname.IsUnknown() {
@@ -126,25 +111,21 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 
 	// Default values to environment variables, but override
 	// with Terraform configuration values if set
-	githubToken := os.Getenv(GITHUB_TOKEN_ENV_NAME)
-	gitlabToken := os.Getenv(GITLAB_TOKEN_ENV_NAME)
+	gitPatToken := os.Getenv(GIT_TOKEN_ENV_NAME)
 	hostname := HCP_TERRAFORM_HOST
 
-	if !config.GithubToken.IsNull() {
-		githubToken = config.GithubToken.ValueString()
-	}
-	if !config.GitlabToken.IsNull() {
-		gitlabToken = config.GitlabToken.ValueString()
+	if !config.GitPatToken.IsNull() {
+		gitPatToken = config.GitPatToken.ValueString()
 	}
 	if !config.Hostname.IsNull() {
 		hostname = config.Hostname.ValueString()
 	}
 
 	// Validate configurations
-	if githubToken == "" && gitlabToken == "" {
+	if gitPatToken == "" {
 		resp.Diagnostics.AddError(
-			"Missing Authentication Tokens",
-			"The provider requires at least one of GitHub or GitLab tokens to be configured either as a Terraform variable or an environment variable.",
+			"Missing Authentication Token",
+			"The provider requires the Git PAT token to be configured either as a Terraform variable or an environment variable.",
 		)
 	}
 
@@ -154,8 +135,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 
 	// Set the provider resource data
 	providerResourceData := ProviderResourceData{
-		GithubToken: githubToken,
-		GitlabToken: gitlabToken,
+		GitPatToken: gitPatToken,
 		Hostname:    hostname,
 	}
 	resp.ResourceData = providerResourceData

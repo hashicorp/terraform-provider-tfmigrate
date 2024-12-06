@@ -16,7 +16,7 @@ import (
 )
 
 type gitCommitPush struct {
-	githubToken string
+	gitPatToken string
 }
 
 var (
@@ -106,7 +106,7 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	if data.EnablePush.ValueBool() {
-		//err = gitops.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.githubToken, true)
+		//err = gitops.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.gitPatToken, true)
 		err = gitops.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
 		if err != nil {
 			tflog.Error(ctx, "Error executing Git Push: "+err.Error())
@@ -147,11 +147,11 @@ func (r *gitCommitPush) Configure(_ context.Context, req resource.ConfigureReque
 
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Github Token Found",
+			"Unexpected Git PAT Token Found",
 			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
 		)
 
 		return
 	}
-	r.githubToken = providerResourceData.GithubToken
+	r.gitPatToken = providerResourceData.GitPatToken
 }

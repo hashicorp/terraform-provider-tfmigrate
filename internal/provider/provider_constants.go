@@ -4,8 +4,8 @@
 package provider
 
 const (
-	PROVIDER_PAT_TOKEN_MISSING          = "Missing Github PAT Token."
-	PROVIDER_PAT_TOKEN_MISSING_DETAILED = "The provider cannot create the Github API client as there is a missing or empty value for the Github API client. Set the password value in the configuration or use the TFM_GITHUB_TOKEN environment variable. If either is already set, ensure the value is not empty."
+	PROVIDER_PAT_TOKEN_MISSING          = "Missing Git PAT Token."
+	PROVIDER_PAT_TOKEN_MISSING_DETAILED = "The provider cannot create the VCS API client as there is a missing or empty value for the VCS API client. Set the password value in the configuration or use the TFM_GITHUB_TOKEN environment variable. If either is already set, ensure the value is not empty."
 
 	DIR_PATH_DOES_NOT_EXIST              = "Specified Directory Path does not exist."
 	DIR_PATH_DOES_NOT_EXIST_DETAILED     = "The given directory path %s does not exist. Please provide a valid directory path."
