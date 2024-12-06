@@ -15,7 +15,7 @@ const (
 	// such as updating the Makefile and running the testing through that tool.
 	providerConfig = `
 provider "tfmigrate" {
-	github_token = "token"
+	git_pat_token = "token"
 }
 `
 )
