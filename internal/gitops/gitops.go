@@ -72,7 +72,7 @@ var providerConfigs = []ProviderConfig{
 	{ProviderUrl: "gitlab.com", Type: ProviderGitLab},
 }
 
-// tokenRegexList contains patterns for each token type
+// tokenRegexList contains patterns for each token type.
 var tokenRegexList = []TokenRegex{
 	{Pattern: `^ghp_[a-zA-Z0-9]{36}$`, Type: ProviderGitHub},    // GitHub PAT format
 	{Pattern: `^glpat-[a-zA-Z0-9-]{20}$`, Type: ProviderGitLab}, // GitLab PAT format
@@ -489,7 +489,7 @@ func GetServiceProvider() (ProviderType, error) {
 	return ProviderUnknown, errors.New("unknown service provider")
 }
 
-// IdentifyTokenType determines the type of the PAT token
+// IdentifyTokenType determines the type of the PAT token.
 func IdentifyTokenType(token string) (ProviderType, error) {
 	for _, tokenRegex := range tokenRegexList {
 		matched, err := regexp.MatchString(tokenRegex.Pattern, token)
