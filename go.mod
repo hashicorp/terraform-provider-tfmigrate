@@ -15,8 +15,8 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.24.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.10.0
-	github.com/xanzy/go-gitlab v0.114.0
 	github.com/zclconf/go-cty v1.15.0
+	gitlab.com/gitlab-org/api/client-go v0.116.0
 	golang.org/x/oauth2 v0.23.0
 )
 
