@@ -25,4 +25,4 @@ provider "tfmigrate" {
 ### Optional
 
 - `git_pat_token` (String, Sensitive) The Git Personal Access Token (PAT) to be used for creating pull or merge requests.
-- `hostname` (String) The hostname of the TFE instance to connect to. Defaults to HCP Terraform at app.terraform.io.
+- `hostname` (String) The hostname of the TFE instance to connect to. Defaults to HCP Terraform at [app.terraform.io](https://app.terraform.io).

@@ -134,11 +134,10 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	}
 
 	// Set the provider resource data
-	providerResourceData := ProviderResourceData{
+	resp.ResourceData = ProviderResourceData{
 		GitPatToken: gitPatToken,
 		Hostname:    hostname,
 	}
-	resp.ResourceData = providerResourceData
 }
 
 // DataSources defines the data sources implemented in the provider.

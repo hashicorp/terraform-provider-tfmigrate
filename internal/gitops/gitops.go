@@ -28,14 +28,22 @@ import (
 
 const (
 	VALID_REPO_URL_FORMAT = "https://github.com/username/repository.git"
-	VALID_URL_REGEX       = `^(https?|git)://.*\.git$`
+	VALID_REPO_URL_REGEX  = `^(https?|git)://.*\.git$|^git@[\w.-]+:[\w./-]+\.git$`
 	VALID_BARNCH_NAME     = `^[a-zA-Z0-9/_-]+$`
+	GITHUB_TOKEN_REGEX    = `^ghp_[a-zA-Z0-9]{36}$`    // GitHub PAT format
+	GITLAB_TOKEN_REGEX    = `^glpat-[a-zA-Z0-9-]{20}$` // GitLab PAT format
+	HOSTNAME_REGEX        = `^(?:https?://|git@)([^:/]+)[:/]`
 )
 
 const (
 	ProviderGitHub  ProviderType = "GitHub"
 	ProviderGitLab  ProviderType = "GitLab"
 	ProviderUnknown ProviderType = "Unknown"
+)
+
+const (
+	ProviderUrlGitHub string = "github.com"
+	ProviderUrlGitLab string = "gitlab.com"
 )
 
 type GitUserConfig struct {
@@ -66,21 +74,15 @@ type ProviderConfig struct {
 	Type        ProviderType
 }
 
-// providerConfigs contains the mapping of hostnames to provider types.
-var providerConfigs = []ProviderConfig{
-	{ProviderUrl: "github.com", Type: ProviderGitHub},
-	{ProviderUrl: "gitlab.com", Type: ProviderGitLab},
-}
-
 // tokenRegexList contains patterns for each token type.
 var tokenRegexList = []TokenRegex{
-	{Pattern: `^ghp_[a-zA-Z0-9]{36}$`, Type: ProviderGitHub},    // GitHub PAT format
-	{Pattern: `^glpat-[a-zA-Z0-9-]{20}$`, Type: ProviderGitLab}, // GitLab PAT format
+	{Pattern: GITHUB_TOKEN_REGEX, Type: ProviderGitHub}, // GitHub PAT format
+	{Pattern: GITLAB_TOKEN_REGEX, Type: ProviderGitLab}, // GitLab PAT format
 }
 
 // CloneRepository clones a repository from the given URL to the specified directory.
 func CloneRepository(repoURL, directory string) error {
-	urlRegex := regexp.MustCompile(VALID_URL_REGEX)
+	urlRegex := regexp.MustCompile(VALID_REPO_URL_REGEX)
 	if !urlRegex.MatchString(repoURL) {
 		return fmt.Errorf("invalid repository URL. It should be in the format: %s", VALID_REPO_URL_FORMAT)
 	}
@@ -462,7 +464,7 @@ func GetRemoteName() (string, error) {
 	return remoteName, nil
 }
 
-// GetServiceProvider returns the service provider name based on the remote URL.
+// GetServiceProvider deduces the service provider name based on the remote URL.
 func GetServiceProvider() (ProviderType, error) {
 	remoteName, err := GetRemoteName()
 	if err != nil {
@@ -479,14 +481,24 @@ func GetServiceProvider() (ProviderType, error) {
 	// Trim whitespace and extract the remote URL.
 	remoteUrl := strings.TrimSpace(string(out))
 
-	// Match the remote URL with the known providers.
-	for _, config := range providerConfigs {
-		if strings.Contains(remoteUrl, config.ProviderUrl) {
-			return config.Type, nil
-		}
+	// Extract the hostname from the remote URL.
+	re := regexp.MustCompile(HOSTNAME_REGEX)
+	matches := re.FindStringSubmatch(remoteUrl)
+	if len(matches) < 2 {
+		return ProviderUnknown, fmt.Errorf("unable to extract hostname from remote URL: %s", remoteUrl)
 	}
 
-	return ProviderUnknown, errors.New("unknown service provider")
+	hostname := matches[1]
+
+	// Determine the provider type based on the hostname.
+	switch hostname {
+	case ProviderUrlGitHub:
+		return ProviderGitHub, nil
+	case ProviderUrlGitLab:
+		return ProviderGitLab, nil
+	default:
+		return ProviderUnknown, fmt.Errorf("unsupported hostname: %s", hostname)
+	}
 }
 
 // IdentifyTokenType determines the type of the PAT token.
