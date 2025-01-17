@@ -15,7 +15,7 @@ description: |-
 ```terraform
 # Example of provider configuration for tfmigrate
 provider "tfmigrate" {
-  git_pat_token = "" # Github PAT token to be passed
+  github_token = "" # Github PAT token to be passed
 }
 ```
 
