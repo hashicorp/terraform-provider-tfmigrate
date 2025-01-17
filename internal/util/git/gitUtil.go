@@ -232,17 +232,10 @@ func (g *gitUtil) GetGitToken(gitServiceProvider *consts.GitServiceProvider) (st
 	gitPatToken, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
 
 	if !isSet {
-<<<<<<< HEAD
 		return "", cliErrs.ErrTfGitPatTokenNotSet
 	}
 	if gitPatToken == "" {
 		return "", cliErrs.ErrTfGitPatTokenEmpty
-=======
-		return "", cliErrs.ErrGithubTokenNotSet
-	}
-	if gitPatToken == "" {
-		return "", cliErrs.ErrGithubTokenEmpty
->>>>>>> cffdcfe (Added interfaces to the git related libraries and added git PAT token validation)
 	}
 
 	switch *gitServiceProvider {
@@ -266,17 +259,10 @@ func getGithubPatToken(gitPatToken string) (string, error) {
 	}
 
 	if tokenType == FineGrainedToken {
-<<<<<<< HEAD
 		return "", cliErrs.ErrTfGitPatTokenFineGrained
 	}
 
 	return "", cliErrs.ErrTfGitPatTokenUnrecognized
-=======
-		return "", cliErrs.ErrGithubTokenFineGrained
-	}
-
-	return "", cliErrs.ErrGithubTokenUnrecognized
->>>>>>> cffdcfe (Added interfaces to the git related libraries and added git PAT token validation)
 }
 
 // getGitlabPatToken returns the GitLab PAT token.
@@ -289,11 +275,7 @@ func (g *gitUtil) getGitlabPatToken(gitPatToken string) (string, error) {
 		return gitPatToken, nil
 	}
 
-<<<<<<< HEAD
 	return "", cliErrs.ErrTfGitPatTokenInvalid
-=======
-	return "", cliErrs.ErrGitlabTokenInvalid
->>>>>>> cffdcfe (Added interfaces to the git related libraries and added git PAT token validation)
 }
 
 // GetRepoIdentifier gets the repo identifier.

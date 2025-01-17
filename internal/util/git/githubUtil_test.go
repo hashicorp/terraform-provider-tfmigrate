@@ -1,5 +1,4 @@
 package git
-<<<<<<< HEAD
 
 import (
 	"bytes"
@@ -270,5 +269,3 @@ func getMockResponse(statusCode int, body string) *http.Response {
 		},
 	}
 }
-=======
->>>>>>> cffdcfe (Added interfaces to the git related libraries and added git PAT token validation)

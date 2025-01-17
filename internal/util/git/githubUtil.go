@@ -44,19 +44,11 @@ func (g *githubUtil) GetRepository(owner string, repo string) (*github.Repositor
 
 	token, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
 	if !isSet {
-<<<<<<< HEAD
 		return nil, nil, cliErrs.ErrTfGitPatTokenNotSet
 	}
 
 	if token == "" {
 		return nil, nil, cliErrs.ErrTfGitPatTokenEmpty
-=======
-		return nil, nil, cliErrs.ErrGithubTokenNotSet
-	}
-
-	if token == "" {
-		return nil, nil, cliErrs.ErrGithubTokenEmpty
->>>>>>> cffdcfe (Added interfaces to the git related libraries and added git PAT token validation)
 	}
 
 	if g.client == nil {
