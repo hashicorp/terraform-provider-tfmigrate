@@ -9,6 +9,7 @@ import (
 	"os"
 	"terraform-provider-tfmigrate/internal/gitops"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -17,6 +18,7 @@ import (
 
 type gitCommitPush struct {
 	gitPatToken string
+	gitOps      gitops.GitOperations
 }
 
 var (
@@ -24,7 +26,9 @@ var (
 )
 
 func NewGitCommitPushResource() resource.Resource {
-	return &gitCommitPush{}
+	return &gitCommitPush{
+		gitOps: gitops.NewGitOperations(hclog.L()),
+	}
 }
 
 type GitCommitPushModel struct {
@@ -94,7 +98,7 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 	commitMessage := data.CommitMessage.ValueString()
 
 	tflog.Info(ctx, "Executing Git Commit")
-	commitHash, err := gitops.CreateCommit(dirPath, commitMessage)
+	commitHash, err := r.gitOps.CreateCommit(dirPath, commitMessage)
 	if err != nil {
 		tflog.Error(ctx, "Error executing Git Commit "+err.Error())
 		resp.Diagnostics.AddError("Error executing Git Commit", err.Error())
@@ -106,8 +110,8 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	if data.EnablePush.ValueBool() {
-		//err = gitops.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.gitPatToken, true)
-		err = gitops.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
+		// err = r.gitOps.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.gitPatToken, true)
+		err = r.gitOps.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
 		if err != nil {
 			tflog.Error(ctx, "Error executing Git Push: "+err.Error())
 			resp.Diagnostics.AddError("Error executing Git Push:", err.Error())

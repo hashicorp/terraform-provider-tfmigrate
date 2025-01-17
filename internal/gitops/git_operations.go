@@ -1,0 +1,472 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0.
+
+package gitops
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os/exec"
+	"regexp"
+	"slices"
+	"strings"
+	"time"
+
+	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
+	consts "terraform-provider-tfmigrate/internal/constants"
+	gitUtil "terraform-provider-tfmigrate/internal/util/git"
+
+	git "github.com/go-git/go-git/v5"
+	transportHttp "github.com/go-git/go-git/v5/plumbing/transport/http"
+	gitlab "gitlab.com/gitlab-org/api/client-go"
+
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/google/go-github/v45/github"
+	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+
+	"golang.org/x/oauth2"
+)
+
+type gitOperations struct {
+	logger  hclog.Logger
+	gitUtil gitUtil.GitUtil
+}
+
+type GitOperations interface {
+	GetRemoteName() (string, error)
+	GetRemoteURL(remoteName string) (string, error)
+	ResetToLastCommittedVersion(repoPath string) error
+	ListBranches(repoPath string) ([]string, error)
+	CreateAndSwitchBranch(repoPath, branchName string) error
+	DeleteLocalBranch(repoPath, branchName string) error
+	CreateCommit(repoPath, message string) (string, error)
+	PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error
+	CreatePullRequest(params PullRequestParams) (string, error)
+	ListRemote(repoPath string) ([]string, error)
+	PushCommitUsingGit(remoteName string, branchName string) error
+	GetRepoIdentifier(repoUrl string) string
+	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
+}
+
+const (
+	validBranchName = `^[a-zA-Z0-9/_-]+$`
+)
+
+type GitUserConfig struct {
+	Name  string
+	Email string
+}
+
+type PullRequestParams struct {
+	RepoIdentifier string
+	BaseBranch     string
+	FeatureBranch  string
+	Title          string
+	Body           string
+	GitPatToken    string
+}
+
+// ProviderType represents the type of a Git service provider.
+type ProviderType string
+
+// TokenRegex stores the regex patterns for identifying tokens.
+type TokenRegex struct {
+	Pattern string
+	Type    ProviderType
+}
+
+type ProviderConfig struct {
+	ProviderUrl string
+	Type        ProviderType
+}
+
+// NewGitOperations creates a new instance of GitOperations.
+func NewGitOperations(logger hclog.Logger) GitOperations {
+	return &gitOperations{
+		logger:  logger,
+		gitUtil: gitUtil.NewGitUtil(logger),
+	}
+}
+
+// GetRemoteName returns the remote name.
+func (gitOps *gitOperations) GetRemoteName() (string, error) {
+	output, err := exec.
+		Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").
+		CombinedOutput()
+
+	if strings.Contains(string(output), "no upstream configured for branch") {
+		return "origin", nil
+	}
+	if err != nil {
+		errorMessage := fmt.Sprintf("error getting remote name: %s", string(output))
+		return gitOps.logAndReturnErr(errorMessage, err)
+	}
+
+	upstream := strings.TrimSpace(string(output))
+	remoteName := strings.Split(upstream, "/")[0]
+	if remoteName == "" {
+		return "", errors.New("error fetching remote name")
+	}
+
+	return remoteName, nil
+}
+
+// GetRemoteURL returns the remote URL.
+func (gitOps *gitOperations) GetRemoteURL(remoteName string) (string, error) {
+	cmd := exec.Command("git", "remote", "get-url", remoteName)
+	out, err := cmd.Output()
+	if err != nil {
+		errorMessage := fmt.Sprintf("error getting remote url: %s", string(out))
+		return gitOps.logAndReturnErr(errorMessage, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// ResetToLastCommittedVersion resets the workspace to last commit version.
+func (gitOps *gitOperations) ResetToLastCommittedVersion(repoPath string) error {
+	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
+	if err != nil {
+		return err
+	}
+
+	ref, err := gitOps.gitUtil.Head(repo)
+	if err != nil {
+		return err
+	}
+
+	commit, err := gitOps.gitUtil.CommitObject(repo, ref.Hash())
+	if err != nil {
+		return err
+	}
+
+	worktree, err := gitOps.gitUtil.Worktree(repo)
+	if err != nil {
+		return err
+	}
+
+	err = gitOps.gitUtil.Reset(worktree, &git.ResetOptions{
+		Mode:   git.HardReset,
+		Commit: commit.Hash,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ListBranches list branches in a repository.
+func (gitOps *gitOperations) ListBranches(repoPath string) ([]string, error) {
+	var branches []string
+
+	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
+	if err != nil {
+		return nil, err
+	}
+
+	branchesIter, err := gitOps.gitUtil.Branches(repo)
+	if err != nil {
+		return nil, err
+	}
+
+	err = branchesIter.ForEach(func(ref *plumbing.Reference) error {
+		branches = append(branches, ref.Name().String())
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return branches, nil
+}
+
+// DeleteLocalBranch delete a local branch in a repository.
+func (gitOps *gitOperations) DeleteLocalBranch(repoPath, branchName string) error {
+	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
+	if err != nil {
+		return err
+	}
+
+	// Check if the branch exists.
+	branches, err := gitOps.ListBranches(repoPath)
+	if err != nil {
+		return err
+	}
+
+	// Check if the branch already exists.
+	if !slices.Contains(branches, "refs/heads/"+branchName) {
+		return fmt.Errorf("the branch %s does not exist", branchName)
+	}
+
+	// Check if the branch to delete is currently checked out.
+	headRef, err := gitOps.gitUtil.Head(repo)
+	if err != nil {
+		return err
+	}
+	if headRef.Name().Short() == branchName {
+		return fmt.Errorf("cannot delete the currently checked out branch '%s'", branchName)
+	}
+
+	// Delete the branch.
+	err = gitOps.gitUtil.RemoveReference(repo.Storer, plumbing.NewBranchReferenceName(branchName))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateAndSwitchBranch creates a new branch and switches to it.
+func (gitOps *gitOperations) CreateAndSwitchBranch(repoPath, branchName string) error {
+	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
+	if err != nil {
+		gitOps.logger.Error(fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
+		return err
+	}
+
+	worktree, err := gitOps.gitUtil.Worktree(repo)
+	if err != nil {
+		gitOps.logger.Error(fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
+		return err
+	}
+
+	branches, err := gitOps.ListBranches(repoPath)
+	if err != nil {
+		gitOps.logger.Error(fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
+		return err
+	}
+	// Check if the branch already exists.
+	var createBranch bool
+	if !slices.Contains(branches, "refs/heads/"+branchName) {
+		// return fmt.Errorf("branch '%s' already exists", branchName).
+		createBranch = true
+	}
+
+	// Check if the branch name is valid.
+	branch_name := regexp.MustCompile(validBranchName)
+	if !branch_name.MatchString(branchName) {
+		return fmt.Errorf("invalid branch name '%s'. Branch names can only contain letters, digits, '_', '-', and '/'", branchName)
+	}
+
+	// Create and switch to the new branch.
+	err = gitOps.gitUtil.Checkout(worktree, &git.CheckoutOptions{
+		Branch: plumbing.NewBranchReferenceName(branchName),
+		Create: createBranch,
+		Keep:   true,
+	})
+	if err != nil {
+		gitOps.logger.Error(fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
+		return err
+	}
+	return nil
+}
+
+// CreateCommit creates a commit in the repository.
+func (gitOps *gitOperations) CreateCommit(repoPath, message string) (string, error) {
+	if len(message) > 255 {
+		return "", fmt.Errorf("commit message too long: must be 255 characters or less")
+	}
+
+	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
+	if err != nil {
+		return "", err
+	}
+
+	worktree, err := gitOps.gitUtil.Worktree(repo)
+	if err != nil {
+		return "", err
+	}
+
+	// Check if there are changes to commit.
+	status, err := gitOps.gitUtil.Status(worktree)
+	if err != nil {
+		return "", err
+	}
+	if status.IsClean() {
+		return "", nil
+	}
+
+	// Add all changes to the staging area.
+	_, err = gitOps.gitUtil.Add(worktree, ".")
+	if err != nil {
+		return "", err
+	}
+
+	// Retrieve the author name and email from the Git config.
+	author, err := gitOps.gitUtil.GlobalGitConfig()
+	if err != nil {
+		return "", err
+	}
+
+	// Commit the changes.
+	commit, err := gitOps.gitUtil.Commit(worktree, message, &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  strings.TrimSpace(author.Name),
+			Email: strings.TrimSpace(author.Email),
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return commit.String(), nil
+}
+
+// PushCommit push commit to the remote repository.
+func (gitOps *gitOperations) PushCommit(repoPath, remoteName, branchName, githubToken string, force bool) error {
+	authToken := githubToken
+	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
+	if err != nil {
+		return err
+	}
+
+	// Check out the branch.
+	worktree, err := gitOps.gitUtil.Worktree(repo)
+	if err != nil {
+		return err
+	}
+	err = gitOps.gitUtil.Checkout(worktree, &git.CheckoutOptions{
+		Branch: plumbing.NewBranchReferenceName(branchName),
+	})
+	if err != nil {
+		return err
+	}
+
+	// Push the changes to the remote repository.
+	author, err := gitOps.gitUtil.GlobalGitConfig()
+	if err != nil {
+		return err
+	}
+	err = gitOps.gitUtil.Push(repo, &git.PushOptions{
+		RemoteName: remoteName,
+		Auth: &transportHttp.BasicAuth{
+			Username: author.Name,
+			Password: authToken,
+		},
+		Force: force,
+	})
+	if err != nil {
+		if errors.Is(err, git.NoErrAlreadyUpToDate) {
+			gitOps.logger.Info("Everything is up-to-date")
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateRequest creates a pull request or merge request based on the serviceProvider (GitHub or GitLab).
+func (gitOps *gitOperations) CreatePullRequest(params PullRequestParams) (string, error) {
+	remoteName, err := gitOps.GetRemoteName()
+	if err != nil {
+		return "", err
+	}
+	repoURL, err := gitOps.GetRemoteURL(remoteName)
+	if err != nil {
+		return "", err
+	}
+	remoteServiceProvider := gitOps.GetRemoteServiceProvider(repoURL)
+
+	if len(strings.Split(params.RepoIdentifier, "/")) != 2 {
+		return "", fmt.Errorf(consts.InvalidRepositoryIdentifier, params.RepoIdentifier)
+	}
+	repoOwner := strings.Split(params.RepoIdentifier, "/")[0]
+	repoName := strings.Split(params.RepoIdentifier, "/")[1]
+
+	if remoteServiceProvider == &consts.GitHub {
+
+		ctx := context.Background()
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: params.GitPatToken},
+		)
+		tc := oauth2.NewClient(ctx, ts)
+		client := github.NewClient(tc)
+
+		newPR := &github.NewPullRequest{
+			Title: github.String(params.Title),
+			Head:  github.String(params.FeatureBranch),
+			Base:  github.String(params.BaseBranch),
+			Body:  github.String(params.Body),
+		}
+		pr, err := gitOps.gitUtil.CreatePR(ctx, client, repoOwner, repoName, newPR)
+		if err != nil {
+			return "", err
+		}
+
+		return pr.GetHTMLURL(), nil
+	} else if remoteServiceProvider == &consts.GitLab {
+
+		// Create a new GitLab client.
+		gitLabNewClient, err := gitOps.gitUtil.NewGitLabClient(params.GitPatToken)
+		if err != nil {
+			gitOps.logger.Error("Failed to create GitLab client", "error", err)
+			return "", err
+		}
+		mrOptions := &gitlab.CreateMergeRequestOptions{
+			SourceBranch: &params.FeatureBranch,
+			TargetBranch: &params.BaseBranch,
+			Title:        &params.Title,
+			Description:  &params.Body,
+		}
+		// Create the merge request.
+		mr, err := gitOps.gitUtil.CreateGitlabMergeRequest(params.RepoIdentifier, mrOptions, gitLabNewClient, params.GitPatToken)
+		if err != nil {
+			return "", err
+		}
+
+		return mr.WebURL, nil
+	} else {
+		return "", fmt.Errorf("%s", string(cliErrs.ErrGitServiceProviderNotSupported))
+	}
+}
+
+// ListRemote lists remote references in a repository.
+func (gitOps *gitOperations) ListRemote(repoPath string) ([]string, error) {
+	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
+	if err != nil {
+		return nil, err
+	}
+
+	remotes, err := gitOps.gitUtil.Remotes(repo)
+	if err != nil {
+		return nil, err
+	}
+
+	var remoteNames []string
+	for _, remote := range remotes {
+		remoteNames = append(remoteNames, remote.Config().Name)
+	}
+
+	return remoteNames, nil
+}
+
+// GetRepoIdentifier returns the repository identifier.
+// This is a wrapper around the GetRepoIdentifier method in GitUtil.
+// This is done to avoid direct dependency on GitUtil in the client code.
+func (gitOps *gitOperations) GetRepoIdentifier(repoUrl string) string {
+	return gitOps.gitUtil.GetRepoIdentifier(repoUrl)
+}
+
+// GetRemoteServiceProvider returns the remote service provider.
+func (gitOps *gitOperations) GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider {
+	return gitOps.gitUtil.GetRemoteServiceProvider(remoteURL)
+}
+
+func (gitOps *gitOperations) PushCommitUsingGit(remoteName string, branchName string) error {
+	// execute git push command.
+	out, err := exec.Command("git", "push", "-u", remoteName, branchName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to push the commit: %s", out)
+	}
+	tflog.Info(context.Background(), "Pushed the commit to remote", map[string]interface{}{"remote": remoteName, "branch": branchName})
+	return nil
+}
+
+// logAndReturnErr logs the error message and returns the error.
+func (gitOps *gitOperations) logAndReturnErr(errMsg string, err error) (string, error) {
+	err = fmt.Errorf("err: %s, details: %s", err, errMsg)
+	gitOps.logger.Error(err.Error())
+	return "", err
+}

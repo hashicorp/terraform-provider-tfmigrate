@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"terraform-provider-tfmigrate/internal/gitops"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -16,6 +17,7 @@ import (
 
 type githubPr struct {
 	gitPatToken string
+	gitOps      gitops.GitOperations
 }
 
 var (
@@ -23,7 +25,9 @@ var (
 )
 
 func NewGithubPrResource() resource.Resource {
-	return &githubPr{}
+	return &githubPr{
+		gitOps: gitops.NewGitOperations(hclog.L()),
+	}
 }
 
 type GithubPrModel struct {
@@ -95,7 +99,7 @@ func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp 
 
 	tflog.Info(ctx, "Executing Git Commit")
 
-	prURL, err := gitops.CreatePullRequest(createPrParams)
+	prURL, err := r.gitOps.CreatePullRequest(createPrParams)
 	if err != nil {
 		tflog.Error(ctx, "Error creating PR: "+err.Error())
 		resp.Diagnostics.AddError("Error creating PR: ", err.Error())

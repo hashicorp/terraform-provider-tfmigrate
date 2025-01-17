@@ -1,0 +1,32 @@
+with-expecter: true
+issue-845-fix: true
+packages:
+  terraform-provider-tfmigrate/internal/util/token_validator:
+    config:
+      dir: "_mocks/util_mocks/token_validator_mocks"
+      outpkg: "token_validator_mocks"
+    interfaces:
+      GithubTokenValidator:
+      GitlabTokenValidator:
+      TokenValidatorFactory:
+  terraform-provider-tfmigrate/internal/util/git:
+    config:
+      dir: "_mocks/util_mocks/git_mocks"
+      outpkg: "git_mocks"
+    interfaces:
+      GithubUtil:
+      GitlabUtil:
+      GitUtil:
+  terraform-provider-tfmigrate/internal/gitops:
+    config:
+      dir: "_mocks/gitops_mocks"
+      outpkg: "gitops_mocks"
+    interfaces:
+      GitOperations:
+  github.com/go-git/go-git/v5/plumbing/storer:
+    config:
+      dir: "_mocks/gitops_mocks"
+      outpkg: "iter_mocks"
+    interfaces:
+      ReferenceIter:
+

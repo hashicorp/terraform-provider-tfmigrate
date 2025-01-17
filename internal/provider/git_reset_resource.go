@@ -9,6 +9,7 @@ import (
 	"os"
 	"terraform-provider-tfmigrate/internal/gitops"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -16,6 +17,7 @@ import (
 )
 
 type gitReset struct {
+	gitOps gitops.GitOperations
 }
 
 var (
@@ -23,7 +25,9 @@ var (
 )
 
 func NewGitResetResource() resource.Resource {
-	return &gitReset{}
+	return &gitReset{
+		gitOps: gitops.NewGitOperations(hclog.L()),
+	}
 }
 
 type GitResetModel struct {
@@ -61,7 +65,7 @@ func (r *gitReset) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 	tflog.Info(ctx, "Executing Git Reset")
-	err = gitops.ResetToLastCommittedVersion(dirPath)
+	err = r.gitOps.ResetToLastCommittedVersion(dirPath)
 	if err != nil {
 		tflog.Error(ctx, "Error executing Git Reset: "+err.Error())
 		resp.Diagnostics.AddError("Error executing Git Reset:", err.Error())
