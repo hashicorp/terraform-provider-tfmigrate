@@ -37,10 +37,17 @@ func NewGitlabUtil(ctx context.Context, logger hclog.Logger) GitlabUtil {
 func (g *gitlabUtil) GetProject(projectIdentifier string) (*gitlab.Project, *gitlab.Response, error) {
 	token, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
 	if !isSet {
+<<<<<<< HEAD
 		return nil, nil, cliErrs.ErrTfGitPatTokenNotSet
 	}
 	if token == "" {
 		return nil, nil, cliErrs.ErrTfGitPatTokenEmpty
+=======
+		return nil, nil, cliErrs.ErrGitlabTokenNotSet
+	}
+	if token == "" {
+		return nil, nil, cliErrs.ErrGitlabTokenEmpty
+>>>>>>> cffdcfe (Added interfaces to the git related libraries and added git PAT token validation)
 	}
 
 	if g.client == nil {

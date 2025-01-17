@@ -1,4 +1,5 @@
 package git
+<<<<<<< HEAD
 
 import (
 	"bytes"
@@ -131,3 +132,5 @@ func TestGetProject(t *testing.T) {
 		})
 	}
 }
+=======
+>>>>>>> cffdcfe (Added interfaces to the git related libraries and added git PAT token validation)

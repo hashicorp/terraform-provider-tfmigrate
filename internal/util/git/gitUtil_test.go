@@ -1,4 +1,5 @@
 package git
+<<<<<<< HEAD
 
 import (
 	"context"
@@ -204,3 +205,5 @@ func TestGetRemoteServiceProvider(t *testing.T) {
 		})
 	}
 }
+=======
+>>>>>>> cffdcfe (Added interfaces to the git related libraries and added git PAT token validation)
