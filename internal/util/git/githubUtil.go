@@ -44,11 +44,11 @@ func (g *githubUtil) GetRepository(owner string, repo string) (*github.Repositor
 
 	token, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
 	if !isSet {
-		return nil, nil, cliErrs.ErrGithubTokenNotSet
+		return nil, nil, cliErrs.ErrTfGitPatTokenNotSet
 	}
 
 	if token == "" {
-		return nil, nil, cliErrs.ErrGithubTokenEmpty
+		return nil, nil, cliErrs.ErrTfGitPatTokenEmpty
 	}
 
 	if g.client == nil {

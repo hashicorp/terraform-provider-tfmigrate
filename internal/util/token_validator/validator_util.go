@@ -63,10 +63,10 @@ func gitTokenErrorHandler(err error, logger hclog.Logger, statusCode ...int) (st
 	case errors.Is(err, cliErrs.ErrGitServiceProviderNotSupported):
 		return constants.SuggestUsingGithubOrGitlab, err
 	case
-		errors.Is(err, cliErrs.ErrGithubTokenNotSet),
-		errors.Is(err, cliErrs.ErrGithubTokenEmpty),
-		errors.Is(err, cliErrs.ErrGithubTokenFineGrained),
-		errors.Is(err, cliErrs.ErrGithubTokenUnrecognized):
+		errors.Is(err, cliErrs.ErrTfGitPatTokenNotSet),
+		errors.Is(err, cliErrs.ErrTfGitPatTokenEmpty),
+		errors.Is(err, cliErrs.ErrTfGitPatTokenFineGrained),
+		errors.Is(err, cliErrs.ErrTfGitPatTokenUnrecognized):
 		return constants.SuggestSettingClassicGitHubTokenValue, err
 	case errors.Is(err, cliErrs.ErrTokenExpired):
 		return constants.SuggestSettingUnexpiredToken, err

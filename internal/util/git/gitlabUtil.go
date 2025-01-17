@@ -37,10 +37,10 @@ func NewGitlabUtil(ctx context.Context, logger hclog.Logger) GitlabUtil {
 func (g *gitlabUtil) GetProject(projectIdentifier string) (*gitlab.Project, *gitlab.Response, error) {
 	token, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
 	if !isSet {
-		return nil, nil, cliErrs.ErrGitlabTokenNotSet
+		return nil, nil, cliErrs.ErrTfGitPatTokenNotSet
 	}
 	if token == "" {
-		return nil, nil, cliErrs.ErrGitlabTokenEmpty
+		return nil, nil, cliErrs.ErrTfGitPatTokenEmpty
 	}
 
 	if g.client == nil {

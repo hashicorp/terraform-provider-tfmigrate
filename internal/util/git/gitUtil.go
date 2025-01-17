@@ -232,10 +232,10 @@ func (g *gitUtil) GetGitToken(gitServiceProvider *consts.GitServiceProvider) (st
 	gitPatToken, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
 
 	if !isSet {
-		return "", cliErrs.ErrGithubTokenNotSet
+		return "", cliErrs.ErrTfGitPatTokenNotSet
 	}
 	if gitPatToken == "" {
-		return "", cliErrs.ErrGithubTokenEmpty
+		return "", cliErrs.ErrTfGitPatTokenEmpty
 	}
 
 	switch *gitServiceProvider {
@@ -259,10 +259,10 @@ func getGithubPatToken(gitPatToken string) (string, error) {
 	}
 
 	if tokenType == FineGrainedToken {
-		return "", cliErrs.ErrGithubTokenFineGrained
+		return "", cliErrs.ErrTfGitPatTokenFineGrained
 	}
 
-	return "", cliErrs.ErrGithubTokenUnrecognized
+	return "", cliErrs.ErrTfGitPatTokenUnrecognized
 }
 
 // getGitlabPatToken returns the GitLab PAT token.
@@ -275,7 +275,7 @@ func (g *gitUtil) getGitlabPatToken(gitPatToken string) (string, error) {
 		return gitPatToken, nil
 	}
 
-	return "", cliErrs.ErrGitlabTokenInvalid
+	return "", cliErrs.ErrTfGitPatTokenInvalid
 }
 
 // GetRepoIdentifier gets the repo identifier.
