@@ -140,7 +140,10 @@ func TestGetRepository(t *testing.T) {
 			ctx := context.Background()
 			mockLogger := hclog.FromContext(ctx)
 			mockHttpClient := getHttpClientWithMockRoundTripper()
-			mockTransport := mockHttpClient.Transport.(*netMock.MockRoundTripper)
+
+			mockTransport, ok := mockHttpClient.Transport.(*netMock.MockRoundTripper)
+			require.True(t, ok, "expected Transport to be of type *netMock.MockRoundTripper, but got %T", mockHttpClient.Transport)
+
 			githubClient := github.NewClient(mockHttpClient)
 			githubUtil := &githubUtil{
 				client: githubClient,

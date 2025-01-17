@@ -67,7 +67,10 @@ func TestGetProject(t *testing.T) {
 			ctx := context.Background()
 			mockLogger := hclog.FromContext(ctx)
 			mockHttpClient := getHttpClientWithMockRoundTripper()
-			mockTransport := mockHttpClient.Transport.(*netMock.MockRoundTripper)
+
+			mockTransport, ok := mockHttpClient.Transport.(*netMock.MockRoundTripper)
+			require.True(t, ok, "expected Transport to be of type *netMock.MockRoundTripper, but got %T", mockHttpClient.Transport)
+
 			gitlabClient, _ := gitlab.NewClient("", gitlab.WithHTTPClient(mockHttpClient))
 			gitlabUtil := &gitlabUtil{
 				client: gitlabClient,
