@@ -94,12 +94,9 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Print Github token being used in GHA
-        run: echo -n ${{secrets.GITHUB_TOKEN}} | sha256sum
-
       - name: Run acceptance test
         env:
           TF_ACC: "1"
-          TF_GIT_PAT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TF_GIT_PAT_TOKEN: ${{ secrets.TF_GIT_PAT_TOKEN }}
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 10
