@@ -350,6 +350,14 @@ func (g *gitUtil) CreateGitlabMergeRequest(projectPath string, mrOptions *gitlab
 
 // getTokenType returns the type of GitHub token.
 func getTokenType(gitPatToken string) TokenType {
+
+	if strings.TrimSpace(gitPatToken) == "" {
+		fmt.Println("Classic Token Is empty")
+	}
+
+	if !strings.HasPrefix(strings.TrimSpace(gitPatToken), githubClassicTokenPrefix) {
+		fmt.Println("Not a Classic Token")
+	}
 	switch {
 	case strings.HasPrefix(gitPatToken, githubClassicTokenPrefix):
 		return ClassicToken
