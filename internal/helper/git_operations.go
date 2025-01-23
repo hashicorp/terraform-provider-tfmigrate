@@ -356,13 +356,13 @@ func (gitOps *gitOperations) CreatePullRequest(pullRequestParams gitUtil.PullReq
 
 	switch *remoteServiceProvider {
 	case consts.GitHub:
-		pr, err := gitOps.gitUtil.CreateGithubPullRequest(gitUtil.PullRequestParams(pullRequestParams))
+		pr, err := gitOps.gitUtil.CreateGithubPullRequest(pullRequestParams)
 		if err != nil {
 			return "", err
 		}
 		return pr.GetHTMLURL(), nil
 	case consts.GitLab:
-		mr, err := gitOps.gitUtil.CreateGitlabMergeRequest(gitUtil.PullRequestParams(pullRequestParams))
+		mr, err := gitOps.gitUtil.CreateGitlabMergeRequest(pullRequestParams)
 		if err != nil {
 			return "", err
 		}
