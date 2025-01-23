@@ -61,7 +61,7 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Required:            true,
 			},
 			"source_branch": schema.StringAttribute{
-				MarkdownDescription: "The feature branch from which the PR will be merged into.",
+				MarkdownDescription: "The feature branch from which the PR will be created.",
 				Required:            true,
 			},
 			"destin_branch": schema.StringAttribute{
