@@ -88,7 +88,7 @@ func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	createPrParams := gitops.PullRequestParams{
+	createPrParams := gitUtil.PullRequestParams{
 		RepoIdentifier: data.RepoIdentifier.ValueString(),
 		BaseBranch:     data.DestinBranch.ValueString(),
 		FeatureBranch:  data.SourceBranch.ValueString(),

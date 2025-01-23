@@ -19,15 +19,17 @@ import (
 
 	git "github.com/go-git/go-git/v5"
 	transportHttp "github.com/go-git/go-git/v5/plumbing/transport/http"
-	gitlab "gitlab.com/gitlab-org/api/client-go"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/google/go-github/v45/github"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-
-	"golang.org/x/oauth2"
 )
+
+const (
+	validBranchName = `^[a-zA-Z0-9/_-]+$`
+)
+
+var err error
 
 type gitOperations struct {
 	ctx     context.Context
@@ -43,28 +45,15 @@ type GitOperations interface {
 	DeleteLocalBranch(repoPath, branchName string) error
 	CreateCommit(repoPath, message string) (string, error)
 	PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error
-	CreatePullRequest(params PullRequestParams) (string, error)
+	CreatePullRequest(params gitUtil.PullRequestParams) (string, error)
 	PushCommitUsingGit(remoteName string, branchName string) error
 	GetRepoIdentifier(repoUrl string) string
 	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
 }
 
-const (
-	validBranchName = `^[a-zA-Z0-9/_-]+$`
-)
-
 type GitUserConfig struct {
 	Name  string
 	Email string
-}
-
-type PullRequestParams struct {
-	RepoIdentifier string
-	BaseBranch     string
-	FeatureBranch  string
-	Title          string
-	Body           string
-	GitPatToken    string
 }
 
 // ProviderType represents the type of a Git service provider.
@@ -352,68 +341,34 @@ func (gitOps *gitOperations) PushCommit(repoPath, remoteName, branchName, github
 	return nil
 }
 
-// CreateRequest creates a pull request or merge request based on the serviceProvider (GitHub or GitLab).
-func (gitOps *gitOperations) CreatePullRequest(params PullRequestParams) (string, error) {
-	remoteName, err := gitOps.GetRemoteName()
-	if err != nil {
+// CreatePullRequest creates a pull request or merge request based on the serviceProvider (GitHub or GitLab).
+func (gitOps *gitOperations) CreatePullRequest(pullRequestParams gitUtil.PullRequestParams) (string, error) {
+
+	// Validate the repository identifier.
+	if len(strings.Split(pullRequestParams.RepoIdentifier, "/")) != 2 {
+		return "", fmt.Errorf(consts.InvalidRepositoryIdentifier, pullRequestParams.RepoIdentifier)
+	}
+
+	var remoteServiceProvider *consts.GitServiceProvider
+	if remoteServiceProvider, err = gitOps.getVcsProviderName(); err != nil {
 		return "", err
 	}
-	repoURL, err := gitOps.GetRemoteURL(remoteName)
-	if err != nil {
-		return "", err
-	}
-	remoteServiceProvider := gitOps.GetRemoteServiceProvider(repoURL)
 
-	if len(strings.Split(params.RepoIdentifier, "/")) != 2 {
-		return "", fmt.Errorf(consts.InvalidRepositoryIdentifier, params.RepoIdentifier)
-	}
-	repoOwner := strings.Split(params.RepoIdentifier, "/")[0]
-	repoName := strings.Split(params.RepoIdentifier, "/")[1]
-
-	if remoteServiceProvider == &consts.GitHub {
-
-		ctx := context.Background()
-		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: params.GitPatToken},
-		)
-		tc := oauth2.NewClient(ctx, ts)
-		client := github.NewClient(tc)
-
-		newPR := &github.NewPullRequest{
-			Title: github.String(params.Title),
-			Head:  github.String(params.FeatureBranch),
-			Base:  github.String(params.BaseBranch),
-			Body:  github.String(params.Body),
-		}
-		pr, err := gitOps.gitUtil.CreatePR(ctx, client, repoOwner, repoName, newPR)
+	switch *remoteServiceProvider {
+	case consts.GitHub:
+		pr, err := gitOps.gitUtil.CreateGithubPullRequest(gitUtil.PullRequestParams(pullRequestParams))
 		if err != nil {
 			return "", err
 		}
-
 		return pr.GetHTMLURL(), nil
-	} else if remoteServiceProvider == &consts.GitLab {
-
-		// Create a new GitLab client.
-		gitLabNewClient, err := gitOps.gitUtil.NewGitLabClient(params.GitPatToken)
-		if err != nil {
-			tflog.Error(gitOps.ctx, "Failed to create GitLab client", map[string]interface{}{"error": err})
-			return "", err
-		}
-		mrOptions := &gitlab.CreateMergeRequestOptions{
-			SourceBranch: &params.FeatureBranch,
-			TargetBranch: &params.BaseBranch,
-			Title:        &params.Title,
-			Description:  &params.Body,
-		}
-		// Create the merge request.
-		mr, err := gitOps.gitUtil.CreateGitlabMergeRequest(params.RepoIdentifier, mrOptions, gitLabNewClient, params.GitPatToken)
+	case consts.GitLab:
+		mr, err := gitOps.gitUtil.CreateGitlabMergeRequest(gitUtil.PullRequestParams(pullRequestParams))
 		if err != nil {
 			return "", err
 		}
-
 		return mr.WebURL, nil
-	} else {
-		return "", fmt.Errorf("%s", string(cliErrs.ErrGitServiceProviderNotSupported))
+	default:
+		return "", fmt.Errorf("%w", cliErrs.ErrGitServiceProviderNotSupported)
 	}
 }
 
@@ -444,4 +399,18 @@ func (gitOps *gitOperations) logAndReturnErr(errMsg string, err error) (string, 
 	err = fmt.Errorf("err: %s, details: %s", err, errMsg)
 	tflog.Error(gitOps.ctx, err.Error())
 	return "", err
+}
+
+func (gitOps *gitOperations) getVcsProviderName() (*consts.GitServiceProvider, error) {
+	remoteName, err := gitOps.GetRemoteName()
+	if err != nil {
+		return nil, err
+	}
+	repoURL, err := gitOps.GetRemoteURL(remoteName)
+	if err != nil {
+		return nil, err
+	}
+	remoteServiceProvider := gitOps.GetRemoteServiceProvider(repoURL)
+
+	return remoteServiceProvider, err
 }

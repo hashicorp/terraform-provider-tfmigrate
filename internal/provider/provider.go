@@ -143,7 +143,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	// Validate the Git PAT token against the remote service provider
 	remoteName, err := p.gitOps.GetRemoteName()
 	if err != nil {
-		resp.Diagnostics.AddError(constants.ErrorFetchingRemote, err.Error())
+		resp.Diagnostics.AddError(fmt.Sprintf(constants.ErrorFetchingRemote, err.Error()), err.Error())
 	}
 	repoUrl, err := p.gitOps.GetRemoteURL(remoteName)
 	if err != nil || repoUrl == "" {

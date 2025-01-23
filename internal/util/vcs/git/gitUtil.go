@@ -12,6 +12,7 @@ import (
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go"
+	"golang.org/x/oauth2"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -39,6 +40,15 @@ type gitUtil struct {
 	ctx context.Context
 }
 
+type PullRequestParams struct {
+	RepoIdentifier string
+	BaseBranch     string
+	FeatureBranch  string
+	Title          string
+	Body           string
+	GitPatToken    string
+}
+
 // GitUtil interface to mock Git operations.
 type GitUtil interface {
 	Add(worktree *git.Worktree, glob string) (plumbing.Hash, error)
@@ -47,13 +57,15 @@ type GitUtil interface {
 	Commit(worktree *git.Worktree, msg string, options *git.CommitOptions) (plumbing.Hash, error)
 	CommitObject(repo *git.Repository, hash plumbing.Hash) (*object.Commit, error)
 	ConfigScoped(repo *git.Repository, scope config.Scope) (*config.Config, error)
-	CreatePR(ctx context.Context, client *github.Client, owner string, repo string, pull *github.NewPullRequest) (*github.PullRequest, error)
+	CreateGithubPullRequest(params PullRequestParams) (*github.PullRequest, error)
+	CreateGitlabMergeRequest(params PullRequestParams) (*gitlab.MergeRequest, error)
 	GetGitToken(gitServiceProvider *consts.GitServiceProvider) (string, error)
 	GetOrgAndRepoName(repoIdentifier string) (string, string)
 	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
 	GetRepoIdentifier(remoteURL string) string
 	GlobalGitConfig() (GitUserConfig, error)
 	Head(repo *git.Repository) (*plumbing.Reference, error)
+	NewGitLabClient(gitlabToken string) (*gitlab.Client, error)
 	OpenRepository(repoPath string) (*git.Repository, error)
 	PlainOpenWithOptions(path string, options *git.PlainOpenOptions) (*git.Repository, error)
 	Push(repo *git.Repository, options *git.PushOptions) error
@@ -62,8 +74,6 @@ type GitUtil interface {
 	Reset(worktree *git.Worktree, options *git.ResetOptions) error
 	Status(worktree *git.Worktree) (git.Status, error)
 	Worktree(repo *git.Repository) (*git.Worktree, error)
-	NewGitLabClient(gitlabToken string) (*gitlab.Client, error)
-	CreateGitlabMergeRequest(projectPath string, mrOptions *gitlab.CreateMergeRequestOptions, gitLabNewClient *gitlab.Client, gitlabToken string) (*gitlab.MergeRequest, error)
 }
 
 // NewGitUtil creates a new instance of GitUtil.
@@ -181,11 +191,26 @@ func (g *gitUtil) ConfigScoped(repo *git.Repository, scope config.Scope) (*confi
 	return configSc, err
 }
 
-func (g *gitUtil) CreatePR(ctx context.Context, client *github.Client, owner string, repo string, pull *github.NewPullRequest) (*github.PullRequest, error) {
+func (g *gitUtil) CreateGithubPullRequest(params PullRequestParams) (*github.PullRequest, error) {
 	var pr *github.PullRequest
 	var resp *github.Response
-	if pr, resp, err = client.PullRequests.Create(ctx, owner, repo, pull); err != nil {
-		tflog.Error(ctx, "Failed to create pull request", map[string]interface{}{"owner": owner, "repo": repo, "pull": pull, "error": err})
+	ctx := context.Background()
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: params.GitPatToken})
+	tc := oauth2.NewClient(g.ctx, ts)
+	client := github.NewClient(tc)
+
+	newPR := &github.NewPullRequest{
+		Title: github.String(params.Title),
+		Head:  github.String(params.FeatureBranch),
+		Base:  github.String(params.BaseBranch),
+		Body:  github.String(params.Body),
+	}
+
+	repoOwner := strings.Split(params.RepoIdentifier, "/")[0]
+	repoName := strings.Split(params.RepoIdentifier, "/")[1]
+
+	if pr, resp, err = client.PullRequests.Create(g.ctx, repoOwner, repoName, newPR); err != nil {
+		tflog.Error(ctx, "Failed to create pull request", map[string]interface{}{"owner": repoOwner, "repo": repoName, "pull": newPR.GetTitle(), "error": err})
 	}
 	if resp.StatusCode != http.StatusCreated {
 		err = fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
@@ -202,16 +227,28 @@ func (g *gitUtil) NewGitLabClient(gitlabToken string) (*gitlab.Client, error) {
 	return gitLabNewClient, err
 }
 
-func (g *gitUtil) CreateGitlabMergeRequest(projectPath string, mrOptions *gitlab.CreateMergeRequestOptions, gitLabNewClient *gitlab.Client, gitlabToken string) (*gitlab.MergeRequest, error) {
+func (g *gitUtil) CreateGitlabMergeRequest(params PullRequestParams) (*gitlab.MergeRequest, error) {
 	var mr *gitlab.MergeRequest
 	var resp *gitlab.Response
-	if mr, resp, err = gitLabNewClient.MergeRequests.CreateMergeRequest(projectPath, mrOptions); err != nil {
-		tflog.Error(context.Background(), fmt.Sprintf("Failed to create merge request for project '%s' with title '%s'", projectPath, *mrOptions.Title), map[string]interface{}{"error": err})
+	gitLabNewClient, err := gitlab.NewClient(params.GitPatToken)
+	if err != nil || gitLabNewClient == nil {
+		tflog.Error(context.Background(), "Failed to create GitLab client", map[string]interface{}{"error": err})
+	}
+
+	mrOptions := &gitlab.CreateMergeRequestOptions{
+		SourceBranch: &params.FeatureBranch,
+		TargetBranch: &params.BaseBranch,
+		Title:        &params.Title,
+		Description:  &params.Body,
+	}
+
+	if mr, resp, err = gitLabNewClient.MergeRequests.CreateMergeRequest(params.RepoIdentifier, mrOptions); err != nil {
+		tflog.Error(context.Background(), fmt.Sprintf("Failed to create merge request for project '%s' with title '%s'", params.RepoIdentifier, *mrOptions.Title), map[string]interface{}{"error": err})
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusCreated {
 		err := fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
-		tflog.Error(context.Background(), fmt.Sprintf("Failed to create merge request for project '%s' with title '%s' due to unexpected status code %d", projectPath, *mrOptions.Title, resp.StatusCode), map[string]interface{}{"error": err})
+		tflog.Error(context.Background(), fmt.Sprintf("Failed to create merge request for project '%s' with title '%s' due to unexpected status code %d", params.RepoIdentifier, *mrOptions.Title, resp.StatusCode), map[string]interface{}{"error": err})
 		return nil, err
 	}
 	return mr, nil

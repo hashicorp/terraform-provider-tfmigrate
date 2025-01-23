@@ -7,8 +7,6 @@ import (
 
 	config "github.com/go-git/go-git/v5/config"
 
-	context "context"
-
 	git "github.com/go-git/go-git/v5"
 
 	github "github.com/google/go-github/v45/github"
@@ -381,9 +379,67 @@ func (_c *MockGitUtil_ConfigScoped_Call) RunAndReturn(run func(*git.Repository, 
 	return _c
 }
 
-// CreateGitlabMergeRequest provides a mock function with given fields: projectPath, mrOptions, gitLabNewClient, gitlabToken
-func (_m *MockGitUtil) CreateGitlabMergeRequest(projectPath string, mrOptions *gitlab.CreateMergeRequestOptions, gitLabNewClient *gitlab.Client, gitlabToken string) (*gitlab.MergeRequest, error) {
-	ret := _m.Called(projectPath, mrOptions, gitLabNewClient, gitlabToken)
+// CreateGithubPullRequest provides a mock function with given fields: params
+func (_m *MockGitUtil) CreateGithubPullRequest(params vcsgit.PullRequestParams) (*github.PullRequest, error) {
+	ret := _m.Called(params)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateGithubPullRequest")
+	}
+
+	var r0 *github.PullRequest
+	var r1 error
+	if rf, ok := ret.Get(0).(func(vcsgit.PullRequestParams) (*github.PullRequest, error)); ok {
+		return rf(params)
+	}
+	if rf, ok := ret.Get(0).(func(vcsgit.PullRequestParams) *github.PullRequest); ok {
+		r0 = rf(params)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*github.PullRequest)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(vcsgit.PullRequestParams) error); ok {
+		r1 = rf(params)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockGitUtil_CreateGithubPullRequest_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateGithubPullRequest'
+type MockGitUtil_CreateGithubPullRequest_Call struct {
+	*mock.Call
+}
+
+// CreateGithubPullRequest is a helper method to define mock.On call
+//   - params vcsgit.PullRequestParams
+func (_e *MockGitUtil_Expecter) CreateGithubPullRequest(params interface{}) *MockGitUtil_CreateGithubPullRequest_Call {
+	return &MockGitUtil_CreateGithubPullRequest_Call{Call: _e.mock.On("CreateGithubPullRequest", params)}
+}
+
+func (_c *MockGitUtil_CreateGithubPullRequest_Call) Run(run func(params vcsgit.PullRequestParams)) *MockGitUtil_CreateGithubPullRequest_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(vcsgit.PullRequestParams))
+	})
+	return _c
+}
+
+func (_c *MockGitUtil_CreateGithubPullRequest_Call) Return(_a0 *github.PullRequest, _a1 error) *MockGitUtil_CreateGithubPullRequest_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockGitUtil_CreateGithubPullRequest_Call) RunAndReturn(run func(vcsgit.PullRequestParams) (*github.PullRequest, error)) *MockGitUtil_CreateGithubPullRequest_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateGitlabMergeRequest provides a mock function with given fields: params
+func (_m *MockGitUtil) CreateGitlabMergeRequest(params vcsgit.PullRequestParams) (*gitlab.MergeRequest, error) {
+	ret := _m.Called(params)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateGitlabMergeRequest")
@@ -391,19 +447,19 @@ func (_m *MockGitUtil) CreateGitlabMergeRequest(projectPath string, mrOptions *g
 
 	var r0 *gitlab.MergeRequest
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, *gitlab.CreateMergeRequestOptions, *gitlab.Client, string) (*gitlab.MergeRequest, error)); ok {
-		return rf(projectPath, mrOptions, gitLabNewClient, gitlabToken)
+	if rf, ok := ret.Get(0).(func(vcsgit.PullRequestParams) (*gitlab.MergeRequest, error)); ok {
+		return rf(params)
 	}
-	if rf, ok := ret.Get(0).(func(string, *gitlab.CreateMergeRequestOptions, *gitlab.Client, string) *gitlab.MergeRequest); ok {
-		r0 = rf(projectPath, mrOptions, gitLabNewClient, gitlabToken)
+	if rf, ok := ret.Get(0).(func(vcsgit.PullRequestParams) *gitlab.MergeRequest); ok {
+		r0 = rf(params)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*gitlab.MergeRequest)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string, *gitlab.CreateMergeRequestOptions, *gitlab.Client, string) error); ok {
-		r1 = rf(projectPath, mrOptions, gitLabNewClient, gitlabToken)
+	if rf, ok := ret.Get(1).(func(vcsgit.PullRequestParams) error); ok {
+		r1 = rf(params)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -417,17 +473,14 @@ type MockGitUtil_CreateGitlabMergeRequest_Call struct {
 }
 
 // CreateGitlabMergeRequest is a helper method to define mock.On call
-//   - projectPath string
-//   - mrOptions *gitlab.CreateMergeRequestOptions
-//   - gitLabNewClient *gitlab.Client
-//   - gitlabToken string
-func (_e *MockGitUtil_Expecter) CreateGitlabMergeRequest(projectPath interface{}, mrOptions interface{}, gitLabNewClient interface{}, gitlabToken interface{}) *MockGitUtil_CreateGitlabMergeRequest_Call {
-	return &MockGitUtil_CreateGitlabMergeRequest_Call{Call: _e.mock.On("CreateGitlabMergeRequest", projectPath, mrOptions, gitLabNewClient, gitlabToken)}
+//   - params vcsgit.PullRequestParams
+func (_e *MockGitUtil_Expecter) CreateGitlabMergeRequest(params interface{}) *MockGitUtil_CreateGitlabMergeRequest_Call {
+	return &MockGitUtil_CreateGitlabMergeRequest_Call{Call: _e.mock.On("CreateGitlabMergeRequest", params)}
 }
 
-func (_c *MockGitUtil_CreateGitlabMergeRequest_Call) Run(run func(projectPath string, mrOptions *gitlab.CreateMergeRequestOptions, gitLabNewClient *gitlab.Client, gitlabToken string)) *MockGitUtil_CreateGitlabMergeRequest_Call {
+func (_c *MockGitUtil_CreateGitlabMergeRequest_Call) Run(run func(params vcsgit.PullRequestParams)) *MockGitUtil_CreateGitlabMergeRequest_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(*gitlab.CreateMergeRequestOptions), args[2].(*gitlab.Client), args[3].(string))
+		run(args[0].(vcsgit.PullRequestParams))
 	})
 	return _c
 }
@@ -437,69 +490,7 @@ func (_c *MockGitUtil_CreateGitlabMergeRequest_Call) Return(_a0 *gitlab.MergeReq
 	return _c
 }
 
-func (_c *MockGitUtil_CreateGitlabMergeRequest_Call) RunAndReturn(run func(string, *gitlab.CreateMergeRequestOptions, *gitlab.Client, string) (*gitlab.MergeRequest, error)) *MockGitUtil_CreateGitlabMergeRequest_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// CreatePR provides a mock function with given fields: ctx, client, owner, repo, pull
-func (_m *MockGitUtil) CreatePR(ctx context.Context, client *github.Client, owner string, repo string, pull *github.NewPullRequest) (*github.PullRequest, error) {
-	ret := _m.Called(ctx, client, owner, repo, pull)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CreatePR")
-	}
-
-	var r0 *github.PullRequest
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *github.Client, string, string, *github.NewPullRequest) (*github.PullRequest, error)); ok {
-		return rf(ctx, client, owner, repo, pull)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, *github.Client, string, string, *github.NewPullRequest) *github.PullRequest); ok {
-		r0 = rf(ctx, client, owner, repo, pull)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*github.PullRequest)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, *github.Client, string, string, *github.NewPullRequest) error); ok {
-		r1 = rf(ctx, client, owner, repo, pull)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockGitUtil_CreatePR_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePR'
-type MockGitUtil_CreatePR_Call struct {
-	*mock.Call
-}
-
-// CreatePR is a helper method to define mock.On call
-//   - ctx context.Context
-//   - client *github.Client
-//   - owner string
-//   - repo string
-//   - pull *github.NewPullRequest
-func (_e *MockGitUtil_Expecter) CreatePR(ctx interface{}, client interface{}, owner interface{}, repo interface{}, pull interface{}) *MockGitUtil_CreatePR_Call {
-	return &MockGitUtil_CreatePR_Call{Call: _e.mock.On("CreatePR", ctx, client, owner, repo, pull)}
-}
-
-func (_c *MockGitUtil_CreatePR_Call) Run(run func(ctx context.Context, client *github.Client, owner string, repo string, pull *github.NewPullRequest)) *MockGitUtil_CreatePR_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*github.Client), args[2].(string), args[3].(string), args[4].(*github.NewPullRequest))
-	})
-	return _c
-}
-
-func (_c *MockGitUtil_CreatePR_Call) Return(_a0 *github.PullRequest, _a1 error) *MockGitUtil_CreatePR_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockGitUtil_CreatePR_Call) RunAndReturn(run func(context.Context, *github.Client, string, string, *github.NewPullRequest) (*github.PullRequest, error)) *MockGitUtil_CreatePR_Call {
+func (_c *MockGitUtil_CreateGitlabMergeRequest_Call) RunAndReturn(run func(vcsgit.PullRequestParams) (*gitlab.MergeRequest, error)) *MockGitUtil_CreateGitlabMergeRequest_Call {
 	_c.Call.Return(run)
 	return _c
 }

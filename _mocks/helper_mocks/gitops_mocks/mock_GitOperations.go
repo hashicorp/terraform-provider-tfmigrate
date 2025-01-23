@@ -4,7 +4,7 @@ package gitops_mocks
 
 import (
 	constants "terraform-provider-tfmigrate/internal/constants"
-	gitops "terraform-provider-tfmigrate/internal/helper"
+	git "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	mock "github.com/stretchr/testify/mock"
 )
@@ -127,7 +127,7 @@ func (_c *MockGitOperations_CreateCommit_Call) RunAndReturn(run func(string, str
 }
 
 // CreatePullRequest provides a mock function with given fields: params
-func (_m *MockGitOperations) CreatePullRequest(params gitops.PullRequestParams) (string, error) {
+func (_m *MockGitOperations) CreatePullRequest(params git.PullRequestParams) (string, error) {
 	ret := _m.Called(params)
 
 	if len(ret) == 0 {
@@ -136,16 +136,16 @@ func (_m *MockGitOperations) CreatePullRequest(params gitops.PullRequestParams) 
 
 	var r0 string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(gitops.PullRequestParams) (string, error)); ok {
+	if rf, ok := ret.Get(0).(func(git.PullRequestParams) (string, error)); ok {
 		return rf(params)
 	}
-	if rf, ok := ret.Get(0).(func(gitops.PullRequestParams) string); ok {
+	if rf, ok := ret.Get(0).(func(git.PullRequestParams) string); ok {
 		r0 = rf(params)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(gitops.PullRequestParams) error); ok {
+	if rf, ok := ret.Get(1).(func(git.PullRequestParams) error); ok {
 		r1 = rf(params)
 	} else {
 		r1 = ret.Error(1)
@@ -160,14 +160,14 @@ type MockGitOperations_CreatePullRequest_Call struct {
 }
 
 // CreatePullRequest is a helper method to define mock.On call
-//   - params gitops.PullRequestParams
+//   - params git.PullRequestParams
 func (_e *MockGitOperations_Expecter) CreatePullRequest(params interface{}) *MockGitOperations_CreatePullRequest_Call {
 	return &MockGitOperations_CreatePullRequest_Call{Call: _e.mock.On("CreatePullRequest", params)}
 }
 
-func (_c *MockGitOperations_CreatePullRequest_Call) Run(run func(params gitops.PullRequestParams)) *MockGitOperations_CreatePullRequest_Call {
+func (_c *MockGitOperations_CreatePullRequest_Call) Run(run func(params git.PullRequestParams)) *MockGitOperations_CreatePullRequest_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(gitops.PullRequestParams))
+		run(args[0].(git.PullRequestParams))
 	})
 	return _c
 }
@@ -177,7 +177,7 @@ func (_c *MockGitOperations_CreatePullRequest_Call) Return(_a0 string, _a1 error
 	return _c
 }
 
-func (_c *MockGitOperations_CreatePullRequest_Call) RunAndReturn(run func(gitops.PullRequestParams) (string, error)) *MockGitOperations_CreatePullRequest_Call {
+func (_c *MockGitOperations_CreatePullRequest_Call) RunAndReturn(run func(git.PullRequestParams) (string, error)) *MockGitOperations_CreatePullRequest_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -488,64 +488,6 @@ func (_c *MockGitOperations_ListBranches_Call) Return(_a0 []string, _a1 error) *
 }
 
 func (_c *MockGitOperations_ListBranches_Call) RunAndReturn(run func(string) ([]string, error)) *MockGitOperations_ListBranches_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ListRemote provides a mock function with given fields: repoPath
-func (_m *MockGitOperations) ListRemote(repoPath string) ([]string, error) {
-	ret := _m.Called(repoPath)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListRemote")
-	}
-
-	var r0 []string
-	var r1 error
-	if rf, ok := ret.Get(0).(func(string) ([]string, error)); ok {
-		return rf(repoPath)
-	}
-	if rf, ok := ret.Get(0).(func(string) []string); ok {
-		r0 = rf(repoPath)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]string)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(repoPath)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockGitOperations_ListRemote_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListRemote'
-type MockGitOperations_ListRemote_Call struct {
-	*mock.Call
-}
-
-// ListRemote is a helper method to define mock.On call
-//   - repoPath string
-func (_e *MockGitOperations_Expecter) ListRemote(repoPath interface{}) *MockGitOperations_ListRemote_Call {
-	return &MockGitOperations_ListRemote_Call{Call: _e.mock.On("ListRemote", repoPath)}
-}
-
-func (_c *MockGitOperations_ListRemote_Call) Run(run func(repoPath string)) *MockGitOperations_ListRemote_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
-	})
-	return _c
-}
-
-func (_c *MockGitOperations_ListRemote_Call) Return(_a0 []string, _a1 error) *MockGitOperations_ListRemote_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockGitOperations_ListRemote_Call) RunAndReturn(run func(string) ([]string, error)) *MockGitOperations_ListRemote_Call {
 	_c.Call.Return(run)
 	return _c
 }
