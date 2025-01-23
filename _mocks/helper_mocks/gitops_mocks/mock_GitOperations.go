@@ -4,7 +4,7 @@ package gitops_mocks
 
 import (
 	constants "terraform-provider-tfmigrate/internal/constants"
-	gitops "terraform-provider-tfmigrate/internal/gitops"
+	gitops "terraform-provider-tfmigrate/internal/helper"
 
 	mock "github.com/stretchr/testify/mock"
 )

@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	netMock "terraform-provider-tfmigrate/_mocks/util_mocks/net_mocks"
+	netMock "terraform-provider-tfmigrate/_mocks/net_mocks"
 
 	"github.com/google/go-github/v66/github"
 	"github.com/hashicorp/go-hclog"

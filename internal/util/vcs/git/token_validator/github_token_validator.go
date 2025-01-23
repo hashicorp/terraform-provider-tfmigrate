@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"terraform-provider-tfmigrate/internal/util/git"
+	"terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/google/go-github/v66/github"
 	"github.com/hashicorp/go-hclog"

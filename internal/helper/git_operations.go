@@ -15,7 +15,7 @@ import (
 
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	consts "terraform-provider-tfmigrate/internal/constants"
-	gitUtil "terraform-provider-tfmigrate/internal/util/git"
+	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	git "github.com/go-git/go-git/v5"
 	transportHttp "github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -45,7 +45,6 @@ type GitOperations interface {
 	CreateCommit(repoPath, message string) (string, error)
 	PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error
 	CreatePullRequest(params PullRequestParams) (string, error)
-	ListRemote(repoPath string) ([]string, error)
 	PushCommitUsingGit(remoteName string, branchName string) error
 	GetRepoIdentifier(repoUrl string) string
 	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
@@ -84,10 +83,10 @@ type ProviderConfig struct {
 }
 
 // NewGitOperations creates a new instance of GitOperations.
-func NewGitOperations(logger hclog.Logger) GitOperations {
+func NewGitOperations(logger hclog.Logger, gitUtil gitUtil.GitUtil) GitOperations {
 	return &gitOperations{
 		logger:  logger,
-		gitUtil: gitUtil.NewGitUtil(logger),
+		gitUtil: gitUtil, // use the passed-in gitUtil instead of creating a new one
 	}
 }
 
@@ -98,7 +97,7 @@ func (gitOps *gitOperations) GetRemoteName() (string, error) {
 		CombinedOutput()
 
 	if strings.Contains(string(output), "no upstream configured for branch") {
-		return "origin", nil
+		return "", errors.New(consts.ErrNoUpstreamBranch)
 	}
 	if err != nil {
 		errorMessage := fmt.Sprintf("error getting remote name: %s", string(output))
@@ -147,11 +146,10 @@ func (gitOps *gitOperations) ResetToLastCommittedVersion(repoPath string) error 
 		return err
 	}
 
-	err = gitOps.gitUtil.Reset(worktree, &git.ResetOptions{
+	if err = gitOps.gitUtil.Reset(worktree, &git.ResetOptions{
 		Mode:   git.HardReset,
 		Commit: commit.Hash,
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 	return nil
@@ -171,11 +169,10 @@ func (gitOps *gitOperations) ListBranches(repoPath string) ([]string, error) {
 		return nil, err
 	}
 
-	err = branchesIter.ForEach(func(ref *plumbing.Reference) error {
+	if err = branchesIter.ForEach(func(ref *plumbing.Reference) error {
 		branches = append(branches, ref.Name().String())
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, err
 	}
 
@@ -210,8 +207,7 @@ func (gitOps *gitOperations) DeleteLocalBranch(repoPath, branchName string) erro
 	}
 
 	// Delete the branch.
-	err = gitOps.gitUtil.RemoveReference(repo.Storer, plumbing.NewBranchReferenceName(branchName))
-	if err != nil {
+	if err = gitOps.gitUtil.RemoveReference(repo.Storer, plumbing.NewBranchReferenceName(branchName)); err != nil {
 		return err
 	}
 	return nil
@@ -420,26 +416,6 @@ func (gitOps *gitOperations) CreatePullRequest(params PullRequestParams) (string
 	} else {
 		return "", fmt.Errorf("%s", string(cliErrs.ErrGitServiceProviderNotSupported))
 	}
-}
-
-// ListRemote lists remote references in a repository.
-func (gitOps *gitOperations) ListRemote(repoPath string) ([]string, error) {
-	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
-	if err != nil {
-		return nil, err
-	}
-
-	remotes, err := gitOps.gitUtil.Remotes(repo)
-	if err != nil {
-		return nil, err
-	}
-
-	var remoteNames []string
-	for _, remote := range remotes {
-		remoteNames = append(remoteNames, remote.Config().Name)
-	}
-
-	return remoteNames, nil
 }
 
 // GetRepoIdentifier returns the repository identifier.

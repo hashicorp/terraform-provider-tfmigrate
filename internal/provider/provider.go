@@ -9,12 +9,13 @@ import (
 	"os"
 	"strings"
 	"terraform-provider-tfmigrate/internal/constants"
-	"terraform-provider-tfmigrate/internal/gitops"
+	gitops "terraform-provider-tfmigrate/internal/helper"
+	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
-	tokenValidator "terraform-provider-tfmigrate/internal/util/token_validator"
+	tokenValidator "terraform-provider-tfmigrate/internal/util/vcs/git/token_validator"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -30,8 +31,8 @@ var (
 )
 
 const (
-	GIT_TOKEN_ENV_NAME = "TF_GIT_PAT_TOKEN"
-	HCP_TERRAFORM_HOST = "app.terraform.io"
+	GitTokenEnvName  = "TF_GIT_PAT_TOKEN"
+	HcpTerraformHost = "app.terraform.io"
 )
 
 // tfmProvider is the provider implementation.
@@ -58,7 +59,7 @@ func New(version string) func() provider.Provider {
 	return func() provider.Provider {
 		return &tfmProvider{
 			version:               version,
-			gitOps:                gitops.NewGitOperations(hclog.L()),
+			gitOps:                gitops.NewGitOperations(hclog.L(), gitUtil.NewGitUtil(hclog.L())),
 			tokenValidatorFactory: tokenValidator.NewTokenValidatorFactory(context.Background(), hclog.L()),
 		}
 	}
@@ -104,8 +105,8 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	if config.GitPatToken.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("git_pat_token"),
-			"Unknown Git PAT Token",
-			"The provider cannot initialize the Git client as the Git PAT token is unknown. Set it in configuration or as an environment variable.",
+			"Unknown TF_GIT_PAT_TOKEN",
+			"The provider cannot initialize the Git client as the Git PAT token is unknown. Set it as an environment variable.",
 		)
 	}
 	if config.Hostname.IsUnknown() {
@@ -122,8 +123,8 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 
 	// Default values to environment variables, but override
 	// with Terraform configuration values if set
-	gitPatToken := os.Getenv(GIT_TOKEN_ENV_NAME)
-	hostname := HCP_TERRAFORM_HOST
+	gitPatToken := os.Getenv(GitTokenEnvName)
+	hostname := HcpTerraformHost
 
 	if !config.GitPatToken.IsNull() {
 		gitPatToken = config.GitPatToken.ValueString()

@@ -10,7 +10,7 @@ import (
 	"os"
 	"testing"
 
-	netMock "terraform-provider-tfmigrate/_mocks/util_mocks/net_mocks"
+	netMock "terraform-provider-tfmigrate/_mocks/net_mocks"
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 
 	"github.com/stretchr/testify/mock"

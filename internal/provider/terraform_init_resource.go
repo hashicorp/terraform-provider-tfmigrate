@@ -43,7 +43,7 @@ func (r *terraformInit) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Required:            true,
 			},
 			"summary": schema.StringAttribute{
-				MarkdownDescription: "On Success, it will return '" + TERRAFORM_INIT_SUCCESS,
+				MarkdownDescription: "On Success, it will return '" + TerraformInitSuccess,
 				Computed:            true,
 			},
 		},
@@ -63,9 +63,9 @@ func (r *terraformInit) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	_, err := os.Stat(dirPath)
 	if err != nil {
-		tflog.Error(ctx, DIR_PATH_DOES_NOT_EXIST)
-		resp.Diagnostics.AddError(DIR_PATH_DOES_NOT_EXIST, DIR_PATH_DOES_NOT_EXIST_DETAILED)
-		data.Summary = types.StringValue(TERRAFORM_INIT_FAILED)
+		tflog.Error(ctx, DirPathDoesNotExist)
+		resp.Diagnostics.AddError(DirPathDoesNotExist, DirPathDoesNotExistDetailed)
+		data.Summary = types.StringValue(TerraformInitFailed)
 		return
 	}
 	tflog.Info(ctx, "Executing terraform init")
@@ -73,10 +73,10 @@ func (r *terraformInit) Create(ctx context.Context, req resource.CreateRequest, 
 	if err != nil {
 		tflog.Error(ctx, "Error executing terraform init: "+err.Error())
 		resp.Diagnostics.AddError("Error executing terraform init:", err.Error())
-		data.Summary = types.StringValue(TERRAFORM_INIT_FAILED)
+		data.Summary = types.StringValue(TerraformInitFailed)
 	} else {
-		data.Summary = types.StringValue(TERRAFORM_INIT_SUCCESS)
-		tflog.Trace(ctx, TERRAFORM_INIT_SUCCESS)
+		data.Summary = types.StringValue(TerraformInitSuccess)
+		tflog.Trace(ctx, TerraformInitSuccess)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -91,11 +91,11 @@ func (r *terraformInit) Update(ctx context.Context, req resource.UpdateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
-	data.Summary = types.StringValue(UPDATE_ACTION_NOT_SUPPORTED)
+	resp.Diagnostics.AddWarning(UpdateActionNotSupported, UpdateActionNotSupportedDetailed)
+	data.Summary = types.StringValue(UpdateActionNotSupported)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *terraformInit) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	tflog.Warn(ctx, DESTROY_ACTION_NOT_SUPPORTED)
+	tflog.Warn(ctx, DestroyActionNotSupported)
 }

@@ -28,6 +28,8 @@ const (
 	gitlabTokenPrefix            = `glpat-`
 )
 
+var err error
+
 type GitUserConfig struct {
 	Name  string
 	Email string
@@ -70,143 +72,155 @@ func NewGitUtil(logger hclog.Logger) GitUtil {
 }
 
 func (g *gitUtil) PlainOpenWithOptions(path string, options *git.PlainOpenOptions) (*git.Repository, error) {
-	repo, err := git.PlainOpenWithOptions(path, options)
-	if err != nil {
+	var repo *git.Repository
+	if repo, err = git.PlainOpenWithOptions(path, options); err != nil {
 		g.logger.Error("Failed to open repository", "path", path, "error", err)
 	}
 	return repo, err
 }
 
 func (g *gitUtil) Head(repo *git.Repository) (*plumbing.Reference, error) {
-	head, err := repo.Head()
-	if err != nil {
+	var head *plumbing.Reference
+	if head, err = repo.Head(); err != nil {
 		g.logger.Error("Failed to get repository head", "error", err)
 	}
 	return head, err
 }
 
 func (g *gitUtil) Worktree(repo *git.Repository) (*git.Worktree, error) {
-	worktree, err := repo.Worktree()
-	if err != nil {
+	var worktree *git.Worktree
+	if worktree, err = repo.Worktree(); err != nil {
 		g.logger.Error("Failed to get repository worktree", "error", err)
 	}
 	return worktree, err
 }
 
 func (g *gitUtil) Reset(worktree *git.Worktree, options *git.ResetOptions) error {
-	err := worktree.Reset(options)
-	if err != nil {
+	if err = worktree.Reset(options); err != nil {
 		g.logger.Error("Failed to reset worktree", "options", options, "error", err)
 	}
 	return err
 }
 
 func (g *gitUtil) CommitObject(repo *git.Repository, hash plumbing.Hash) (*object.Commit, error) {
-	commit, err := repo.CommitObject(hash)
-	if err != nil {
+	var commit *object.Commit
+	if commit, err = repo.CommitObject(hash); err != nil {
 		g.logger.Error("Failed to get commit object", "hash", hash, "error", err)
 	}
 	return commit, err
 }
 
 func (g *gitUtil) Branches(repo *git.Repository) (storer.ReferenceIter, error) {
-	branches, err := repo.Branches()
-	if err != nil {
+	var branches storer.ReferenceIter
+	if branches, err = repo.Branches(); err != nil {
 		g.logger.Error("Failed to get repository branches", "error", err)
 	}
 	return branches, err
 }
 
 func (g *gitUtil) Checkout(worktree *git.Worktree, options *git.CheckoutOptions) error {
-	err := worktree.Checkout(options)
-	if err != nil {
+	if err = worktree.Checkout(options); err != nil {
 		g.logger.Error("Failed to checkout worktree", "options", options, "error", err)
 	}
 	return err
 }
-
 func (g *gitUtil) RemoveReference(storer storer.ReferenceStorer, ref plumbing.ReferenceName) error {
-	err := storer.RemoveReference(ref)
-	if err != nil {
-		g.logger.Error("Failed to remove reference", "reference", ref, "error", err)
+	if err = storer.RemoveReference(ref); err != nil {
+		g.logger.Error("Failed to remove reference", "ref", ref, "error", err)
 	}
 	return err
 }
 
 func (g *gitUtil) Add(worktree *git.Worktree, glob string) (plumbing.Hash, error) {
-	hash, err := worktree.Add(glob)
-	if err != nil {
+	var hash plumbing.Hash
+	if hash, err = worktree.Add(glob); err != nil {
 		g.logger.Error("Failed to add to worktree", "glob", glob, "error", err)
 	}
 	return hash, err
 }
 
 func (g *gitUtil) Commit(worktree *git.Worktree, msg string, options *git.CommitOptions) (plumbing.Hash, error) {
-	hash, err := worktree.Commit(msg, options)
-	if err != nil {
+	var hash plumbing.Hash
+	if hash, err = worktree.Commit(msg, options); err != nil {
 		g.logger.Error("Failed to commit worktree", "message", msg, "options", options, "error", err)
 	}
 	return hash, err
 }
 
 func (g *gitUtil) Status(worktree *git.Worktree) (git.Status, error) {
-	status, err := worktree.Status()
-	if err != nil {
+	var status git.Status
+	if status, err = worktree.Status(); err != nil {
 		g.logger.Error("Failed to get worktree status", "error", err)
 	}
 	return status, err
 }
 
 func (g *gitUtil) Push(repo *git.Repository, o *git.PushOptions) error {
-	err := repo.Push(o)
-	if err != nil {
+	if err = repo.Push(o); err != nil {
 		g.logger.Error("Failed to push to repository", "options", o, "error", err)
 	}
 	return err
 }
 
 func (g *gitUtil) Remotes(repo *git.Repository) ([]*git.Remote, error) {
-	remotes, err := repo.Remotes()
-	if err != nil {
+	var remotes []*git.Remote
+	if remotes, err = repo.Remotes(); err != nil {
 		g.logger.Error("Failed to get repository remotes", "error", err)
 	}
 	return remotes, err
 }
 
 func (g *gitUtil) ConfigScoped(repo *git.Repository, scope config.Scope) (*config.Config, error) {
-	configSc, err := repo.ConfigScoped(scope)
-	if err != nil {
+	var configSc *config.Config
+	if configSc, err = repo.ConfigScoped(scope); err != nil {
 		g.logger.Error("Failed to get scoped config", "scope", scope, "error", err)
 	}
 	return configSc, err
 }
 
 func (g *gitUtil) CreatePR(ctx context.Context, client *github.Client, owner string, repo string, pull *github.NewPullRequest) (*github.PullRequest, error) {
-	pr, resp, err := client.PullRequests.Create(ctx, owner, repo, pull)
-	if err != nil {
-		g.logger.Error(fmt.Sprintf("Failed to create pull request for repo '%s/%s' with title '%s': %v", owner, repo, pull.GetTitle(), err))
-		return nil, err
+	var pr *github.PullRequest
+	var resp *github.Response
+	if pr, resp, err = client.PullRequests.Create(ctx, owner, repo, pull); err != nil {
+		g.logger.Error("Failed to create pull request", "owner", owner, "repo", repo, "pull", pull, "error", err)
 	}
-
-	// Validate the response status code.
 	if resp.StatusCode != http.StatusCreated {
-		err := fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
-		g.logger.Error(fmt.Sprintf("Failed to create pull request for repo '%s/%s' with title '%s' due to unexpected status code %d: %v", owner, repo, pull.GetTitle(), resp.StatusCode, err))
-		return nil, err
+		err = fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
+		g.logger.Error("Failed to create pull request due to unexpected status code", "status", resp.StatusCode, "error", err)
 	}
-
-	return pr, nil
+	return pr, err
 }
 
-// GlobalGitConfig retrieves a global Git configuration value.
+func (g *gitUtil) NewGitLabClient(gitlabToken string) (*gitlab.Client, error) {
+	var gitLabNewClient *gitlab.Client
+	if gitLabNewClient, err = gitlab.NewClient(gitlabToken); err != nil {
+		g.logger.Error("Failed to create GitLab client", "error", err)
+	}
+	return gitLabNewClient, err
+}
+
+func (g *gitUtil) CreateGitlabMergeRequest(projectPath string, mrOptions *gitlab.CreateMergeRequestOptions, gitLabNewClient *gitlab.Client, gitlabToken string) (*gitlab.MergeRequest, error) {
+	var mr *gitlab.MergeRequest
+	var resp *gitlab.Response
+	if mr, resp, err = gitLabNewClient.MergeRequests.CreateMergeRequest(projectPath, mrOptions); err != nil {
+		g.logger.Error(fmt.Sprintf("Failed to create merge request for project '%s' with title '%s': %v", projectPath, *mrOptions.Title, err))
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusCreated {
+		err := fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
+		g.logger.Error(fmt.Sprintf("Failed to create merge request for project '%s' with title '%s' due to unexpected status code %d:", projectPath, *mrOptions.Title, resp.StatusCode))
+		return nil, err
+	}
+	return mr, nil
+}
+
 func (g *gitUtil) GlobalGitConfig() (GitUserConfig, error) {
-	repo, err := g.OpenRepository(".")
-	if err != nil {
+	var repo *git.Repository
+	var cfg *config.Config
+	if repo, err = g.OpenRepository("."); err != nil {
 		return GitUserConfig{}, err
 	}
-
-	cfg, err := g.ConfigScoped(repo, config.GlobalScope)
-	if err != nil {
+	if cfg, err = g.ConfigScoped(repo, config.GlobalScope); err != nil {
 		return GitUserConfig{}, err
 	}
 	return GitUserConfig{
@@ -215,11 +229,13 @@ func (g *gitUtil) GlobalGitConfig() (GitUserConfig, error) {
 	}, nil
 }
 
-// OpenRepository is a helper function to open a repository.
 func (g *gitUtil) OpenRepository(repoPath string) (*git.Repository, error) {
-	repo, err := g.PlainOpenWithOptions(repoPath, &git.PlainOpenOptions{
+	var repo *git.Repository
+	if repo, err = g.PlainOpenWithOptions(repoPath, &git.PlainOpenOptions{
 		DetectDotGit: true,
-	})
+	}); err != nil {
+		g.logger.Error("Failed to open repository", "repoPath", repoPath, "error", err)
+	}
 	return repo, err
 }
 
@@ -322,30 +338,6 @@ func (g *gitUtil) GetRemoteServiceProvider(remoteURL string) *consts.GitServiceP
 		return &consts.GitLab
 	}
 	return &consts.UnknownGitServiceProvider
-}
-
-// NewGitLabClient creates a new GitLab client.
-func (g *gitUtil) NewGitLabClient(gitlabToken string) (*gitlab.Client, error) {
-	gitLabNewClient, err := gitlab.NewClient(gitlabToken)
-	return gitLabNewClient, err
-}
-
-// CreateGitlabMergeRequest creates a merge request in GitLab.
-func (g *gitUtil) CreateGitlabMergeRequest(projectPath string, mrOptions *gitlab.CreateMergeRequestOptions, gitLabNewClient *gitlab.Client, gitlabToken string) (*gitlab.MergeRequest, error) {
-
-	mr, resp, err := gitLabNewClient.MergeRequests.CreateMergeRequest(projectPath, mrOptions)
-	if err != nil {
-		g.logger.Error(fmt.Sprintf("Failed to create merge request for project '%s' with title '%s': %v", projectPath, *mrOptions.Title, err))
-		return nil, err
-
-	}
-	if resp.StatusCode != http.StatusCreated {
-		err := fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
-		g.logger.Error(fmt.Sprintf("Failed to create merge request for project '%s' with title '%s' due to unexpected status code %d:", projectPath, *mrOptions.Title, resp.StatusCode))
-		return nil, err
-	}
-	return mr, nil
-
 }
 
 // getTokenType returns the type of GitHub token.

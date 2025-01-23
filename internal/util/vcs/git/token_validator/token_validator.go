@@ -3,7 +3,7 @@ package token_validator
 import (
 	"context"
 
-	"terraform-provider-tfmigrate/internal/util/git"
+	"terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	consts "terraform-provider-tfmigrate/internal/constants"
 

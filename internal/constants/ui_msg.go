@@ -3,6 +3,8 @@ package constants
 const (
 	// InvalidRepositoryIdentifier is the error displayed when the repository identifier is invalid.
 	InvalidRepositoryIdentifier = `Invalid repository identifier: %s. Expected format: <owner>/<repo-name>`
+	// ErrNoUpstreamBranch is the error displayed when no upstream branch is found for the current branch.
+	ErrNoUpstreamBranch = `No upstream branch found for the current branch.`
 	// ErrorFetchingRemote is the warning message displayed when the tool is unable to fetch the remote name.
 	ErrorFetchingRemote = `Error fetching remote name, err: %v, all git operations will be skipped.`
 	// ErrorFetchingRemoteURL is the warning message displayed when the tool is unable to fetch the remote URL.
@@ -12,9 +14,9 @@ const (
 	// ErrorCreatingNewTokenvalidator is the error displayed when the tool is unable to create a new token validator.
 	ErrorCreatingNewTokenvalidator = `Error creating new token validator: %v`
 	// ErrorCreatingBranch is the warning message displayed when the tool is unable to create a branch.
-	ErrorCreatingBranch = `Error creating or checking out branch %s, err: %v. Terraform Migrate will skip all Git operations.`
+	ErrorCreatingBranch = `Error creating or checking out branch %s, err: %v.`
 	// WarnNotOnGithubOrGitlab is the warning displayed when the user's repository is not on GitHub.
-	WarnNotOnGithubOrGitlab = `Your repository URL is %s. Only GitHub and Gitlab is supported. Terraform Migrate will skip all Git operations.`
+	WarnNotOnGithubOrGitlab = `Your repository URL is %s. Only GitHub and Gitlab is supported.`
 	// SuggestSettingClassicGitHubTokenValue is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is not set with a classic GitHub token.
 	SuggestSettingClassicGitHubTokenValue = `Set the value of the TF_GIT_PAT_TOKEN environment variable with a classic GitHub token to see all git operation related options.`
 	// SuggestUsingGithub is the suggestion displayed when the repository is not hosted on GitHub.

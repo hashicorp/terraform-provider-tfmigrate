@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"testing"
 
-	gitMocks "terraform-provider-tfmigrate/_mocks/util_mocks/git_mocks"
+	gitMocks "terraform-provider-tfmigrate/_mocks/util_mocks/vcs_mocks/git_mocks"
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	"terraform-provider-tfmigrate/internal/constants"
 

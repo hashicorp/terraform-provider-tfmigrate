@@ -6,7 +6,8 @@ package provider
 import (
 	"context"
 	"fmt"
-	"terraform-provider-tfmigrate/internal/gitops"
+	gitops "terraform-provider-tfmigrate/internal/helper"
+	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -26,7 +27,7 @@ var (
 
 func NewGithubPrResource() resource.Resource {
 	return &githubPr{
-		gitOps: gitops.NewGitOperations(hclog.L()),
+		gitOps: gitops.NewGitOperations(hclog.L(), gitUtil.NewGitUtil(hclog.L())),
 	}
 }
 
@@ -120,13 +121,13 @@ func (r *githubPr) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
-	data.Summary = types.StringValue(UPDATE_ACTION_NOT_SUPPORTED)
+	resp.Diagnostics.AddWarning(UpdateActionNotSupported, UpdateActionNotSupportedDetailed)
+	data.Summary = types.StringValue(UpdateActionNotSupported)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *githubPr) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	tflog.Warn(ctx, DESTROY_ACTION_NOT_SUPPORTED)
+	tflog.Warn(ctx, DestroyActionNotSupported)
 }
 
 func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {

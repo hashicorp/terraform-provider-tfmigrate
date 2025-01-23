@@ -7,7 +7,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"terraform-provider-tfmigrate/internal/gitops"
+	gitops "terraform-provider-tfmigrate/internal/helper"
+	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -27,7 +28,7 @@ var (
 
 func NewGitCommitPushResource() resource.Resource {
 	return &gitCommitPush{
-		gitOps: gitops.NewGitOperations(hclog.L()),
+		gitOps: gitops.NewGitOperations(hclog.L(), gitUtil.NewGitUtil(hclog.L())),
 	}
 }
 
@@ -133,8 +134,8 @@ func (r *gitCommitPush) Update(ctx context.Context, req resource.UpdateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
-	data.Summary = types.StringValue(UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
+	resp.Diagnostics.AddWarning(UpdateActionNotSupported, UpdateActionNotSupportedDetailed)
+	data.Summary = types.StringValue(UpdateActionNotSupportedDetailed)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -151,7 +152,7 @@ func (r *gitCommitPush) Configure(_ context.Context, req resource.ConfigureReque
 
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Git PAT Token Found",
+			"Unexpected TF_GIT_PAT_TOKEN Found",
 			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
 		)
 
