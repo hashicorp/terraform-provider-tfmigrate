@@ -7,8 +7,6 @@ import (
 
 	consts "terraform-provider-tfmigrate/internal/constants"
 
-	"github.com/hashicorp/go-hclog"
-
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 
 	"github.com/stretchr/testify/require"
@@ -67,7 +65,8 @@ func TestGetGitToken(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
 			r := require.New(t)
-			gitOps := NewGitUtil(hclog.FromContext(context.Background()))
+			ctx := context.Background()
+			gitOps := NewGitUtil(ctx)
 
 			// Environment variable setup
 			if name != "gitSvcPvdIsNil" && name != "unknownGitSvcPvd" {
@@ -132,8 +131,8 @@ func TestGetRepoIdentifier(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
 			r := require.New(t)
-			gitOps := NewGitUtil(hclog.FromContext(context.Background()))
-
+			ctx := context.Background()
+			gitOps := NewGitUtil(ctx)
 			// Act
 			repoIdentifier := gitOps.GetRepoIdentifier(tc.repoUrl)
 
@@ -160,8 +159,8 @@ func TestGetOrgAndRepoName(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
 			r := require.New(t)
-			gitOps := NewGitUtil(hclog.FromContext(context.Background()))
-
+			ctx := context.Background()
+			gitOps := NewGitUtil(ctx)
 			// Act
 			orgName, repoName := gitOps.GetOrgAndRepoName(tc.repoId)
 
@@ -194,8 +193,8 @@ func TestGetRemoteServiceProvider(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
 			r := require.New(t)
-			gitOps := NewGitUtil(hclog.FromContext(context.Background()))
-
+			ctx := context.Background()
+			gitOps := NewGitUtil(ctx)
 			// Act
 			gitSvcPvd := gitOps.GetRemoteServiceProvider(tc.repoUrl)
 

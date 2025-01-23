@@ -13,7 +13,6 @@ import (
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	"terraform-provider-tfmigrate/internal/constants"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	gitlab "gitlab.com/gitlab-org/api/client-go"
@@ -53,7 +52,6 @@ func TestValidateToken_gitlab(t *testing.T) {
 
 			r := require.New(t)
 			ctx := context.Background()
-			logger := hclog.FromContext(ctx)
 			git := gitMocks.NewMockGitUtil(t)
 			gitlabUtil := gitMocks.NewMockGitlabUtil(t)
 
@@ -61,7 +59,6 @@ func TestValidateToken_gitlab(t *testing.T) {
 				ctx:        ctx,
 				git:        git,
 				gitlabUtil: gitlabUtil,
-				logger:     logger,
 			}
 
 			func() {

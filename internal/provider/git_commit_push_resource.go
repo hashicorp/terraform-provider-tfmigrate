@@ -10,7 +10,6 @@ import (
 	gitops "terraform-provider-tfmigrate/internal/helper"
 	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -28,7 +27,7 @@ var (
 
 func NewGitCommitPushResource() resource.Resource {
 	return &gitCommitPush{
-		gitOps: gitops.NewGitOperations(hclog.L(), gitUtil.NewGitUtil(hclog.L())),
+		gitOps: gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
 	}
 }
 

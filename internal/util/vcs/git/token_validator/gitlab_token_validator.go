@@ -9,7 +9,7 @@ import (
 
 	"terraform-provider-tfmigrate/internal/constants"
 
-	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	gitlab "gitlab.com/gitlab-org/api/client-go"
 
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
@@ -20,7 +20,6 @@ type gitlabTokenValidator struct {
 	ctx        context.Context
 	git        git.GitUtil
 	gitlabUtil git.GitlabUtil
-	logger     hclog.Logger
 }
 
 // GitlabTokenValidator extends TokenValidator for GitLab-specific token validation.
@@ -32,12 +31,12 @@ type GitlabTokenValidator interface {
 func (g *gitlabTokenValidator) ValidateToken(repoUrl string, projectIdentifier string) (string, error) {
 	_, err := g.git.GetGitToken(g.git.GetRemoteServiceProvider(repoUrl))
 	if err != nil {
-		suggestions, gitTokenErr := gitTokenErrorHandler(err, g.logger)
+		suggestions, gitTokenErr := gitTokenErrorHandler(err)
 		return suggestions, gitTokenErr
 	}
 	statusCode, err := g.validateGitPatToken(g.git.GetRemoteServiceProvider(repoUrl), projectIdentifier)
 	if err != nil {
-		suggestions, gitTokenErr := gitTokenErrorHandler(err, g.logger, statusCode)
+		suggestions, gitTokenErr := gitTokenErrorHandler(err, statusCode)
 		return suggestions, gitTokenErr
 	}
 
@@ -58,12 +57,12 @@ func (g *gitlabTokenValidator) validateGitlabTokenRepoAccess(projectIdentifier s
 	projectDetails, resp, err := g.gitlabUtil.GetProject(projectIdentifier)
 
 	if err != nil {
-		g.logger.Error(fmt.Sprintf("error fetching project details err: %v", err))
+		tflog.Error(g.ctx, fmt.Sprintf("error fetching project details err: %v", err))
 		return 0, err
 	}
 
 	if projectDetails == nil {
-		return handleNonSuccessResponse(resp.Response, g.logger)
+		return handleNonSuccessResponse(resp.Response)
 	}
 
 	return http.StatusOK, g.handleGitlabSuccessResponse(projectDetails)

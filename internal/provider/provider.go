@@ -12,7 +12,6 @@ import (
 	gitops "terraform-provider-tfmigrate/internal/helper"
 	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	tokenValidator "terraform-provider-tfmigrate/internal/util/vcs/git/token_validator"
@@ -59,8 +58,8 @@ func New(version string) func() provider.Provider {
 	return func() provider.Provider {
 		return &tfmProvider{
 			version:               version,
-			gitOps:                gitops.NewGitOperations(hclog.L(), gitUtil.NewGitUtil(hclog.L())),
-			tokenValidatorFactory: tokenValidator.NewTokenValidatorFactory(context.Background(), hclog.L()),
+			gitOps:                gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
+			tokenValidatorFactory: tokenValidator.NewTokenValidatorFactory(context.Background()),
 		}
 	}
 }

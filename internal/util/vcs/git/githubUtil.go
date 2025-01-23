@@ -8,12 +8,11 @@ import (
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 
 	"github.com/google/go-github/v66/github"
-	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type githubUtil struct {
 	client *github.Client
-	logger hclog.Logger
 	ctx    context.Context
 }
 
@@ -30,10 +29,9 @@ var (
 )
 
 // NewGithubUtil creates a new instance of GithubUtil.
-func NewGithubUtil(ctx context.Context, logger hclog.Logger) GithubUtil {
+func NewGithubUtil(ctx context.Context) GithubUtil {
 	return &githubUtil{
-		ctx:    ctx,
-		logger: logger,
+		ctx: ctx,
 	}
 }
 
@@ -57,9 +55,9 @@ func (g *githubUtil) GetRepository(owner string, repo string) (*github.Repositor
 
 	repoDetails, response, err := g.client.Repositories.Get(g.ctx, owner, repo)
 	if repoDetails != nil {
-		g.logger.Debug(fmt.Sprintf("Fetched repository details: %v", repoDetails))
+		tflog.Debug(g.ctx, fmt.Sprintf("Fetched repository details: %v", repoDetails))
 		return repoDetails, response, err
 	}
-	g.logger.Error(fmt.Sprintf("Failed to fetch repository details. response: %v, err: %v", response, err))
+	tflog.Error(g.ctx, fmt.Sprintf("Failed to fetch repository details. response: %v, err: %v", response, err))
 	return nil, response, err
 }

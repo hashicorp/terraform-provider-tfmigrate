@@ -8,7 +8,7 @@ import (
 	"terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/google/go-github/v66/github"
-	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	"terraform-provider-tfmigrate/internal/constants"
@@ -19,7 +19,6 @@ type githubTokenValidator struct {
 	ctx        context.Context
 	git        git.GitUtil
 	githubUtil git.GithubUtil
-	logger     hclog.Logger
 }
 
 // GithubTokenValidator extends TokenValidator for GitHub-specific token validation.
@@ -31,14 +30,14 @@ type GithubTokenValidator interface {
 func (g *githubTokenValidator) ValidateToken(repoUrl string, repoIdentifier string) (string, error) {
 	_, err := g.git.GetGitToken(g.git.GetRemoteServiceProvider(repoUrl))
 	if err != nil {
-		suggestions, gitTokenErr := gitTokenErrorHandler(err, g.logger)
+		suggestions, gitTokenErr := gitTokenErrorHandler(err)
 		return suggestions, gitTokenErr
 	}
 
 	orgName, repoName := g.git.GetOrgAndRepoName(repoIdentifier)
 	statusCode, err := g.validateGitPatToken(g.git.GetRemoteServiceProvider(repoUrl), orgName, repoName)
 	if err != nil {
-		suggestions, gitTokenErr := gitTokenErrorHandler(err, g.logger, statusCode)
+		suggestions, gitTokenErr := gitTokenErrorHandler(err, statusCode)
 		return suggestions, gitTokenErr
 	}
 
@@ -60,12 +59,12 @@ func (g *githubTokenValidator) validateGithubTokenRepoAccess(owner string, repos
 
 	repoDetails, resp, err := g.githubUtil.GetRepository(owner, repositoryName)
 	if err != nil {
-		g.logger.Error(fmt.Sprintf("error fetching repository details err: %v", err))
+		tflog.Error(g.ctx, fmt.Sprintf("error fetching repository details err: %v", err))
 		return 0, err
 	}
 
 	if repoDetails == nil {
-		return handleNonSuccessResponse(resp.Response, g.logger)
+		return handleNonSuccessResponse(resp.Response)
 	}
 
 	return http.StatusOK, g.handleGitHubSuccessResponse(repoDetails)

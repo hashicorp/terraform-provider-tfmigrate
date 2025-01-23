@@ -7,14 +7,13 @@ import (
 
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 
-	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	gitlab "gitlab.com/gitlab-org/api/client-go"
 )
 
 type gitlabUtil struct {
 	client *gitlab.Client
 	ctx    context.Context
-	logger hclog.Logger
 }
 
 type GitlabUtil interface {
@@ -26,10 +25,9 @@ var (
 )
 
 // NewGitlabUtil creates a new instance of GitlabUtil.
-func NewGitlabUtil(ctx context.Context, logger hclog.Logger) GitlabUtil {
+func NewGitlabUtil(ctx context.Context) GitlabUtil {
 	return &gitlabUtil{
-		ctx:    ctx,
-		logger: logger,
+		ctx: ctx,
 	}
 }
 
@@ -53,10 +51,15 @@ func (g *gitlabUtil) GetProject(projectIdentifier string) (*gitlab.Project, *git
 
 	repoDetails, response, err := g.client.Projects.GetProject(projectIdentifier, &gitlab.GetProjectOptions{})
 	if err != nil {
-		g.logger.Error(fmt.Sprintf("Failed to fetch project details. response: %v, err: %v", response, err))
+		tflog.Error(g.ctx, "Failed to fetch project details", map[string]interface{}{
+			"response": response,
+			"error":    err,
+		})
 		return nil, response, err
 	}
 
-	g.logger.Debug(fmt.Sprintf("Fetched repository details: %v", repoDetails))
+	tflog.Debug(g.ctx, "Fetched repository details", map[string]interface{}{
+		"repoDetails": repoDetails,
+	})
 	return repoDetails, response, nil
 }

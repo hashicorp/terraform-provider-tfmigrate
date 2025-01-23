@@ -19,7 +19,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/google/go-github/v45/github"
-	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 const (
@@ -36,7 +36,7 @@ type GitUserConfig struct {
 }
 
 type gitUtil struct {
-	logger hclog.Logger
+	ctx context.Context
 }
 
 // GitUtil interface to mock Git operations.
@@ -67,14 +67,16 @@ type GitUtil interface {
 }
 
 // NewGitUtil creates a new instance of GitUtil.
-func NewGitUtil(logger hclog.Logger) GitUtil {
-	return &gitUtil{logger}
+func NewGitUtil(ctx context.Context) GitUtil {
+	return &gitUtil{
+		ctx: ctx,
+	}
 }
 
 func (g *gitUtil) PlainOpenWithOptions(path string, options *git.PlainOpenOptions) (*git.Repository, error) {
 	var repo *git.Repository
 	if repo, err = git.PlainOpenWithOptions(path, options); err != nil {
-		g.logger.Error("Failed to open repository", "path", path, "error", err)
+		tflog.Error(context.Background(), "Failed to open repository", map[string]interface{}{"path": path, "error": err})
 	}
 	return repo, err
 }
@@ -82,7 +84,7 @@ func (g *gitUtil) PlainOpenWithOptions(path string, options *git.PlainOpenOption
 func (g *gitUtil) Head(repo *git.Repository) (*plumbing.Reference, error) {
 	var head *plumbing.Reference
 	if head, err = repo.Head(); err != nil {
-		g.logger.Error("Failed to get repository head", "error", err)
+		tflog.Error(context.Background(), "Failed to get repository head", map[string]interface{}{"error": err})
 	}
 	return head, err
 }
@@ -90,14 +92,14 @@ func (g *gitUtil) Head(repo *git.Repository) (*plumbing.Reference, error) {
 func (g *gitUtil) Worktree(repo *git.Repository) (*git.Worktree, error) {
 	var worktree *git.Worktree
 	if worktree, err = repo.Worktree(); err != nil {
-		g.logger.Error("Failed to get repository worktree", "error", err)
+		tflog.Error(context.Background(), "Failed to get repository worktree", map[string]interface{}{"error": err})
 	}
 	return worktree, err
 }
 
 func (g *gitUtil) Reset(worktree *git.Worktree, options *git.ResetOptions) error {
 	if err = worktree.Reset(options); err != nil {
-		g.logger.Error("Failed to reset worktree", "options", options, "error", err)
+		tflog.Error(context.Background(), "Failed to reset worktree", map[string]interface{}{"options": options, "error": err})
 	}
 	return err
 }
@@ -105,7 +107,7 @@ func (g *gitUtil) Reset(worktree *git.Worktree, options *git.ResetOptions) error
 func (g *gitUtil) CommitObject(repo *git.Repository, hash plumbing.Hash) (*object.Commit, error) {
 	var commit *object.Commit
 	if commit, err = repo.CommitObject(hash); err != nil {
-		g.logger.Error("Failed to get commit object", "hash", hash, "error", err)
+		tflog.Error(context.Background(), "Failed to get commit object", map[string]interface{}{"hash": hash, "error": err})
 	}
 	return commit, err
 }
@@ -113,20 +115,21 @@ func (g *gitUtil) CommitObject(repo *git.Repository, hash plumbing.Hash) (*objec
 func (g *gitUtil) Branches(repo *git.Repository) (storer.ReferenceIter, error) {
 	var branches storer.ReferenceIter
 	if branches, err = repo.Branches(); err != nil {
-		g.logger.Error("Failed to get repository branches", "error", err)
+		tflog.Error(context.Background(), "Failed to get repository branches", map[string]interface{}{"error": err})
 	}
 	return branches, err
 }
 
 func (g *gitUtil) Checkout(worktree *git.Worktree, options *git.CheckoutOptions) error {
 	if err = worktree.Checkout(options); err != nil {
-		g.logger.Error("Failed to checkout worktree", "options", options, "error", err)
+		tflog.Error(context.Background(), "Failed to checkout worktree", map[string]interface{}{"options": options, "error": err})
 	}
 	return err
 }
+
 func (g *gitUtil) RemoveReference(storer storer.ReferenceStorer, ref plumbing.ReferenceName) error {
 	if err = storer.RemoveReference(ref); err != nil {
-		g.logger.Error("Failed to remove reference", "ref", ref, "error", err)
+		tflog.Error(context.Background(), "Failed to remove reference", map[string]interface{}{"ref": ref, "error": err})
 	}
 	return err
 }
@@ -134,7 +137,7 @@ func (g *gitUtil) RemoveReference(storer storer.ReferenceStorer, ref plumbing.Re
 func (g *gitUtil) Add(worktree *git.Worktree, glob string) (plumbing.Hash, error) {
 	var hash plumbing.Hash
 	if hash, err = worktree.Add(glob); err != nil {
-		g.logger.Error("Failed to add to worktree", "glob", glob, "error", err)
+		tflog.Error(context.Background(), "Failed to add to worktree", map[string]interface{}{"glob": glob, "error": err})
 	}
 	return hash, err
 }
@@ -142,7 +145,7 @@ func (g *gitUtil) Add(worktree *git.Worktree, glob string) (plumbing.Hash, error
 func (g *gitUtil) Commit(worktree *git.Worktree, msg string, options *git.CommitOptions) (plumbing.Hash, error) {
 	var hash plumbing.Hash
 	if hash, err = worktree.Commit(msg, options); err != nil {
-		g.logger.Error("Failed to commit worktree", "message", msg, "options", options, "error", err)
+		tflog.Error(context.Background(), "Failed to commit worktree", map[string]interface{}{"message": msg, "options": options, "error": err})
 	}
 	return hash, err
 }
@@ -150,14 +153,14 @@ func (g *gitUtil) Commit(worktree *git.Worktree, msg string, options *git.Commit
 func (g *gitUtil) Status(worktree *git.Worktree) (git.Status, error) {
 	var status git.Status
 	if status, err = worktree.Status(); err != nil {
-		g.logger.Error("Failed to get worktree status", "error", err)
+		tflog.Error(context.Background(), "Failed to get worktree status", map[string]interface{}{"error": err})
 	}
 	return status, err
 }
 
 func (g *gitUtil) Push(repo *git.Repository, o *git.PushOptions) error {
 	if err = repo.Push(o); err != nil {
-		g.logger.Error("Failed to push to repository", "options", o, "error", err)
+		tflog.Error(context.Background(), "Failed to push to repository", map[string]interface{}{"options": o, "error": err})
 	}
 	return err
 }
@@ -165,7 +168,7 @@ func (g *gitUtil) Push(repo *git.Repository, o *git.PushOptions) error {
 func (g *gitUtil) Remotes(repo *git.Repository) ([]*git.Remote, error) {
 	var remotes []*git.Remote
 	if remotes, err = repo.Remotes(); err != nil {
-		g.logger.Error("Failed to get repository remotes", "error", err)
+		tflog.Error(context.Background(), "Failed to get repository remotes", map[string]interface{}{"error": err})
 	}
 	return remotes, err
 }
@@ -173,7 +176,7 @@ func (g *gitUtil) Remotes(repo *git.Repository) ([]*git.Remote, error) {
 func (g *gitUtil) ConfigScoped(repo *git.Repository, scope config.Scope) (*config.Config, error) {
 	var configSc *config.Config
 	if configSc, err = repo.ConfigScoped(scope); err != nil {
-		g.logger.Error("Failed to get scoped config", "scope", scope, "error", err)
+		tflog.Error(context.Background(), "Failed to get scoped config", map[string]interface{}{"scope": scope, "error": err})
 	}
 	return configSc, err
 }
@@ -182,11 +185,11 @@ func (g *gitUtil) CreatePR(ctx context.Context, client *github.Client, owner str
 	var pr *github.PullRequest
 	var resp *github.Response
 	if pr, resp, err = client.PullRequests.Create(ctx, owner, repo, pull); err != nil {
-		g.logger.Error("Failed to create pull request", "owner", owner, "repo", repo, "pull", pull, "error", err)
+		tflog.Error(ctx, "Failed to create pull request", map[string]interface{}{"owner": owner, "repo": repo, "pull": pull, "error": err})
 	}
 	if resp.StatusCode != http.StatusCreated {
 		err = fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
-		g.logger.Error("Failed to create pull request due to unexpected status code", "status", resp.StatusCode, "error", err)
+		tflog.Error(ctx, "Failed to create pull request due to unexpected status code", map[string]interface{}{"status": resp.StatusCode, "error": err})
 	}
 	return pr, err
 }
@@ -194,7 +197,7 @@ func (g *gitUtil) CreatePR(ctx context.Context, client *github.Client, owner str
 func (g *gitUtil) NewGitLabClient(gitlabToken string) (*gitlab.Client, error) {
 	var gitLabNewClient *gitlab.Client
 	if gitLabNewClient, err = gitlab.NewClient(gitlabToken); err != nil {
-		g.logger.Error("Failed to create GitLab client", "error", err)
+		tflog.Error(context.Background(), "Failed to create GitLab client", map[string]interface{}{"error": err})
 	}
 	return gitLabNewClient, err
 }
@@ -203,12 +206,12 @@ func (g *gitUtil) CreateGitlabMergeRequest(projectPath string, mrOptions *gitlab
 	var mr *gitlab.MergeRequest
 	var resp *gitlab.Response
 	if mr, resp, err = gitLabNewClient.MergeRequests.CreateMergeRequest(projectPath, mrOptions); err != nil {
-		g.logger.Error(fmt.Sprintf("Failed to create merge request for project '%s' with title '%s': %v", projectPath, *mrOptions.Title, err))
+		tflog.Error(context.Background(), fmt.Sprintf("Failed to create merge request for project '%s' with title '%s'", projectPath, *mrOptions.Title), map[string]interface{}{"error": err})
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusCreated {
 		err := fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
-		g.logger.Error(fmt.Sprintf("Failed to create merge request for project '%s' with title '%s' due to unexpected status code %d:", projectPath, *mrOptions.Title, resp.StatusCode))
+		tflog.Error(context.Background(), fmt.Sprintf("Failed to create merge request for project '%s' with title '%s' due to unexpected status code %d", projectPath, *mrOptions.Title, resp.StatusCode), map[string]interface{}{"error": err})
 		return nil, err
 	}
 	return mr, nil
@@ -234,7 +237,7 @@ func (g *gitUtil) OpenRepository(repoPath string) (*git.Repository, error) {
 	if repo, err = g.PlainOpenWithOptions(repoPath, &git.PlainOpenOptions{
 		DetectDotGit: true,
 	}); err != nil {
-		g.logger.Error("Failed to open repository", "repoPath", repoPath, "error", err)
+		tflog.Error(context.Background(), "Failed to open repository", map[string]interface{}{"repoPath": repoPath, "error": err})
 	}
 	return repo, err
 }
@@ -258,7 +261,7 @@ func (g *gitUtil) GetGitToken(gitServiceProvider *consts.GitServiceProvider) (st
 	case consts.GitHub:
 		return getGithubPatToken(gitPatToken)
 	case consts.GitLab:
-		g.logger.Info(fmt.Sprintf("Fetched GitLab token set: %s", gitPatToken))
+		tflog.Info(context.Background(), fmt.Sprintf("Fetched GitLab token set: %s", gitPatToken))
 		return g.getGitlabPatToken(gitPatToken)
 	}
 
@@ -284,10 +287,8 @@ func getGithubPatToken(gitPatToken string) (string, error) {
 // getGitlabPatToken returns the GitLab PAT token.
 func (g *gitUtil) getGitlabPatToken(gitPatToken string) (string, error) {
 	tokenType := getTokenType(gitPatToken)
-	g.logger.Info(fmt.Sprintf(" GitLab token type: %s", tokenType))
 
 	if tokenType == gitlabPat {
-		g.logger.Info(fmt.Sprintf(" GitLab token: %s", gitPatToken))
 		return gitPatToken, nil
 	}
 

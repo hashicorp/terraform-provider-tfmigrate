@@ -6,27 +6,24 @@ import (
 	consts "terraform-provider-tfmigrate/internal/constants"
 	"testing"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewTokenValidatorFactory(t *testing.T) {
 	ctx := context.Background()
-	logger := hclog.NewNullLogger()
 
 	for name, tc := range map[string]struct {
 		tokenValidatorFactory TokenValidatorFactory
 	}{
 		"success": {
 			tokenValidatorFactory: &tokenValidatorFactory{
-				ctx:    ctx,
-				logger: logger,
+				ctx: ctx,
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := require.New(t)
-			factory := NewTokenValidatorFactory(ctx, logger)
+			factory := NewTokenValidatorFactory(ctx)
 			r.NotNil(factory)
 			r.Equal(tc.tokenValidatorFactory, factory)
 		})
@@ -36,8 +33,7 @@ func TestNewTokenValidatorFactory(t *testing.T) {
 
 func TestNewTokenValidator(t *testing.T) {
 	ctx := context.Background()
-	logger := hclog.NewNullLogger()
-	factory := NewTokenValidatorFactory(ctx, logger)
+	factory := NewTokenValidatorFactory(ctx)
 
 	for name, tc := range map[string]struct {
 		err                error

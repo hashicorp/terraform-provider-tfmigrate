@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hashicorp/go-hclog"
 	gitlab "gitlab.com/gitlab-org/api/client-go"
 )
 
@@ -65,7 +64,6 @@ func TestGetProject(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
-			mockLogger := hclog.FromContext(ctx)
 			mockHttpClient := getHttpClientWithMockRoundTripper()
 
 			mockTransport, ok := mockHttpClient.Transport.(*netMock.MockRoundTripper)
@@ -74,7 +72,6 @@ func TestGetProject(t *testing.T) {
 			gitlabClient, _ := gitlab.NewClient("", gitlab.WithHTTPClient(mockHttpClient))
 			gitlabUtil := &gitlabUtil{
 				client: gitlabClient,
-				logger: mockLogger,
 				ctx:    ctx,
 			}
 			token = os.Getenv("TF_GIT_PAT_TOKEN")

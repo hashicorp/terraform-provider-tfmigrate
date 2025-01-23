@@ -18,7 +18,6 @@ import (
 	netMock "terraform-provider-tfmigrate/_mocks/net_mocks"
 
 	"github.com/google/go-github/v66/github"
-	"github.com/hashicorp/go-hclog"
 )
 
 const (
@@ -138,7 +137,6 @@ func TestGetRepository(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
-			mockLogger := hclog.FromContext(ctx)
 			mockHttpClient := getHttpClientWithMockRoundTripper()
 
 			mockTransport, ok := mockHttpClient.Transport.(*netMock.MockRoundTripper)
@@ -147,7 +145,6 @@ func TestGetRepository(t *testing.T) {
 			githubClient := github.NewClient(mockHttpClient)
 			githubUtil := &githubUtil{
 				client: githubClient,
-				logger: mockLogger,
 				ctx:    ctx,
 			}
 			token = os.Getenv("TF_GIT_PAT_TOKEN")

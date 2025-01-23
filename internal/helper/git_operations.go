@@ -24,14 +24,13 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/go-github/v45/github"
-	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"golang.org/x/oauth2"
 )
 
 type gitOperations struct {
-	logger  hclog.Logger
+	ctx     context.Context
 	gitUtil gitUtil.GitUtil
 }
 
@@ -83,9 +82,9 @@ type ProviderConfig struct {
 }
 
 // NewGitOperations creates a new instance of GitOperations.
-func NewGitOperations(logger hclog.Logger, gitUtil gitUtil.GitUtil) GitOperations {
+func NewGitOperations(ctx context.Context, gitUtil gitUtil.GitUtil) GitOperations {
 	return &gitOperations{
-		logger:  logger,
+		ctx:     ctx,
 		gitUtil: gitUtil, // use the passed-in gitUtil instead of creating a new one
 	}
 }
@@ -217,19 +216,19 @@ func (gitOps *gitOperations) DeleteLocalBranch(repoPath, branchName string) erro
 func (gitOps *gitOperations) CreateAndSwitchBranch(repoPath, branchName string) error {
 	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
 	if err != nil {
-		gitOps.logger.Error(fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
+		tflog.Error(gitOps.ctx, fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
 		return err
 	}
 
 	worktree, err := gitOps.gitUtil.Worktree(repo)
 	if err != nil {
-		gitOps.logger.Error(fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
+		tflog.Error(gitOps.ctx, fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
 		return err
 	}
 
 	branches, err := gitOps.ListBranches(repoPath)
 	if err != nil {
-		gitOps.logger.Error(fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
+		tflog.Error(gitOps.ctx, fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
 		return err
 	}
 	// Check if the branch already exists.
@@ -252,7 +251,7 @@ func (gitOps *gitOperations) CreateAndSwitchBranch(repoPath, branchName string) 
 		Keep:   true,
 	})
 	if err != nil {
-		gitOps.logger.Error(fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
+		tflog.Error(gitOps.ctx, fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
 		return err
 	}
 	return nil
@@ -345,7 +344,7 @@ func (gitOps *gitOperations) PushCommit(repoPath, remoteName, branchName, github
 	})
 	if err != nil {
 		if errors.Is(err, git.NoErrAlreadyUpToDate) {
-			gitOps.logger.Info("Everything is up-to-date")
+			tflog.Info(gitOps.ctx, "Everything is up-to-date")
 		} else {
 			return err
 		}
@@ -397,7 +396,7 @@ func (gitOps *gitOperations) CreatePullRequest(params PullRequestParams) (string
 		// Create a new GitLab client.
 		gitLabNewClient, err := gitOps.gitUtil.NewGitLabClient(params.GitPatToken)
 		if err != nil {
-			gitOps.logger.Error("Failed to create GitLab client", "error", err)
+			tflog.Error(gitOps.ctx, "Failed to create GitLab client", map[string]interface{}{"error": err})
 			return "", err
 		}
 		mrOptions := &gitlab.CreateMergeRequestOptions{
@@ -443,6 +442,6 @@ func (gitOps *gitOperations) PushCommitUsingGit(remoteName string, branchName st
 // logAndReturnErr logs the error message and returns the error.
 func (gitOps *gitOperations) logAndReturnErr(errMsg string, err error) (string, error) {
 	err = fmt.Errorf("err: %s, details: %s", err, errMsg)
-	gitOps.logger.Error(err.Error())
+	tflog.Error(gitOps.ctx, err.Error())
 	return "", err
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -22,7 +21,7 @@ import (
 )
 
 var (
-	logger = hclog.FromContext(context.Background())
+	ctx = context.Background()
 )
 
 func TestGitRemoteName(t *testing.T) {
@@ -38,7 +37,8 @@ func TestGitRemoteName(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := require.New(t)
-			gitInterface := NewGitOperations(logger, gitUtil.NewGitUtil(logger))
+			ctx := context.Background()
+			gitInterface := NewGitOperations(ctx, gitUtil.NewGitUtil(ctx))
 			remoteName, err := gitInterface.GetRemoteName()
 			if err != nil {
 				r.Equal(tc.error, err)
@@ -61,7 +61,8 @@ func TestGetRemoteURL(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := require.New(t)
-			gitInterface := NewGitOperations(logger, gitUtil.NewGitUtil(logger))
+			ctx := context.Background()
+			gitInterface := NewGitOperations(ctx, gitUtil.NewGitUtil(ctx))
 			repoUrl, err := gitInterface.GetRemoteURL("origin")
 			if err != nil {
 				r.Equal(tc.error, err)
@@ -112,7 +113,7 @@ func TestResetToLastCommittedVersion(t *testing.T) {
 			// Arrange
 			mockGitOps := git_mocks.NewMockGitUtil(t)
 			r := require.New(t)
-			gitOps := NewGitOperations(logger, mockGitOps)
+			gitOps := NewGitOperations(ctx, mockGitOps)
 
 			mockRepo := &git.Repository{}
 			mockWorktree := &git.Worktree{}
@@ -206,7 +207,7 @@ func TestListBranches(t *testing.T) {
 			// Arrange
 			mockGitOps := git_mocks.NewMockGitUtil(t)
 			r := require.New(t)
-			gitOps := NewGitOperations(logger, mockGitOps)
+			gitOps := NewGitOperations(ctx, mockGitOps)
 			mockBranchIter := iter_mocks.NewMockReferenceIter(t)
 			mockRepo := &git.Repository{}
 
@@ -215,7 +216,8 @@ func TestListBranches(t *testing.T) {
 					mockGitOps.On("OpenRepository", "./repo").Return(mockRepo, nil)
 					mockGitOps.On("Branches", mockRepo).Return(mockBranchIter, nil)
 					mockBranchIter.On("ForEach", mock.AnythingOfType("func(*plumbing.Reference) error")).Return(nil).Run(func(args mock.Arguments) {
-						arg := args.Get(0).(func(*plumbing.Reference) error)
+						arg, ok := args.Get(0).(func(*plumbing.Reference) error)
+						require.True(t, ok)
 						require.NoError(t, arg(plumbing.NewHashReference(plumbing.NewBranchReferenceName("master"), plumbing.ZeroHash)))
 						require.NoError(t, arg(plumbing.NewHashReference(plumbing.NewBranchReferenceName("develop"), plumbing.ZeroHash)))
 					})
@@ -279,7 +281,7 @@ func TestCreateAndSwitchBranch(t *testing.T) {
 			// arrange
 			mockGitOps := git_mocks.NewMockGitUtil(t)
 			r := require.New(t)
-			gitOps := NewGitOperations(logger, mockGitOps)
+			gitOps := NewGitOperations(ctx, mockGitOps)
 
 			mockRepo := &git.Repository{}
 			mockWorktree := &git.Worktree{}
@@ -371,7 +373,7 @@ func TestDeleteLocalBranch(t *testing.T) {
 			// Arrange
 			mockGitOps := git_mocks.NewMockGitUtil(t)
 			r := require.New(t)
-			gitOps := NewGitOperations(logger, mockGitOps)
+			gitOps := NewGitOperations(ctx, mockGitOps)
 			mockBranchIter := iter_mocks.NewMockReferenceIter(t)
 			mockRepo := &git.Repository{}
 			headRef := plumbing.NewHashReference(plumbing.NewBranchReferenceName("master"), plumbing.ZeroHash)
@@ -381,7 +383,8 @@ func TestDeleteLocalBranch(t *testing.T) {
 					mockGitOps.On("OpenRepository", tc.repoPath).Return(mockRepo, nil)
 					mockGitOps.On("Branches", mockRepo).Return(mockBranchIter, nil)
 					mockBranchIter.On("ForEach", mock.AnythingOfType("func(*plumbing.Reference) error")).Return(nil).Run(func(args mock.Arguments) {
-						arg := args.Get(0).(func(*plumbing.Reference) error)
+						arg, ok := args.Get(0).(func(*plumbing.Reference) error)
+						require.True(t, ok)
 						require.NoError(t, arg(plumbing.NewHashReference(plumbing.NewBranchReferenceName("master"), plumbing.ZeroHash)))
 						require.NoError(t, arg(plumbing.NewHashReference(plumbing.NewBranchReferenceName("feature-branch"), plumbing.ZeroHash)))
 					})
@@ -397,7 +400,8 @@ func TestDeleteLocalBranch(t *testing.T) {
 					mockGitOps.On("OpenRepository", tc.repoPath).Return(mockRepo, nil)
 					mockGitOps.On("Branches", mockRepo).Return(mockBranchIter, nil)
 					mockBranchIter.On("ForEach", mock.AnythingOfType("func(*plumbing.Reference) error")).Return(nil).Run(func(args mock.Arguments) {
-						arg := args.Get(0).(func(*plumbing.Reference) error)
+						arg, ok := args.Get(0).(func(*plumbing.Reference) error)
+						require.True(t, ok)
 						require.NoError(t, arg(plumbing.NewHashReference(plumbing.NewBranchReferenceName("master"), plumbing.ZeroHash)))
 						require.NoError(t, arg(plumbing.NewHashReference(plumbing.NewBranchReferenceName("feature-branch"), plumbing.ZeroHash)))
 					})
@@ -446,7 +450,7 @@ func TestCreateCommit(t *testing.T) {
 			// Arrange
 			mockGitOps := git_mocks.NewMockGitUtil(t)
 			r := require.New(t)
-			gitOps := NewGitOperations(logger, mockGitOps)
+			gitOps := NewGitOperations(ctx, mockGitOps)
 			worktree := new(git.Worktree)
 			status := git.Status{}
 			// Mock Git config
@@ -532,7 +536,7 @@ func TestPushCommit(t *testing.T) {
 			// Arrange
 			mockGitOps := git_mocks.NewMockGitUtil(t)
 			r := require.New(t)
-			gitOps := NewGitOperations(logger, mockGitOps)
+			gitOps := NewGitOperations(ctx, mockGitOps)
 			repo := new(git.Repository)
 			worktree := new(git.Worktree)
 
@@ -598,7 +602,8 @@ func TestGetRemoteServiceProvider(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
 			r := require.New(t)
-			gitOps := NewGitOperations(logger, gitUtil.NewGitUtil(logger))
+			ctx := context.Background()
+			gitOps := NewGitOperations(ctx, gitUtil.NewGitUtil(ctx))
 
 			// Act
 			gitSvcPvd := gitOps.GetRemoteServiceProvider(tc.repoUrl)
@@ -640,7 +645,8 @@ func TestGetRepoIdentifier(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
 			r := require.New(t)
-			gitOps := NewGitOperations(logger, gitUtil.NewGitUtil(logger))
+			ctx := context.Background()
+			gitOps := NewGitOperations(ctx, gitUtil.NewGitUtil(ctx))
 
 			// Act
 			repoIdentifier := gitOps.GetRepoIdentifier(tc.repoUrl)

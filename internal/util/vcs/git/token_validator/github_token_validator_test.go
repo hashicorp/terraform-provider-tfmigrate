@@ -16,7 +16,6 @@ import (
 	"terraform-provider-tfmigrate/internal/constants"
 
 	"github.com/google/go-github/v66/github"
-	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -178,7 +177,6 @@ func TestValidateToken(t *testing.T) {
 
 			r := require.New(t)
 			ctx := context.Background()
-			logger := hclog.FromContext(ctx)
 			git := gitMocks.NewMockGitUtil(t)
 			githubUtil := gitMocks.NewMockGithubUtil(t)
 
@@ -186,7 +184,6 @@ func TestValidateToken(t *testing.T) {
 				ctx:        ctx,
 				git:        git,
 				githubUtil: githubUtil,
-				logger:     logger,
 			}
 
 			func() {

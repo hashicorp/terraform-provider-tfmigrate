@@ -7,15 +7,12 @@ import (
 
 	consts "terraform-provider-tfmigrate/internal/constants"
 
-	"github.com/hashicorp/go-hclog"
-
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 )
 
 // tokenValidatorFactory implements TokenValidatorFactory.
 type tokenValidatorFactory struct {
-	ctx    context.Context
-	logger hclog.Logger
+	ctx context.Context
 }
 
 // TokenValidator is the base interface for validating tokens.
@@ -29,10 +26,9 @@ type TokenValidatorFactory interface {
 }
 
 // NewTokenValidatorFactory creates a new instance of TokenValidatorFactory.
-func NewTokenValidatorFactory(ctx context.Context, logger hclog.Logger) TokenValidatorFactory {
+func NewTokenValidatorFactory(ctx context.Context) TokenValidatorFactory {
 	return &tokenValidatorFactory{
-		ctx:    ctx,
-		logger: logger,
+		ctx: ctx,
 	}
 }
 
@@ -41,18 +37,16 @@ func (f *tokenValidatorFactory) NewTokenValidator(gitServiceProvider *consts.Git
 	if gitServiceProvider != nil && *gitServiceProvider == consts.GitHub {
 		return &githubTokenValidator{
 			ctx:        f.ctx,
-			logger:     f.logger,
-			git:        git.NewGitUtil(f.logger),
-			githubUtil: git.NewGithubUtil(f.ctx, f.logger),
+			git:        git.NewGitUtil(f.ctx),
+			githubUtil: git.NewGithubUtil(f.ctx),
 		}, nil
 	}
 
 	if gitServiceProvider != nil && *gitServiceProvider == consts.GitLab {
 		return &gitlabTokenValidator{
 			ctx:        f.ctx,
-			logger:     f.logger,
-			git:        git.NewGitUtil(f.logger),
-			gitlabUtil: git.NewGitlabUtil(f.ctx, f.logger),
+			git:        git.NewGitUtil(f.ctx),
+			gitlabUtil: git.NewGitlabUtil(f.ctx),
 		}, nil
 	}
 	return nil, cliErrs.ErrGitServiceProviderNotSupported
