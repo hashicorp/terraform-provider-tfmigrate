@@ -1,4 +1,4 @@
-package token_validator
+package remote_svc_provider
 
 import (
 	"context"
@@ -14,20 +14,20 @@ import (
 	"terraform-provider-tfmigrate/internal/constants"
 )
 
-// githubTokenValidator implements GithubTokenValidator.
-type githubTokenValidator struct {
+// githubSvcProvider implements GithubSvcProvider.
+type githubSvcProvider struct {
 	ctx        context.Context
 	git        git.GitUtil
 	githubUtil git.GithubUtil
 }
 
-// GithubTokenValidator extends TokenValidator for GitHub-specific token validation.
-type GithubTokenValidator interface {
-	TokenValidator
+// GithubSvcProvider extends RemoteVcsSvcProvider for GitHub-specific token validation.
+type GithubSvcProvider interface {
+	RemoteVcsSvcProvider
 }
 
-// ValidateToken creates a new instance of GithubTokenValidator.
-func (g *githubTokenValidator) ValidateToken(repoUrl string, repoIdentifier string) (string, error) {
+// ValidateToken creates a new instance of GithubSvcProvider.
+func (g *githubSvcProvider) ValidateToken(repoUrl string, repoIdentifier string) (string, error) {
 	_, err := g.git.GetGitToken(g.git.GetRemoteServiceProvider(repoUrl))
 	if err != nil {
 		suggestions, gitTokenErr := gitTokenErrorHandler(err)
@@ -45,7 +45,7 @@ func (g *githubTokenValidator) ValidateToken(repoUrl string, repoIdentifier stri
 }
 
 // validateGitPatToken validates the git pat token.
-func (g *githubTokenValidator) validateGitPatToken(gitServiceProvider *constants.GitServiceProvider, owner string, repositoryName string) (int, error) {
+func (g *githubSvcProvider) validateGitPatToken(gitServiceProvider *constants.GitServiceProvider, owner string, repositoryName string) (int, error) {
 	if *gitServiceProvider == constants.GitHub {
 		return g.validateGithubTokenRepoAccess(owner, repositoryName)
 	}
@@ -55,7 +55,7 @@ func (g *githubTokenValidator) validateGitPatToken(gitServiceProvider *constants
 }
 
 // validateGithubTokenRepoAccess validates the github pat token.
-func (g *githubTokenValidator) validateGithubTokenRepoAccess(owner string, repositoryName string) (int, error) {
+func (g *githubSvcProvider) validateGithubTokenRepoAccess(owner string, repositoryName string) (int, error) {
 
 	repoDetails, resp, err := g.githubUtil.GetRepository(owner, repositoryName)
 	if err != nil {
@@ -71,7 +71,7 @@ func (g *githubTokenValidator) validateGithubTokenRepoAccess(owner string, repos
 }
 
 // handleGitHubSuccessResponse handles the success response.
-func (g *githubTokenValidator) handleGitHubSuccessResponse(repoDetails *github.Repository) error {
+func (g *githubSvcProvider) handleGitHubSuccessResponse(repoDetails *github.Repository) error {
 	repoPermissions := repoDetails.GetPermissions()
 
 	if len(repoPermissions) == 0 {
@@ -87,4 +87,8 @@ func (g *githubTokenValidator) handleGitHubSuccessResponse(repoDetails *github.R
 	}
 
 	return nil
+}
+
+func (g *githubSvcProvider) CreatePullRequest(params git.PullRequestParams) (string, error) {
+	panic("implement me")
 }

@@ -11,9 +11,9 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"terraform-provider-tfmigrate/internal/util/vcs/git/remote_svc_provider"
 	"time"
 
-	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	consts "terraform-provider-tfmigrate/internal/constants"
 	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
@@ -354,22 +354,16 @@ func (gitOps *gitOperations) CreatePullRequest(pullRequestParams gitUtil.PullReq
 		return "", err
 	}
 
-	switch *remoteServiceProvider {
-	case consts.GitHub:
-		pr, err := gitOps.gitUtil.CreateGithubPullRequest(pullRequestParams)
-		if err != nil {
-			return "", err
-		}
-		return pr.GetHTMLURL(), nil
-	case consts.GitLab:
-		mr, err := gitOps.gitUtil.CreateGitlabMergeRequest(pullRequestParams)
-		if err != nil {
-			return "", err
-		}
-		return mr.WebURL, nil
-	default:
-		return "", fmt.Errorf("%w", cliErrs.ErrGitServiceProviderNotSupported)
+	remoteVcsSvcProvider, err := remote_svc_provider.NewRemoteSvcProviderFactory(gitOps.ctx).NewRemoteVcsSvcProvider(remoteServiceProvider)
+	if err != nil {
+		return "", err
 	}
+
+	prUrl, err := remoteVcsSvcProvider.CreatePullRequest(pullRequestParams)
+	if err != nil {
+		return "", err
+	}
+	return prUrl, nil
 }
 
 // GetRepoIdentifier returns the repository identifier.

@@ -1,4 +1,4 @@
-package token_validator
+package remote_svc_provider
 
 import (
 	"bytes"

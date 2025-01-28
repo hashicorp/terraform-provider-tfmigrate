@@ -1,4 +1,4 @@
-package token_validator
+package remote_svc_provider
 
 import (
 	"context"
@@ -13,17 +13,17 @@ func TestNewTokenValidatorFactory(t *testing.T) {
 	ctx := context.Background()
 
 	for name, tc := range map[string]struct {
-		tokenValidatorFactory TokenValidatorFactory
+		tokenValidatorFactory RemoteVcsSvcProviderFactory
 	}{
 		"success": {
-			tokenValidatorFactory: &tokenValidatorFactory{
+			tokenValidatorFactory: &remoteSvcProviderFactory{
 				ctx: ctx,
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := require.New(t)
-			factory := NewTokenValidatorFactory(ctx)
+			factory := NewRemoteSvcProviderFactory(ctx)
 			r.NotNil(factory)
 			r.Equal(tc.tokenValidatorFactory, factory)
 		})
@@ -33,14 +33,14 @@ func TestNewTokenValidatorFactory(t *testing.T) {
 
 func TestNewTokenValidator(t *testing.T) {
 	ctx := context.Background()
-	factory := NewTokenValidatorFactory(ctx)
+	factory := NewRemoteSvcProviderFactory(ctx)
 
 	for name, tc := range map[string]struct {
 		err                error
 		gitServiceProvider *consts.GitServiceProvider
-		tokenValidator     TokenValidator
+		tokenValidator     RemoteVcsSvcProvider
 	}{
-		"GithubTokenValidator": {
+		"GithubSvcProvider": {
 			gitServiceProvider: &consts.GitHub,
 		},
 		"GitServiceProviderNotRecognised": {
@@ -53,7 +53,7 @@ func TestNewTokenValidator(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := require.New(t)
-			tokenValidator, err := factory.NewTokenValidator(tc.gitServiceProvider)
+			tokenValidator, err := factory.NewRemoteVcsSvcProvider(tc.gitServiceProvider)
 
 			if err != nil {
 				r.Nil(tokenValidator)
