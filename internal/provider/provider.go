@@ -5,9 +5,16 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
+	"terraform-provider-tfmigrate/internal/constants"
+	gitops "terraform-provider-tfmigrate/internal/helper"
+	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+
+	gitRemoteSvcProvider "terraform-provider-tfmigrate/internal/util/vcs/git/remote_svc_provider"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -23,37 +30,38 @@ var (
 )
 
 const (
-	GITHUB_TOKEN_ENV_NAME = "GITHUB_TOKEN"
-	HCP_TERRAFORM_HOST    = "app.terraform.io"
+	GitTokenEnvName  = "TF_GIT_PAT_TOKEN"
+	HcpTerraformHost = "app.terraform.io"
 )
+
+// tfmProvider is the provider implementation.
+type tfmProvider struct {
+	version                     string
+	gitOps                      gitops.GitOperations
+	remoteVcsSvcProviderFactory gitRemoteSvcProvider.RemoteVcsSvcProviderFactory
+}
+
+// tfmProviderModel maps provider schema data to a Go type.
+type tfmProviderModel struct {
+	GitPatToken types.String `tfsdk:"git_pat_token"`
+	Hostname    types.String `tfsdk:"hostname"`
+}
+
+// ProviderResourceData holds the provider configuration data.
+type ProviderResourceData struct {
+	GitPatToken string
+	Hostname    string
+}
 
 // New is a helper function to simplify provider server and testing implementation.
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
 		return &tfmProvider{
-			version: version,
+			version:                     version,
+			gitOps:                      gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
+			remoteVcsSvcProviderFactory: gitRemoteSvcProvider.NewRemoteSvcProviderFactory(context.Background()),
 		}
 	}
-}
-
-// tfmProvider is the provider implementation.
-type tfmProvider struct {
-	// version is set to the provider version on release, "dev" when the
-	// provider is built and ran locally, and "test" when running acceptance
-	// testing.
-	version string
-}
-
-// tfmProviderModel maps provider schema data to a Go type.
-type tfmProviderModel struct {
-	GithubToken types.String `tfsdk:"github_token"`
-	Hostname    types.String `tfsdk:"hostname"`
-}
-
-// ProviderResourceData is a struct to hold the provider configuration data.
-type ProviderResourceData struct {
-	GithubToken string
-	Hostname    string
 }
 
 // Metadata returns the provider type name.
@@ -66,23 +74,24 @@ func (p *tfmProvider) Metadata(_ context.Context, _ provider.MetadataRequest, re
 func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"github_token": schema.StringAttribute{
+			"git_pat_token": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "The Github PAT token to be used for creating Pull-Requests",
+				Description: "The Git Personal Access Token (PAT) to be used for creating pull or merge requests.",
 			},
 			"hostname": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   false,
-				Description: "The Hostname of the TFE instance to connect to, if empty will default to HCP Terraform at app.terraform.io",
+				Description: "The hostname of the TFE instance to connect to. Defaults to HCP Terraform at app.terraform.io.",
 			},
 		},
 	}
 }
 
-// Configure prepares a HashiCups API client for data sources and resources.
+// Configure prepares the provider configuration.
 func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	tflog.Info(ctx, "Configuring tfmigrate provider")
+
 	// Retrieve provider data from configuration
 	var config tfmProviderModel
 	diags := req.Config.Get(ctx, &config)
@@ -91,24 +100,19 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	// If practitioner provided a configuration value for any of the
-	// attributes, it must be a known value.
-
-	if config.GithubToken.IsUnknown() {
+	// Handle unknown values
+	if config.GitPatToken.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
-			path.Root("github_token"),
-			"Unknown Github PAT Token",
-			"The provider cannot create the Github API client as there is an unknown configuration value for the Github Token. "+
-				"Either target apply the source of the value first, set the value statically in the configuration, or use the TFM_GITHUB_TOKEN environment variable.",
+			path.Root("git_pat_token"),
+			"Unknown TF_GIT_PAT_TOKEN",
+			"The provider cannot initialize the Git client as the Git PAT token is unknown. Set it as an environment variable.",
 		)
 	}
-
 	if config.Hostname.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			path.Root("hostname"),
 			"Unknown Hostname",
-			"The provider cannot initialize the TFE API client as there is an unknown configuration value for the Hostname. "+
-				"Please set the value statically in the configuration.",
+			"The provider cannot initialize the TFE API client as the hostname is unknown. Set it in configuration.",
 		)
 	}
 
@@ -117,36 +121,61 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	}
 
 	// Default values to environment variables, but override
-	// with Terraform configuration value if set.
+	// with Terraform configuration values if set
+	gitPatToken := os.Getenv(GitTokenEnvName)
+	hostname := HcpTerraformHost
 
-	githubToken := os.Getenv(GITHUB_TOKEN_ENV_NAME)
-	hostname := HCP_TERRAFORM_HOST
-
-	if !config.GithubToken.IsNull() {
-		githubToken = config.GithubToken.ValueString()
+	if !config.GitPatToken.IsNull() {
+		gitPatToken = config.GitPatToken.ValueString()
 	}
-
 	if !config.Hostname.IsNull() {
 		hostname = config.Hostname.ValueString()
 	}
 
-	// If any of the expected configurations are missing, return
-	// errors with provider-specific guidance.
-
-	if githubToken == "" {
-		resp.Diagnostics.AddAttributeError(path.Root("github_token"), PROVIDER_PAT_TOKEN_MISSING,
-			PROVIDER_PAT_TOKEN_MISSING_DETAILED)
+	// Validate configurations
+	if gitPatToken == "" {
+		resp.Diagnostics.AddError(
+			"Missing Authentication Token",
+			"The provider requires the Git PAT token to be configured either as a Terraform variable or an environment variable.",
+		)
 	}
 
-	if resp.Diagnostics.HasError() {
+	// Validate the Git PAT token against the remote service provider
+	remoteName, err := p.gitOps.GetRemoteName()
+	if err != nil {
+		resp.Diagnostics.AddError(fmt.Sprintf(constants.ErrorFetchingRemote, err.Error()), err.Error())
 		return
 	}
 
-	providerResourceData := ProviderResourceData{
-		githubToken, hostname}
+	repoUrl, err := p.gitOps.GetRemoteURL(remoteName)
+	if err != nil || repoUrl == "" {
+		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorFetchingRemoteURL, err)), err.Error())
+		return
+	}
 
-	// Required to pass this information into the resources.
-	resp.ResourceData = providerResourceData
+	var repoIdentifier string
+	if repoIdentifier = p.gitOps.GetRepoIdentifier(repoUrl); repoIdentifier == "" {
+		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.WarnNotOnGithubOrGitlab, repoUrl)), "unable to determine the repository identifier")
+		return
+	}
+
+	remoteVcsSvcProvider, err := p.remoteVcsSvcProviderFactory.NewRemoteVcsSvcProvider(p.gitOps.GetRemoteServiceProvider(repoUrl))
+	if err != nil {
+		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorCreatingNewTokenvalidator, err)), err.Error())
+		return
+	}
+
+	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier); err != nil {
+		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorValidatingGitToken, err)), err.Error())
+		resp.Diagnostics.AddWarning("", suggestion)
+		return
+	}
+
+	// Set the provider resource data
+	resp.ResourceData = ProviderResourceData{
+		GitPatToken: gitPatToken,
+		Hostname:    hostname,
+	}
 }
 
 // DataSources defines the data sources implemented in the provider.

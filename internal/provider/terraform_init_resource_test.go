@@ -24,14 +24,14 @@ func TestCreateUpdateOnInitResource_Valid(t *testing.T) {
 				Config: getInitConfigsForDirPath(validInitTestDir),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "directory_path", validInitTestDir),
-					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "summary", TERRAFORM_INIT_SUCCESS),
+					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "summary", TerraformInitSuccess),
 				),
 			},
 			{
 				Config: getInitConfigsForDirPath(invalidInitTestDir),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "directory_path", invalidInitTestDir),
-					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "summary", UPDATE_ACTION_NOT_SUPPORTED),
+					resource.TestCheckResourceAttr("tfmigrate_terraform_init.test", "summary", UpdateActionNotSupported),
 				),
 			},
 		},
@@ -44,7 +44,7 @@ func TestPathOnInitResource_Invalid(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      getInitConfigsForDirPath(invalidInitTestDir),
-				ExpectError: regexp.MustCompile(DIR_PATH_DOES_NOT_EXIST),
+				ExpectError: regexp.MustCompile(DirPathDoesNotExist),
 			},
 		},
 	})

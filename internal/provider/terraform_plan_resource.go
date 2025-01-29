@@ -66,9 +66,9 @@ func (r *terraformPlan) Create(ctx context.Context, req resource.CreateRequest, 
 	if err != nil {
 		tflog.Error(ctx, "Error executing terraform plan: "+err.Error())
 		resp.Diagnostics.AddError("Error executing terraform plan:", err.Error())
-		data.Summary = types.StringValue(TERRAFORM_PLAN_FAILED)
+		data.Summary = types.StringValue(TerraformPlanFailed)
 	} else {
-		result_string := fmt.Sprintf(TERRAFORM_PLAN_SUCCESS, summary.Add, summary.Change, summary.Remove)
+		result_string := fmt.Sprintf(TerraformPlanSuccess, summary.Add, summary.Change, summary.Remove)
 		tflog.Info(ctx, "Terraform Plan Summary:"+result_string)
 		data.Summary = types.StringValue(result_string)
 	}
@@ -85,8 +85,8 @@ func (r *terraformPlan) Update(ctx context.Context, req resource.UpdateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
-	data.Summary = types.StringValue(UPDATE_ACTION_NOT_SUPPORTED)
+	resp.Diagnostics.AddWarning(UpdateActionNotSupported, UpdateActionNotSupportedDetailed)
+	data.Summary = types.StringValue(UpdateActionNotSupported)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

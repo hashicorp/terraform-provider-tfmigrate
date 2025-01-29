@@ -1,0 +1,33 @@
+with-expecter: true
+issue-845-fix: true
+packages:
+  terraform-provider-tfmigrate/internal/util/vcs/git/remote_svc_provider:
+    config:
+      dir: "_mocks/util_mocks/vcs_mocks/git_mocks/remote_svc_provider_mocks"
+      outpkg: "remote_svc_provider_mocks"
+    interfaces:
+      GithubSvcProvider:
+      GitlabSvcProvider:
+      RemoteVcsSvcProvider:
+      RemoteVcsSvcProviderFactory:
+  terraform-provider-tfmigrate/internal/util/vcs/git:
+    config:
+      dir: "_mocks/util_mocks/vcs_mocks/git_mocks"
+      outpkg: "git_mocks"
+    interfaces:
+      GithubUtil:
+      GitlabUtil:
+      GitUtil:
+  terraform-provider-tfmigrate/internal/helper:
+    config:
+      dir: "_mocks/helper_mocks/gitops_mocks"
+      outpkg: "gitops_mocks"
+    interfaces:
+      GitOperations:
+  github.com/go-git/go-git/v5/plumbing/storer:
+    config:
+      dir: "_mocks/helper_mocks/iter_mocks"
+      outpkg: "iter_mocks"
+    interfaces:
+      ReferenceIter:
+

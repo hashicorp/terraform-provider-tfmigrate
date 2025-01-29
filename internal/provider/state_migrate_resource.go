@@ -87,8 +87,8 @@ func (r *stateMigration) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	_, err := os.Stat(dirPath)
 	if err != nil {
-		tflog.Error(ctx, DIR_PATH_DOES_NOT_EXIST)
-		resp.Diagnostics.AddError(DIR_PATH_DOES_NOT_EXIST, DIR_PATH_DOES_NOT_EXIST_DETAILED)
+		tflog.Error(ctx, DirPathDoesNotExist)
+		resp.Diagnostics.AddError(DirPathDoesNotExist, DirPathDoesNotExistDetailed)
 		return
 	}
 
@@ -150,12 +150,12 @@ func (r *stateMigration) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
+	resp.Diagnostics.AddWarning(UpdateActionNotSupported, UpdateActionNotSupportedDetailed)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *stateMigration) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	tflog.Warn(ctx, DESTROY_ACTION_NOT_SUPPORTED)
+	tflog.Warn(ctx, DestroyActionNotSupported)
 }
 
 func uploadState(ctx context.Context, state []byte, workspaceId string, workspace string, client *tfe.Client) error {

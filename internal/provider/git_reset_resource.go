@@ -7,7 +7,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"terraform-provider-tfmigrate/internal/gitops"
+	gitops "terraform-provider-tfmigrate/internal/helper"
+	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -16,6 +17,7 @@ import (
 )
 
 type gitReset struct {
+	gitOps gitops.GitOperations
 }
 
 var (
@@ -23,7 +25,9 @@ var (
 )
 
 func NewGitResetResource() resource.Resource {
-	return &gitReset{}
+	return &gitReset{
+		gitOps: gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
+	}
 }
 
 type GitResetModel struct {
@@ -56,12 +60,12 @@ func (r *gitReset) Create(ctx context.Context, req resource.CreateRequest, resp 
 	dirPath := data.DirectoryPath.ValueString()
 	_, err := os.Stat(dirPath)
 	if err != nil {
-		tflog.Error(ctx, DIR_PATH_DOES_NOT_EXIST)
-		resp.Diagnostics.AddError(DIR_PATH_DOES_NOT_EXIST, fmt.Sprintf(DIR_PATH_DOES_NOT_EXIST_DETAILED, dirPath))
+		tflog.Error(ctx, DirPathDoesNotExist)
+		resp.Diagnostics.AddError(DirPathDoesNotExist, fmt.Sprintf(DirPathDoesNotExistDetailed, dirPath))
 		return
 	}
 	tflog.Info(ctx, "Executing Git Reset")
-	err = gitops.ResetToLastCommittedVersion(dirPath)
+	err = r.gitOps.ResetToLastCommittedVersion(dirPath)
 	if err != nil {
 		tflog.Error(ctx, "Error executing Git Reset: "+err.Error())
 		resp.Diagnostics.AddError("Error executing Git Reset:", err.Error())
@@ -80,10 +84,10 @@ func (r *gitReset) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
+	resp.Diagnostics.AddWarning(UpdateActionNotSupported, UpdateActionNotSupportedDetailed)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *gitReset) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	tflog.Warn(ctx, DESTROY_ACTION_NOT_SUPPORTED)
+	tflog.Warn(ctx, DestroyActionNotSupported)
 }

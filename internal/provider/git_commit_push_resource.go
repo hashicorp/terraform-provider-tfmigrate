@@ -7,7 +7,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"terraform-provider-tfmigrate/internal/gitops"
+	gitops "terraform-provider-tfmigrate/internal/helper"
+	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -16,7 +17,8 @@ import (
 )
 
 type gitCommitPush struct {
-	githubToken string
+	gitPatToken string
+	gitOps      gitops.GitOperations
 }
 
 var (
@@ -24,7 +26,9 @@ var (
 )
 
 func NewGitCommitPushResource() resource.Resource {
-	return &gitCommitPush{}
+	return &gitCommitPush{
+		gitOps: gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
+	}
 }
 
 type GitCommitPushModel struct {
@@ -94,7 +98,7 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 	commitMessage := data.CommitMessage.ValueString()
 
 	tflog.Info(ctx, "Executing Git Commit")
-	commitHash, err := gitops.CreateCommit(dirPath, commitMessage)
+	commitHash, err := r.gitOps.CreateCommit(dirPath, commitMessage)
 	if err != nil {
 		tflog.Error(ctx, "Error executing Git Commit "+err.Error())
 		resp.Diagnostics.AddError("Error executing Git Commit", err.Error())
@@ -106,8 +110,8 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	if data.EnablePush.ValueBool() {
-		//err = gitops.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.githubToken, true)
-		err = gitops.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
+		// err = r.gitOps.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.gitPatToken, true)
+		err = r.gitOps.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
 		if err != nil {
 			tflog.Error(ctx, "Error executing Git Push: "+err.Error())
 			resp.Diagnostics.AddError("Error executing Git Push:", err.Error())
@@ -129,8 +133,8 @@ func (r *gitCommitPush) Update(ctx context.Context, req resource.UpdateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
-	data.Summary = types.StringValue(UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
+	resp.Diagnostics.AddWarning(UpdateActionNotSupported, UpdateActionNotSupportedDetailed)
+	data.Summary = types.StringValue(UpdateActionNotSupportedDetailed)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -147,11 +151,11 @@ func (r *gitCommitPush) Configure(_ context.Context, req resource.ConfigureReque
 
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Github Token Found",
+			"Unexpected TF_GIT_PAT_TOKEN Found",
 			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
 		)
 
 		return
 	}
-	r.githubToken = providerResourceData.GithubToken
+	r.gitPatToken = providerResourceData.GitPatToken
 }

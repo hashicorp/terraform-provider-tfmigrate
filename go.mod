@@ -6,7 +6,6 @@ toolchain go1.23.4
 
 require (
 	github.com/go-git/go-git/v5 v5.13.2
-	github.com/google/go-github/v45 v45.2.0
 	github.com/hashicorp/go-tfe v1.74.1
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/hashicorp/terraform-exec v0.22.0
@@ -15,8 +14,18 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.26.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.11.0
+	github.com/stretchr/testify v1.10.0
 	github.com/zclconf/go-cty v1.16.2
+	gitlab.com/gitlab-org/api/client-go v0.116.0
 	golang.org/x/oauth2 v0.25.0
+
+)
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/hashicorp/go-hclog v1.6.3 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 )
 
 require (
@@ -42,6 +51,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/go-github/v66 v66.0.0
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/cli v1.1.6 // indirect
@@ -49,7 +59,6 @@ require (
 	github.com/hashicorp/go-checkpoint v0.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-cty v1.4.1-0.20200414143053-d3edf31b6320 // indirect
-	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.6.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect

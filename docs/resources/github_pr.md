@@ -27,11 +27,11 @@ resource "tfmigrate_github_pr" "sample_pr" {
 
 ### Required
 
-- `destin_branch` (String) The Base branch into which the PR will be merged into
+- `destin_branch` (String) The Base branch into which the PR will be merged into.
 - `pr_body` (String) Content of the PR Body.
 - `pr_title` (String) The PR title.
 - `repo_identifier` (String) The identifier of the repository in the format `owner/repo`.
-- `source_branch` (String) The feature branch from which the PR will be merged into
+- `source_branch` (String) The feature branch from which the PR will be created.
 
 ### Read-Only
 

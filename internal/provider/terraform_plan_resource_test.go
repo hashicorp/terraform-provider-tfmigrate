@@ -31,7 +31,7 @@ func TestCreateUpdateOnPlanResource_Valid(t *testing.T) {
 				Config: getPlanConfigsForDirPath(invalidPlanTestDir),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("tfmigrate_terraform_plan.test", "directory_path", invalidPlanTestDir),
-					resource.TestCheckResourceAttr("tfmigrate_terraform_plan.test", "summary", UPDATE_ACTION_NOT_SUPPORTED),
+					resource.TestCheckResourceAttr("tfmigrate_terraform_plan.test", "summary", UpdateActionNotSupported),
 				),
 			},
 		},
@@ -44,7 +44,7 @@ func TestPathOnPlanResource_Invalid(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      getPlanConfigsForDirPath(invalidPlanTestDir),
-				ExpectError: regexp.MustCompile(DIR_PATH_DOES_NOT_EXIST),
+				ExpectError: regexp.MustCompile(DirPathDoesNotExist),
 			},
 		},
 	})

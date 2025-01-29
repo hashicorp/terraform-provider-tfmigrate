@@ -6,7 +6,8 @@ package provider
 import (
 	"context"
 	"fmt"
-	"terraform-provider-tfmigrate/internal/gitops"
+	gitops "terraform-provider-tfmigrate/internal/helper"
+	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -15,7 +16,8 @@ import (
 )
 
 type githubPr struct {
-	githubToken string
+	gitPatToken string
+	gitOps      gitops.GitOperations
 }
 
 var (
@@ -23,7 +25,9 @@ var (
 )
 
 func NewGithubPrResource() resource.Resource {
-	return &githubPr{}
+	return &githubPr{
+		gitOps: gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
+	}
 }
 
 type GithubPrModel struct {
@@ -57,11 +61,11 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Required:            true,
 			},
 			"source_branch": schema.StringAttribute{
-				MarkdownDescription: "The feature branch from which the PR will be merged into",
+				MarkdownDescription: "The feature branch from which the PR will be created.",
 				Required:            true,
 			},
 			"destin_branch": schema.StringAttribute{
-				MarkdownDescription: "The Base branch into which the PR will be merged into",
+				MarkdownDescription: "The Base branch into which the PR will be merged into.",
 				Required:            true,
 			},
 			"pull_request_url": schema.StringAttribute{
@@ -77,35 +81,38 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 }
 
 func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-
 	var data GithubPrModel
+
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	repoIdentifier := data.RepoIdentifier.ValueString()
-	prTitle := data.PrTitle.ValueString()
-	prBody := data.PrBody.ValueString()
-	sourceBranch := data.SourceBranch.ValueString()
-	destinBranch := data.DestinBranch.ValueString()
-	githubToken := r.githubToken
+
+	createPrParams := gitUtil.PullRequestParams{
+		RepoIdentifier: data.RepoIdentifier.ValueString(),
+		BaseBranch:     data.DestinBranch.ValueString(),
+		FeatureBranch:  data.SourceBranch.ValueString(),
+		Title:          data.PrTitle.ValueString(),
+		Body:           data.PrBody.ValueString(),
+		GitPatToken:    r.gitPatToken,
+	}
 
 	tflog.Info(ctx, "Executing Git Commit")
-	prUrl, err := gitops.CreatePullRequest(repoIdentifier, destinBranch, sourceBranch, prTitle, prBody, githubToken)
 
-	data.Summary = types.StringValue("Github PR Created: " + prUrl)
-	data.PrUrl = types.StringValue(prUrl)
+	prURL, err := r.gitOps.CreatePullRequest(createPrParams)
 	if err != nil {
 		tflog.Error(ctx, "Error creating PR: "+err.Error())
 		resp.Diagnostics.AddError("Error creating PR: ", err.Error())
 		return
 	}
 
+	data.Summary = types.StringValue("Git PR Created: " + prURL)
+	data.PrUrl = types.StringValue(prURL)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *githubPr) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-}
+func (r *githubPr) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {}
 
 func (r *githubPr) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data GithubPrModel
@@ -113,13 +120,13 @@ func (r *githubPr) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	resp.Diagnostics.AddWarning(UPDATE_ACTION_NOT_SUPPORTED, UPDATE_ACTION_NOT_SUPPORTED_DETAILED)
-	data.Summary = types.StringValue(UPDATE_ACTION_NOT_SUPPORTED)
+	resp.Diagnostics.AddWarning(UpdateActionNotSupported, UpdateActionNotSupportedDetailed)
+	data.Summary = types.StringValue(UpdateActionNotSupported)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *githubPr) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	tflog.Warn(ctx, DESTROY_ACTION_NOT_SUPPORTED)
+	tflog.Warn(ctx, DestroyActionNotSupported)
 }
 
 func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -128,14 +135,13 @@ func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, r
 	}
 
 	providerResourceData, ok := req.ProviderData.(ProviderResourceData)
-
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Github Token Found",
-			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
+			"Unexpected Git PAT Token Found",
+			fmt.Sprintf("providerResourceData from context is %v.", providerResourceData),
 		)
-
 		return
 	}
-	r.githubToken = providerResourceData.GithubToken
+
+	r.gitPatToken = providerResourceData.GitPatToken
 }
