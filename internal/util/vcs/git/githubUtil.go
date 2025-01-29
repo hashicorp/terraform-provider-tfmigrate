@@ -16,17 +16,9 @@ type githubUtil struct {
 	ctx    context.Context
 }
 
-type TokenType string
-
 type GithubUtil interface {
 	GetRepository(owner string, repo string) (*github.Repository, *github.Response, error)
 }
-
-var (
-	ClassicToken     TokenType = "classic"
-	FineGrainedToken TokenType = "fine-grained"
-	Unrecognized     TokenType = "unrecognized"
-)
 
 // NewGithubUtil creates a new instance of GithubUtil.
 func NewGithubUtil(ctx context.Context) GithubUtil {

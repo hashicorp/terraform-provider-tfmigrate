@@ -1,4 +1,4 @@
-package token_validator
+package remote_svc_provider
 
 import (
 	"bytes"
@@ -18,18 +18,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// handleNonSuccessResponse handles the non-success response.
-func handleNonSuccessResponse(resp *http.Response) (int, error) {
-
+func handleNonSuccessResponseFromVcsApi(resp *http.Response) (int, error) {
 	if resp == nil {
 		tflog.Error(context.Background(), fmt.Sprintf("error fetching repository details resp %v", resp))
 		return 0, cliErrs.ErrUnknownError
 	}
 
-	return handleGitRepoResponse(resp)
-}
-
-func handleGitRepoResponse(resp *http.Response) (int, error) {
 	responseBody := getResponseBodyFromHttpResponse(resp)
 	responseHeaders := getHeaderFromHttpResponse(resp)
 	statusCode := resp.StatusCode

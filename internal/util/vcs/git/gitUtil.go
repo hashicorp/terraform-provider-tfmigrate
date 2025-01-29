@@ -3,7 +3,6 @@ package git
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
@@ -12,14 +11,12 @@ import (
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go"
-	"golang.org/x/oauth2"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
-	"github.com/google/go-github/v45/github"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -35,6 +32,15 @@ type GitUserConfig struct {
 	Name  string
 	Email string
 }
+
+var (
+	ClassicToken     TokenType = "classic"
+	FineGrainedToken TokenType = "fine-grained"
+	Unrecognized     TokenType = "unrecognized"
+	GitlabPat        TokenType = "gitlabToken"
+)
+
+type TokenType string
 
 type gitUtil struct {
 	ctx context.Context
@@ -57,8 +63,6 @@ type GitUtil interface {
 	Commit(worktree *git.Worktree, msg string, options *git.CommitOptions) (plumbing.Hash, error)
 	CommitObject(repo *git.Repository, hash plumbing.Hash) (*object.Commit, error)
 	ConfigScoped(repo *git.Repository, scope config.Scope) (*config.Config, error)
-	CreateGithubPullRequest(params PullRequestParams) (*github.PullRequest, error)
-	CreateGitlabMergeRequest(params PullRequestParams) (*gitlab.MergeRequest, error)
 	GetGitToken(gitServiceProvider *consts.GitServiceProvider) (string, error)
 	GetOrgAndRepoName(repoIdentifier string) (string, string)
 	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
@@ -191,67 +195,12 @@ func (g *gitUtil) ConfigScoped(repo *git.Repository, scope config.Scope) (*confi
 	return configSc, err
 }
 
-func (g *gitUtil) CreateGithubPullRequest(params PullRequestParams) (*github.PullRequest, error) {
-	var pr *github.PullRequest
-	var resp *github.Response
-	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: params.GitPatToken})
-	tc := oauth2.NewClient(g.ctx, ts)
-	client := github.NewClient(tc)
-
-	newPR := &github.NewPullRequest{
-		Title: github.String(params.Title),
-		Head:  github.String(params.FeatureBranch),
-		Base:  github.String(params.BaseBranch),
-		Body:  github.String(params.Body),
-	}
-
-	repoOwner := strings.Split(params.RepoIdentifier, "/")[0]
-	repoName := strings.Split(params.RepoIdentifier, "/")[1]
-
-	if pr, resp, err = client.PullRequests.Create(g.ctx, repoOwner, repoName, newPR); err != nil {
-		tflog.Error(ctx, "Failed to create pull request", map[string]interface{}{"owner": repoOwner, "repo": repoName, "pull": newPR.GetTitle(), "error": err})
-	}
-	if resp.StatusCode != http.StatusCreated {
-		err = fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
-		tflog.Error(ctx, "Failed to create pull request due to unexpected status code", map[string]interface{}{"status": resp.StatusCode, "error": err})
-	}
-	return pr, err
-}
-
 func (g *gitUtil) NewGitLabClient(gitlabToken string) (*gitlab.Client, error) {
 	var gitLabNewClient *gitlab.Client
 	if gitLabNewClient, err = gitlab.NewClient(gitlabToken); err != nil {
 		tflog.Error(context.Background(), "Failed to create GitLab client", map[string]interface{}{"error": err})
 	}
 	return gitLabNewClient, err
-}
-
-func (g *gitUtil) CreateGitlabMergeRequest(params PullRequestParams) (*gitlab.MergeRequest, error) {
-	var mr *gitlab.MergeRequest
-	var resp *gitlab.Response
-	gitLabNewClient, err := gitlab.NewClient(params.GitPatToken)
-	if err != nil || gitLabNewClient == nil {
-		tflog.Error(context.Background(), "Failed to create GitLab client", map[string]interface{}{"error": err})
-	}
-
-	mrOptions := &gitlab.CreateMergeRequestOptions{
-		SourceBranch: &params.FeatureBranch,
-		TargetBranch: &params.BaseBranch,
-		Title:        &params.Title,
-		Description:  &params.Body,
-	}
-
-	if mr, resp, err = gitLabNewClient.MergeRequests.CreateMergeRequest(params.RepoIdentifier, mrOptions); err != nil {
-		tflog.Error(context.Background(), fmt.Sprintf("Failed to create merge request for project '%s' with title '%s'", params.RepoIdentifier, *mrOptions.Title), map[string]interface{}{"error": err})
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusCreated {
-		err := fmt.Errorf("unexpected status code: %d, expected %d", resp.StatusCode, http.StatusCreated)
-		tflog.Error(context.Background(), fmt.Sprintf("Failed to create merge request for project '%s' with title '%s' due to unexpected status code %d", params.RepoIdentifier, *mrOptions.Title, resp.StatusCode), map[string]interface{}{"error": err})
-		return nil, err
-	}
-	return mr, nil
 }
 
 func (g *gitUtil) GlobalGitConfig() (GitUserConfig, error) {
@@ -325,7 +274,7 @@ func getGithubPatToken(gitPatToken string) (string, error) {
 func (g *gitUtil) getGitlabPatToken(gitPatToken string) (string, error) {
 	tokenType := getTokenType(gitPatToken)
 
-	if tokenType == gitlabPat {
+	if tokenType == GitlabPat {
 		return gitPatToken, nil
 	}
 
@@ -386,7 +335,7 @@ func getTokenType(gitPatToken string) TokenType {
 	case strings.HasPrefix(gitPatToken, githubFineGrainedTokenPrefix):
 		return FineGrainedToken
 	case strings.HasPrefix(gitPatToken, gitlabTokenPrefix):
-		return gitlabPat
+		return GitlabPat
 	default:
 		return Unrecognized
 	}

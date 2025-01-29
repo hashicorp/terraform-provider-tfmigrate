@@ -1,4 +1,4 @@
-package token_validator
+package remote_svc_provider
 
 import (
 	"bytes"
@@ -180,7 +180,7 @@ func TestValidateToken(t *testing.T) {
 			git := gitMocks.NewMockGitUtil(t)
 			githubUtil := gitMocks.NewMockGithubUtil(t)
 
-			g := &githubTokenValidator{
+			g := &githubSvcProvider{
 				ctx:        ctx,
 				git:        git,
 				githubUtil: githubUtil,

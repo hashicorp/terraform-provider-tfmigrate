@@ -20,10 +20,6 @@ type GitlabUtil interface {
 	GetProject(projectIdentifier string) (*gitlab.Project, *gitlab.Response, error)
 }
 
-var (
-	gitlabPat TokenType = "gitlabToken"
-)
-
 // NewGitlabUtil creates a new instance of GitlabUtil.
 func NewGitlabUtil(ctx context.Context) GitlabUtil {
 	return &gitlabUtil{

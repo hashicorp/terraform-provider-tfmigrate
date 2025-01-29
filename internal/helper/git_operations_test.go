@@ -9,13 +9,13 @@ import (
 
 	"terraform-provider-tfmigrate/_mocks/helper_mocks/gitops_mocks"
 	"terraform-provider-tfmigrate/_mocks/helper_mocks/iter_mocks"
+	"terraform-provider-tfmigrate/_mocks/util_mocks/vcs_mocks/git_mocks/remote_svc_provider_mocks"
 
 	"terraform-provider-tfmigrate/_mocks/util_mocks/vcs_mocks/git_mocks"
 	consts "terraform-provider-tfmigrate/internal/constants"
 	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/google/go-github/v45/github"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -246,108 +246,6 @@ func TestListBranches(t *testing.T) {
 			} else {
 				r.NoError(err)
 				assert.ElementsMatch(t, tc.expected, branches)
-			}
-		})
-	}
-}
-
-func TestCreateAndSwitchBranch(t *testing.T) {
-	for name, tc := range map[string]struct {
-		repoPath    string
-		branchName  string
-		expectedErr error
-	}{
-		"ErrOnBranchExists": {
-			repoPath:    "repo-path",
-			branchName:  "existing-branch",
-			expectedErr: errors.New("branch 'existing-branch' already exists"),
-		},
-		"ErrOnBranchCreation": {
-			repoPath:    "repo-path",
-			branchName:  "new-branch",
-			expectedErr: errors.New("error creating branch 'new-branch'"),
-		},
-		"ErrOnSwitchingBranch": {
-			repoPath:    "repo-path",
-			branchName:  "new-branch",
-			expectedErr: errors.New("error switching to branch 'new-branch'"),
-		},
-		"InvalidBranchName": {
-			repoPath:    "repo-path",
-			branchName:  "invalid-branch#name",
-			expectedErr: errors.New("invalid branch name 'invalid-branch#name'. Branch names can only contain letters, digits, '_', '-', and '/'"),
-		},
-		"success": {
-			repoPath:    "repo-path",
-			branchName:  "new-branch",
-			expectedErr: nil,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			// arrange
-			mockGitOps := git_mocks.NewMockGitUtil(t)
-			r := require.New(t)
-			gitOps := NewGitOperations(ctx, mockGitOps)
-
-			mockRepo := &git.Repository{}
-			mockWorktree := &git.Worktree{}
-			mockBranchIter := iter_mocks.NewMockReferenceIter(t)
-
-			func() {
-
-				if name == "ErrOnBranchExists" {
-					mockGitOps.On("OpenRepository", tc.repoPath).Return(mockRepo, nil)
-					mockGitOps.On("Branches", mockRepo).Return(mockBranchIter, nil)
-					mockGitOps.On("Worktree", mockRepo).Return(mockWorktree, nil)
-					// Simulate the branch already existing
-					mockBranchIter.On("ForEach", mock.Anything).Return(errors.New("branch 'existing-branch' already exists"))
-					return
-				}
-				if name == "ErrOnBranchCreation" {
-					mockGitOps.On("OpenRepository", tc.repoPath).Return(mockRepo, nil)
-					mockGitOps.On("Branches", mockRepo).Return(mockBranchIter, nil)
-					mockGitOps.On("Worktree", mockRepo).Return(mockWorktree, nil)
-					mockBranchIter.On("ForEach", mock.Anything).Return(nil)
-					mockGitOps.On("Checkout", mockWorktree, mock.Anything).Return(errors.New("error creating branch 'new-branch'"))
-					return
-				}
-
-				if name == "ErrOnSwitchingBranch" {
-					mockGitOps.On("OpenRepository", tc.repoPath).Return(mockRepo, nil)
-					mockGitOps.On("Branches", mockRepo).Return(mockBranchIter, nil)
-					mockGitOps.On("Worktree", mockRepo).Return(mockWorktree, nil)
-					mockBranchIter.On("ForEach", mock.Anything).Return(nil)
-					mockGitOps.On("Checkout", mockWorktree, mock.Anything).Return(errors.New("error switching to branch 'new-branch'"))
-					return
-				}
-
-				if name == "InvalidBranchName" {
-					mockGitOps.On("OpenRepository", tc.repoPath).Return(mockRepo, nil)
-					mockGitOps.On("Branches", mockRepo).Return(mockBranchIter, nil)
-					mockGitOps.On("Worktree", mockRepo).Return(mockWorktree, nil)
-					mockBranchIter.On("ForEach", mock.Anything).Return(nil)
-					return
-				}
-
-				if name == "success" {
-					mockGitOps.On("OpenRepository", tc.repoPath).Return(mockRepo, nil)
-					mockGitOps.On("Branches", mockRepo).Return(mockBranchIter, nil)
-					mockGitOps.On("Worktree", mockRepo).Return(mockWorktree, nil)
-					mockBranchIter.On("ForEach", mock.Anything).Return(nil)
-					mockGitOps.On("Checkout", mockWorktree, mock.Anything).Return(nil)
-					return
-				}
-
-			}()
-
-			// act
-			err := gitOps.CreateAndSwitchBranch(tc.repoPath, tc.branchName)
-
-			// assert
-			if err != nil {
-				r.EqualError(err, tc.expectedErr.Error())
-			} else {
-				r.NoError(err)
 			}
 		})
 	}
@@ -587,235 +485,6 @@ func TestPushCommit(t *testing.T) {
 	}
 }
 
-// func TestCreatePullRequest(t *testing.T) {
-// 	for name, tc := range map[string]struct {
-// 		repoIdentifier string
-// 		baseBranch     string
-// 		featureBranch  string
-// 		title          string
-// 		body           string
-// 		gitPatToken    string
-// 		remoteService  string
-// 		expectedErr    error
-// 		expectedURL    string
-// 	}{
-// 		"invalid repo identifier": {
-// 			repoIdentifier: "invalid",
-// 			baseBranch:     "main",
-// 			featureBranch:  "feature-branch",
-// 			title:          "Test PR",
-// 			body:           "Test PR body",
-// 			gitPatToken:    "fake-token",
-// 			remoteService:  "",
-// 			expectedErr:    fmt.Errorf("invalid repository identifier. It should be in the format: owner/repository"),
-// 			expectedURL:    "",
-// 		},
-
-// 		"remote name error": {
-// 			repoIdentifier: "owner/repo",
-// 			baseBranch:     "main",
-// 			featureBranch:  "feature-branch",
-// 			title:          "Test PR",
-// 			body:           "Test PR body",
-// 			gitPatToken:    "fake-token",
-// 			remoteService:  "",
-// 			expectedErr:    errors.New("failed to get remote name"),
-// 			expectedURL:    "",
-// 		},
-// 		"remote URL error": {
-// 			repoIdentifier: "owner/repo",
-// 			baseBranch:     "main",
-// 			featureBranch:  "feature-branch",
-// 			title:          "Test PR",
-// 			body:           "Test PR body",
-// 			gitPatToken:    "fake-token",
-// 			remoteService:  "",
-// 			expectedErr:    errors.New("failed to get remote URL"),
-// 			expectedURL:    "",
-// 		},
-// 		"successful GitHub pull request": {
-// 			repoIdentifier: "owner/repo",
-// 			baseBranch:     "main",
-// 			featureBranch:  "feature-branch",
-// 			title:          "Test PR",
-// 			body:           "Test PR body",
-// 			gitPatToken:    "fake-token",
-// 			remoteService:  "Github",
-// 			expectedErr:    nil,
-// 			expectedURL:    "https://github.com/owner/repo/pull/1",
-// 		},
-
-// 		"failed GitHub pull request": {
-// 			repoIdentifier: "owner/repo",
-// 			baseBranch:     "main",
-// 			featureBranch:  "feature-branch",
-// 			title:          "Test PR",
-// 			body:           "Test PR body",
-// 			gitPatToken:    "fake-token",
-// 			remoteService:  "Github",
-// 			expectedErr:    errors.New("failed to create PR"),
-// 			expectedURL:    "",
-// 		},
-// 		"successful GitLab merge request": {
-// 			repoIdentifier: "group/project",
-// 			baseBranch:     "main",
-// 			featureBranch:  "feature-branch",
-// 			title:          "Test MR",
-// 			body:           "Test MR body",
-// 			gitPatToken:    "fake-token",
-// 			remoteService:  "GitLab",
-// 			expectedErr:    nil,
-// 			expectedURL:    "https://gitlab.com/group/project/merge_requests/1",
-// 		},
-// 		"failed GitLab merge request creation": {
-// 			repoIdentifier: "group/project",
-// 			baseBranch:     "main",
-// 			featureBranch:  "feature-branch",
-// 			title:          "Test MR",
-// 			body:           "Test MR body",
-// 			gitPatToken:    "fake-token",
-// 			remoteService:  "GitLab",
-// 			expectedErr:    errors.New("failed to create MR"),
-// 			expectedURL:    "",
-// 		},
-// 		"unsupported remote service provider": {
-// 			repoIdentifier: "owner/repo",
-// 			baseBranch:     "main",
-// 			featureBranch:  "feature-branch",
-// 			title:          "Test PR",
-// 			body:           "Test PR body",
-// 			gitPatToken:    "fake-token",
-// 			remoteService:  "Unsupported",
-// 			expectedErr:    fmt.Errorf("unsupported remote service provider: Unsupported"),
-// 			expectedURL:    "",
-// 		},
-// 	} {
-// 		t.Run(name, func(t *testing.T) {
-// 			// Arrange
-// 			mockOps := new(gitops_mocks.MockGitOperations)
-// 			mockUtil := new(git_mocks.MockGitUtil)
-// 			r := require.New(t)
-// 			gitOps := &gitOperations{gitUtil: mockUtil}
-// 			mockGitLabClient := &gitlab.Client{} // Creating a placeholder for the mock client
-// 			mrOptions := &gitlab.CreateMergeRequestOptions{
-// 				SourceBranch: &tc.featureBranch,
-// 				TargetBranch: &tc.baseBranch,
-// 				Title:        &tc.title,
-// 				Description:  &tc.body,
-// 			}
-// 			ctx := context.Background()
-// 			staticTokenSrc := oauth2.StaticTokenSource(
-// 				&oauth2.Token{AccessToken: tc.gitPatToken},
-// 			)
-// 			transport := &oauth2.Transport{
-// 				Source: oauth2.ReuseTokenSource(nil, staticTokenSrc),
-// 				Base: &http.Transport{
-// 					TLSClientConfig: &tls.Config{
-// 						InsecureSkipVerify: true,
-// 					},
-// 				},
-// 			}
-
-// 			transportClient := &http.Client{
-// 				Transport: transport,
-// 			}
-// 			client := github.NewClient(transportClient)
-
-// 			pr := &github.PullRequest{
-// 				HTMLURL: github.String("https://github.com/owner/repo/pull/1"),
-// 			}
-// 			draft := true
-// 			newPR := &github.NewPullRequest{
-// 				Title: github.String(tc.title),
-// 				Head:  github.String(tc.featureBranch),
-// 				Base:  github.String(tc.baseBranch),
-// 				Body:  github.String(tc.body),
-// 				Draft: &draft,
-// 			}
-
-// 			if name == "invalid repo identifier" {
-// 				return
-// 				// No additional setup needed
-// 			}
-
-// 			if name == "remote name error" {
-// 				mockOps.On("GetRemoteName").Return("", errors.New("failed to get remote name"))
-// 				return
-// 			}
-
-// 			if name == "remote URL error" {
-// 				mockOps.On("GetRemoteName").Return("origin", nil)
-// 				mockOps.On("GetRemoteURL", "origin").Return("", errors.New("failed to get remote URL"))
-// 				return
-// 			}
-
-// 			if tc.remoteService == "Github" {
-
-// 				mockOps.On("GetRemoteName").Return("origin", nil)
-// 				mockOps.On("GetRemoteURL", "origin").Return("git@github.com:hashicorp/tf-migrate.git", nil)
-// 				mockOps.On("GetRemoteServiceProvider", "git@github.com:hashicorp/tf-migrate.git").Return(&consts.GitHub)
-// 				mockUtil.On("GetRemoteServiceProvider", "git@github.com:hashicorp/tf-migrate.git").Return(&consts.GitHub)
-
-// 				if name == "successful GitHub pull request" {
-
-// 					mockUtil.On("CreatePR", ctx, client, "owner", "repo", newPR).Return(pr, nil)
-// 					return
-// 				}
-
-// 				if name == "failed GitHub pull request" {
-// 					mockUtil.On("CreatePR", ctx, client, "owner", "repo", newPR).Return((*github.PullRequest)(nil), errors.New("failed to create PR"))
-// 					return
-// 				}
-
-// 			}
-
-// 			if tc.remoteService == "GitLab" {
-
-// 				mockOps.On("GetRemoteName").Return("origin", nil)
-// 				mockOps.On("GetRemoteURL", "origin").Return("git@github.com:hashicorp/tf-migrate.git", nil)
-// 				mockOps.On("GetRemoteServiceProvider", "git@github.com:hashicorp/tf-migrate.git").Return(&consts.GitHub)
-// 				mockUtil.On("GetRemoteServiceProvider", "git@github.com:hashicorp/tf-migrate.git").Return(&consts.GitHub)
-
-// 				mockUtil.On("NewGitLabClient", tc.gitPatToken).Return(mockGitLabClient, nil)
-
-// 				if name == "successful GitLab merge request" {
-// 					mockUtil.On("CreateGitlabMergeRequest", tc.repoIdentifier, mrOptions, mockGitLabClient, tc.gitPatToken).
-// 						Return(&gitlab.MergeRequest{WebURL: "https://gitlab.com/group/project/merge_requests/1"}, nil)
-// 					return
-// 				}
-
-// 				if name == "failed GitLab merge request creation" {
-// 					mockUtil.On("CreateGitlabMergeRequest", tc.repoIdentifier, mrOptions, mockGitLabClient, tc.gitPatToken).
-// 						Return(nil, errors.New("failed to create merge request"))
-// 					return
-
-// 				}
-// 			}
-
-// 			if name == "unsupported remote service provider" {
-// 				mockOps.On("GetRemoteName").Return("origin", nil)
-// 				mockOps.On("GetRemoteURL", "origin").Return("git@github.com:hashicorp/tf-migrate.git", nil)
-// 				mockOps.On("GetRemoteServiceProvider", "git@github.com:hashicorp/tf-migrate.git").Return(&tc.remoteService)
-// 				return // No additional setup needed
-// 			} // Act
-// 			url, err := gitOps.CreatePullRequest(tc.repoIdentifier, tc.baseBranch, tc.featureBranch, tc.title, tc.body, tc.gitPatToken)
-
-// 			// Assert
-// 			if err != nil {
-// 				r.EqualError(err, tc.expectedErr.Error())
-// 				assert.Empty(t, url)
-// 			} else {
-// 				r.NoError(err)
-// 				assert.Equal(t, tc.expectedURL, url)
-// 			}
-
-// 			// Verify mock expectations
-// 			mockOps.AssertExpectations(t)
-// 			mockUtil.AssertExpectations(t)
-// 		})
-// 	}
-// }
-
 func TestGetRemoteServiceProvider(t *testing.T) {
 	for name, tc := range map[string]struct {
 		gitSvcPvd *consts.GitServiceProvider
@@ -1001,11 +670,11 @@ func TestCreatePullRequest(t *testing.T) {
 			r := require.New(t)
 			gitOps := &gitOperations{gitUtil: mockUtil}
 			mockGitLabClient := &gitlab.Client{}
+			mockGithubSvcProvider := new(remote_svc_provider_mocks.MockGithubSvcProvider)
+			mockGitlabSvcProvider := new(remote_svc_provider_mocks.MockGitlabSvcProvider)
 
-			pr := &github.PullRequest{
-				HTMLURL: github.String("https://github.com/owner/repo/pull/1"),
-			}
-			mr := &gitlab.MergeRequest{WebURL: "https://gitlab.com/group/project/merge_requests/1"}
+			pr := "https://github.com/owner/repo/pull/1"
+			mr := "https://gitlab.com/group/project/merge_requests/1"
 
 			pullRequestParams := &gitUtil.PullRequestParams{
 				RepoIdentifier: tc.repoIdentifier,
@@ -1041,12 +710,12 @@ func TestCreatePullRequest(t *testing.T) {
 
 				if name == "successful GitHub pull request" {
 
-					mockUtil.On("CreateGithubPullRequest", pullRequestParams).Return(pr, nil)
+					mockGithubSvcProvider.On("CreatePullRequest", pullRequestParams).Return(pr, nil)
 					return
 				}
 
 				if name == "failed GitHub pull request" {
-					mockUtil.On("CreateGithubPullRequest", pullRequestParams).Return(nil, errors.New("failed to create PR"))
+					mockGithubSvcProvider.On("CreatePullRequest", pullRequestParams).Return("", errors.New("failed to create PR"))
 					return
 				}
 
@@ -1062,14 +731,12 @@ func TestCreatePullRequest(t *testing.T) {
 				mockUtil.On("NewGitLabClient", tc.gitPatToken).Return(mockGitLabClient, nil)
 
 				if name == "successful GitLab merge request" {
-					mockUtil.On("CreateGitlabMergeRequest", pullRequestParams).
-						Return(mr, nil)
+					mockGitlabSvcProvider.On("CreatePullRequest", pullRequestParams).Return(mr, nil)
 					return
 				}
 
 				if name == "failed GitLab merge request creation" {
-					mockUtil.On("CreateGitlabMergeRequest", pullRequestParams).
-						Return(nil, errors.New("failed to create merge request"))
+					mockGitlabSvcProvider.On("CreatePullRequest", pullRequestParams).Return(nil, errors.New("failed to create merge request"))
 					return
 
 				}

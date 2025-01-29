@@ -6,7 +6,6 @@ toolchain go1.23.4
 
 require (
 	github.com/go-git/go-git/v5 v5.13.2
-	github.com/google/go-github/v45 v45.2.0
 	github.com/hashicorp/go-tfe v1.74.1
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/hashicorp/terraform-exec v0.22.0
@@ -14,10 +13,10 @@ require (
 	github.com/hashicorp/terraform-plugin-framework v1.13.0
 	github.com/hashicorp/terraform-plugin-go v0.26.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
-	github.com/stretchr/testify v1.10.0
-	gitlab.com/gitlab-org/api/client-go v0.116.0
 	github.com/hashicorp/terraform-plugin-testing v1.11.0
+	github.com/stretchr/testify v1.10.0
 	github.com/zclconf/go-cty v1.16.2
+	gitlab.com/gitlab-org/api/client-go v0.116.0
 	golang.org/x/oauth2 v0.25.0
 
 )

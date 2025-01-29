@@ -1,4 +1,4 @@
-package token_validator
+package remote_svc_provider
 
 import (
 	"bytes"
@@ -55,7 +55,7 @@ func TestValidateToken_gitlab(t *testing.T) {
 			git := gitMocks.NewMockGitUtil(t)
 			gitlabUtil := gitMocks.NewMockGitlabUtil(t)
 
-			g := &gitlabTokenValidator{
+			g := &gitlabSvcProvider{
 				ctx:        ctx,
 				git:        git,
 				gitlabUtil: gitlabUtil,

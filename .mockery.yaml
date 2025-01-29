@@ -1,14 +1,15 @@
 with-expecter: true
 issue-845-fix: true
 packages:
-  terraform-provider-tfmigrate/internal/util/vcs/git/token_validator:
+  terraform-provider-tfmigrate/internal/util/vcs/git/remote_svc_provider:
     config:
-      dir: "_mocks/util_mocks/vcs_mocks/git_mocks/token_validator_mocks"
-      outpkg: "token_validator_mocks"
+      dir: "_mocks/util_mocks/vcs_mocks/git_mocks/remote_svc_provider_mocks"
+      outpkg: "remote_svc_provider_mocks"
     interfaces:
-      GithubTokenValidator:
-      GitlabTokenValidator:
-      TokenValidatorFactory:
+      GithubSvcProvider:
+      GitlabSvcProvider:
+      RemoteVcsSvcProvider:
+      RemoteVcsSvcProviderFactory:
   terraform-provider-tfmigrate/internal/util/vcs/git:
     config:
       dir: "_mocks/util_mocks/vcs_mocks/git_mocks"

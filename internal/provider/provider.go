@@ -14,7 +14,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
-	tokenValidator "terraform-provider-tfmigrate/internal/util/vcs/git/token_validator"
+	gitRemoteSvcProvider "terraform-provider-tfmigrate/internal/util/vcs/git/remote_svc_provider"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -36,9 +36,9 @@ const (
 
 // tfmProvider is the provider implementation.
 type tfmProvider struct {
-	version               string
-	gitOps                gitops.GitOperations
-	tokenValidatorFactory tokenValidator.TokenValidatorFactory
+	version                     string
+	gitOps                      gitops.GitOperations
+	remoteVcsSvcProviderFactory gitRemoteSvcProvider.RemoteVcsSvcProviderFactory
 }
 
 // tfmProviderModel maps provider schema data to a Go type.
@@ -57,9 +57,9 @@ type ProviderResourceData struct {
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
 		return &tfmProvider{
-			version:               version,
-			gitOps:                gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
-			tokenValidatorFactory: tokenValidator.NewTokenValidatorFactory(context.Background()),
+			version:                     version,
+			gitOps:                      gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
+			remoteVcsSvcProviderFactory: gitRemoteSvcProvider.NewRemoteSvcProviderFactory(context.Background()),
 		}
 	}
 }
@@ -144,28 +144,30 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	remoteName, err := p.gitOps.GetRemoteName()
 	if err != nil {
 		resp.Diagnostics.AddError(fmt.Sprintf(constants.ErrorFetchingRemote, err.Error()), err.Error())
+		return
 	}
+
 	repoUrl, err := p.gitOps.GetRemoteURL(remoteName)
 	if err != nil || repoUrl == "" {
 		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorFetchingRemoteURL, err)), err.Error())
+		return
 	}
 
 	var repoIdentifier string
 	if repoIdentifier = p.gitOps.GetRepoIdentifier(repoUrl); repoIdentifier == "" {
-		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.WarnNotOnGithubOrGitlab, repoUrl)), err.Error())
+		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.WarnNotOnGithubOrGitlab, repoUrl)), "unable to determine the repository identifier")
+		return
 	}
 
-	gitTokenValidator, err := p.tokenValidatorFactory.NewTokenValidator(p.gitOps.GetRemoteServiceProvider(repoUrl))
+	remoteVcsSvcProvider, err := p.remoteVcsSvcProviderFactory.NewRemoteVcsSvcProvider(p.gitOps.GetRemoteServiceProvider(repoUrl))
 	if err != nil {
 		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorCreatingNewTokenvalidator, err)), err.Error())
+		return
 	}
 
-	if suggestion, err := gitTokenValidator.ValidateToken(repoUrl, repoIdentifier); err != nil {
+	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier); err != nil {
 		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorValidatingGitToken, err)), err.Error())
 		resp.Diagnostics.AddWarning("", suggestion)
-	}
-
-	if resp.Diagnostics.HasError() {
 		return
 	}
 

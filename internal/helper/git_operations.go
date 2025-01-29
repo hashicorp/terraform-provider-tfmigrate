@@ -8,12 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"slices"
 	"strings"
+	"terraform-provider-tfmigrate/internal/util/vcs/git/remote_svc_provider"
 	"time"
 
-	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	consts "terraform-provider-tfmigrate/internal/constants"
 	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
@@ -23,10 +22,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-)
-
-const (
-	validBranchName = `^[a-zA-Z0-9/_-]+$`
 )
 
 var err error
@@ -41,7 +36,6 @@ type GitOperations interface {
 	GetRemoteURL(remoteName string) (string, error)
 	ResetToLastCommittedVersion(repoPath string) error
 	ListBranches(repoPath string) ([]string, error)
-	CreateAndSwitchBranch(repoPath, branchName string) error
 	DeleteLocalBranch(repoPath, branchName string) error
 	CreateCommit(repoPath, message string) (string, error)
 	PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error
@@ -201,51 +195,6 @@ func (gitOps *gitOperations) DeleteLocalBranch(repoPath, branchName string) erro
 	return nil
 }
 
-// CreateAndSwitchBranch creates a new branch and switches to it.
-func (gitOps *gitOperations) CreateAndSwitchBranch(repoPath, branchName string) error {
-	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
-	if err != nil {
-		tflog.Error(gitOps.ctx, fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
-		return err
-	}
-
-	worktree, err := gitOps.gitUtil.Worktree(repo)
-	if err != nil {
-		tflog.Error(gitOps.ctx, fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
-		return err
-	}
-
-	branches, err := gitOps.ListBranches(repoPath)
-	if err != nil {
-		tflog.Error(gitOps.ctx, fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
-		return err
-	}
-	// Check if the branch already exists.
-	var createBranch bool
-	if !slices.Contains(branches, "refs/heads/"+branchName) {
-		// return fmt.Errorf("branch '%s' already exists", branchName).
-		createBranch = true
-	}
-
-	// Check if the branch name is valid.
-	branch_name := regexp.MustCompile(validBranchName)
-	if !branch_name.MatchString(branchName) {
-		return fmt.Errorf("invalid branch name '%s'. Branch names can only contain letters, digits, '_', '-', and '/'", branchName)
-	}
-
-	// Create and switch to the new branch.
-	err = gitOps.gitUtil.Checkout(worktree, &git.CheckoutOptions{
-		Branch: plumbing.NewBranchReferenceName(branchName),
-		Create: createBranch,
-		Keep:   true,
-	})
-	if err != nil {
-		tflog.Error(gitOps.ctx, fmt.Sprintf(consts.ErrorCreatingBranch, branchName, err))
-		return err
-	}
-	return nil
-}
-
 // CreateCommit creates a commit in the repository.
 func (gitOps *gitOperations) CreateCommit(repoPath, message string) (string, error) {
 	if len(message) > 255 {
@@ -354,22 +303,16 @@ func (gitOps *gitOperations) CreatePullRequest(pullRequestParams gitUtil.PullReq
 		return "", err
 	}
 
-	switch *remoteServiceProvider {
-	case consts.GitHub:
-		pr, err := gitOps.gitUtil.CreateGithubPullRequest(pullRequestParams)
-		if err != nil {
-			return "", err
-		}
-		return pr.GetHTMLURL(), nil
-	case consts.GitLab:
-		mr, err := gitOps.gitUtil.CreateGitlabMergeRequest(pullRequestParams)
-		if err != nil {
-			return "", err
-		}
-		return mr.WebURL, nil
-	default:
-		return "", fmt.Errorf("%w", cliErrs.ErrGitServiceProviderNotSupported)
+	remoteVcsSvcProvider, err := remote_svc_provider.NewRemoteSvcProviderFactory(gitOps.ctx).NewRemoteVcsSvcProvider(remoteServiceProvider)
+	if err != nil {
+		return "", err
 	}
+
+	prUrl, err := remoteVcsSvcProvider.CreatePullRequest(pullRequestParams)
+	if err != nil {
+		return "", err
+	}
+	return prUrl, nil
 }
 
 // GetRepoIdentifier returns the repository identifier.
