@@ -13,7 +13,6 @@ var (
 	ErrTokenDoesNotHaveWritePermission = GitTokenError(`the provided git token does not have write permission to the repository`)
 	ErrTokenExpired                    = GitTokenError(`the provided git token has expired`)
 	ErrTfGitPatTokenFineGrained        = GitTokenError(`TF_GIT_PAT_TOKEN is a Github fine-grained token`)
-	ErrTfGitPatTokenUnrecognized       = GitTokenError(`TF_GIT_PAT_TOKEN token type is not recognized`)
 	ErrTfGitPatTokenValid              = GitTokenError(`TF_GIT_PAT_TOKEN is valid`)
 	ErrTfGitPatTokenInvalid            = GitTokenError(`TF_GIT_PAT_TOKEN is invalid`)
 

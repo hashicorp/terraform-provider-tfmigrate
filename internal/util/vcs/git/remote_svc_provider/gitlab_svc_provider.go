@@ -57,11 +57,23 @@ func (g *gitlabSvcProvider) validateGitlabTokenRepoAccess(projectIdentifier stri
 
 // handleGitlabSuccessResponse handles the success response.
 func (g *gitlabSvcProvider) handleGitlabSuccessResponse(projectDetails *gitlab.Project) error {
-	if projectDetails.Permissions.ProjectAccess.AccessLevel < gitlab.DeveloperPermissions {
-		return cliErrs.ErrTokenDoesNotHaveWritePermission
+	var gitlabAccessLevel gitlab.AccessLevelValue
+	gitlabPermissions := projectDetails.Permissions
+
+	if gitlabPermissions != nil {
+		if gitlabPermissions.ProjectAccess != nil {
+			gitlabAccessLevel = gitlabPermissions.ProjectAccess.AccessLevel
+		} else if gitlabPermissions.GroupAccess != nil {
+			gitlabAccessLevel = gitlabPermissions.GroupAccess.AccessLevel
+		}
 	}
-	if projectDetails.Permissions.ProjectAccess.AccessLevel < gitlab.ReporterPermissions {
+
+	if gitlabAccessLevel < gitlab.ReporterPermissions {
 		return cliErrs.ErrTokenDoesNotHaveReadPermission
+	}
+
+	if gitlabAccessLevel < gitlab.DeveloperPermissions {
+		return cliErrs.ErrTokenDoesNotHaveWritePermission
 	}
 
 	return nil

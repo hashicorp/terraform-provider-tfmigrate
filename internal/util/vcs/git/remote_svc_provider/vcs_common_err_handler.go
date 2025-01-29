@@ -61,8 +61,8 @@ func gitTokenErrorHandler(err error, statusCode ...int) (string, error) {
 		errors.Is(err, cliErrs.ErrTfGitPatTokenNotSet),
 		errors.Is(err, cliErrs.ErrTfGitPatTokenEmpty),
 		errors.Is(err, cliErrs.ErrTfGitPatTokenFineGrained),
-		errors.Is(err, cliErrs.ErrTfGitPatTokenUnrecognized):
-		return constants.SuggestSettingClassicGitHubTokenValue, err
+		errors.Is(err, cliErrs.ErrTfGitPatTokenInvalid):
+		return constants.SuggestSettingValidTokenValue, err
 	case errors.Is(err, cliErrs.ErrTokenExpired):
 		return constants.SuggestSettingUnexpiredToken, err
 	case errors.Is(err, cliErrs.ErrTokenDoesNotHaveAccessToOrg):
