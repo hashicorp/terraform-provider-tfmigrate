@@ -3,8 +3,8 @@ package constants
 const (
 	// InvalidRepositoryIdentifier is the error displayed when the repository identifier is invalid.
 	InvalidRepositoryIdentifier = `Invalid repository identifier: %s. Expected format: <owner>/<repo-name>`
-	// ErrNoUpstreamBranch is the error displayed when no upstream branch is found for the current branch.
-	ErrNoUpstreamBranch = `No upstream branch found for the current branch.`
+	// ErrNoRemoteSet is the error displayed when no remote is set for the current branch.
+	ErrNoRemoteSet = `No remote set for the current branch.`
 	// ErrorFetchingRemote is the warning message displayed when the tool is unable to fetch the remote name.
 	ErrorFetchingRemote = `Error fetching remote name, err: %v, all git operations will be skipped.`
 	// ErrorFetchingRemoteURL is the warning message displayed when the tool is unable to fetch the remote URL.

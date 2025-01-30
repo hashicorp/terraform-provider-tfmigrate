@@ -74,22 +74,18 @@ func NewGitOperations(ctx context.Context, gitUtil gitUtil.GitUtil) GitOperation
 
 // GetRemoteName returns the remote name.
 func (gitOps *gitOperations) GetRemoteName() (string, error) {
-	output, err := exec.
-		Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").
-		CombinedOutput()
-
-	if strings.Contains(string(output), "no upstream configured for branch") {
-		return "", errors.New(consts.ErrNoUpstreamBranch)
-	}
+	// run git remote command to get the remote name.
+	cmd := exec.Command("git", "remote")
+	out, err := cmd.Output()
 	if err != nil {
-		errorMessage := fmt.Sprintf("error getting remote name: %s", string(output))
+		errorMessage := fmt.Sprintf("error getting remote name: %s", string(out))
 		return gitOps.logAndReturnErr(errorMessage, err)
 	}
 
-	upstream := strings.TrimSpace(string(output))
-	remoteName := strings.Split(upstream, "/")[0]
+	// get the remote name from the output.
+	remoteName := strings.TrimSpace(string(out))
 	if remoteName == "" {
-		return "", errors.New("error fetching remote name")
+		return "", errors.New(strings.ToLower(consts.ErrNoRemoteSet))
 	}
 
 	return remoteName, nil
