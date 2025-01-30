@@ -41,7 +41,7 @@ func TestGetGitToken(t *testing.T) {
 		},
 		"githubTokenUnrecognised": {
 			gitSvcPvd: &consts.GitHub,
-			err:       cliErrs.ErrTfGitPatTokenUnrecognized,
+			err:       cliErrs.ErrTfGitPatTokenInvalid,
 			token:     "unrecognised_token_1234ABCDef5", //nolint:misspell
 		},
 		"githubTokenClassic": {

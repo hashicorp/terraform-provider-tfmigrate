@@ -267,7 +267,7 @@ func getGithubPatToken(gitPatToken string) (string, error) {
 		return "", cliErrs.ErrTfGitPatTokenFineGrained
 	}
 
-	return "", cliErrs.ErrTfGitPatTokenUnrecognized
+	return "", cliErrs.ErrTfGitPatTokenInvalid
 }
 
 // getGitlabPatToken returns the GitLab PAT token.

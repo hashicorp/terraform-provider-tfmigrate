@@ -121,19 +121,19 @@ func TestValidateToken(t *testing.T) {
 		},
 		"ErrGithubTokenNotSet": {
 			err:     cliErrs.ErrTfGitPatTokenNotSet,
-			suggest: constants.SuggestSettingClassicGitHubTokenValue,
+			suggest: constants.SuggestSettingValidTokenValue,
 		},
 		"ErrGithubTokenEmpty": {
 			err:     cliErrs.ErrTfGitPatTokenEmpty,
-			suggest: constants.SuggestSettingClassicGitHubTokenValue,
+			suggest: constants.SuggestSettingValidTokenValue,
 		},
 		"ErrGithubTokenFineGrained": {
 			err:     cliErrs.ErrTfGitPatTokenFineGrained,
-			suggest: constants.SuggestSettingClassicGitHubTokenValue,
+			suggest: constants.SuggestSettingValidTokenValue,
 		},
 		"ErrGithubTokenUnrecognized": {
-			err:     cliErrs.ErrTfGitPatTokenUnrecognized,
-			suggest: constants.SuggestSettingClassicGitHubTokenValue,
+			err:     cliErrs.ErrTfGitPatTokenInvalid,
+			suggest: constants.SuggestSettingValidTokenValue,
 		},
 		"UnknownErrorOccurred": {
 			err:     cliErrs.ErrUnknownError,
@@ -225,7 +225,7 @@ func TestValidateToken(t *testing.T) {
 				if name == "ErrGithubTokenUnrecognized" {
 					git.
 						On("GetGitToken", mock.Anything).
-						Return("", cliErrs.ErrTfGitPatTokenUnrecognized)
+						Return("", cliErrs.ErrTfGitPatTokenInvalid)
 					return
 				}
 

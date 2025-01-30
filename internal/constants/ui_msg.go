@@ -17,16 +17,16 @@ const (
 	ErrorCreatingBranch = `Error creating or checking out branch %s, err: %v.`
 	// WarnNotOnGithubOrGitlab is the warning displayed when the user's repository is not on GitHub.
 	WarnNotOnGithubOrGitlab = `Your repository URL is %s. Only GitHub and Gitlab is supported.`
-	// SuggestSettingClassicGitHubTokenValue is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is not set with a classic GitHub token.
-	SuggestSettingClassicGitHubTokenValue = `Set the value of the TF_GIT_PAT_TOKEN environment variable with a classic GitHub token to see all git operation related options.`
+	// SuggestSettingValidTokenValue is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is not set with a classic GitHub token.
+	SuggestSettingValidTokenValue = `Set the value of the TF_GIT_PAT_TOKEN environment variable with a proper VCS token to see all git operation related options.
+For GitHub, use a classic token.
+For Gitlab, use a personal access token.`
 	// SuggestUsingGithub is the suggestion displayed when the repository is not hosted on GitHub.
 	SuggestUsingGithubOrGitlab = `Repository must be hosted on GitHub Or Gitlab to see all git operation related options.`
 	// SuggestSettingUnexpiredToken is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is set with an expired token.
 	SuggestSettingUnexpiredToken = `Set the TF_GIT_PAT_TOKEN environment variable with a non-expired classic GitHub token to enable all git operation related options.`
 	// SuggestProvidingAccessToToken is the suggestion displayed when the token does not have access to the required organization.
 	SuggestProvidingAccessToToken = `Authorize the token to access the required organization.`
-	// SuggestSettingGitlabTokenValue is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is not set.
-	SuggestSettingGitlabTokenValue = `Set the value of the TF_GIT_PAT_TOKEN environment variable with a non-expired Gitlab token to see all git operation related options.`
 	// SuggestProvidingRepoReadPermissionToToken is the suggestion displayed when the token does not have read permission to the required repository.
 	SuggestProvidingRepoReadPermissionToToken = `Authorize the token to read the required repository.`
 	// SuggestProvidingRepoWritePermissionToToken is the suggestion displayed when the token does not have write permission to the required repository.
