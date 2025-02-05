@@ -94,7 +94,15 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+
+      - name: Checking contributors
+        run: |
+          CONTRIBUTORS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/contributors" | jq length)
+          echo "CONTRIBUTORS=$CONTRIBUTORS" >> $GITHUB_ENV
+
       - name: Run acceptance test
+        if: github.actor != 'dependabot[bot]' || ${{ env.CONTRIBUTORS }} > 1
         env:
           TF_ACC: "1"
           TF_GIT_PAT_TOKEN: ${{ secrets.TF_GIT_PAT_TOKEN }}
