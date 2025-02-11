@@ -108,7 +108,7 @@ jobs:
           PRERELEASE_VERSION: ${{ needs.set-product-version.outputs.product-prerelease-version}}
           METADATA_VERSION: ${{ env.METADATA }}
         with:
-          bin_name: "${{ env.PKG_NAME }}_v${{ needs.set-product-version.outputs.product-version }}_x5"
+          bin_name: "${{ env.PKG_NAME }}_v${{ needs.set-product-version.outputs.product-version }}"
           product_name: ${{ env.PKG_NAME }}
           product_version: ${{ needs.set-product-version.outputs.product-version }}
           go_version: ${{ needs.get-go-version.outputs.go-version }}
@@ -147,7 +147,7 @@ jobs:
           PRERELEASE_VERSION: ${{ needs.set-product-version.outputs.product-prerelease-version}}
           METADATA_VERSION: ${{ env.METADATA }}
         with:
-          bin_name: "${{ env.PKG_NAME }}_v${{ needs.set-product-version.outputs.product-version }}_x5"
+          bin_name: "${{ env.PKG_NAME }}_v${{ needs.set-product-version.outputs.product-version }}"
           product_name: ${{ env.PKG_NAME }}
           product_version: ${{ needs.set-product-version.outputs.product-version }}
           go_version: ${{ needs.get-go-version.outputs.go-version }}
