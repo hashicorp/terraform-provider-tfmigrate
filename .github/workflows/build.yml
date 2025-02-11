@@ -25,6 +25,9 @@ env:
   PKG_NAME: "terraform-provider-tfmigrate"
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
   get-go-version:
     # Inspired by envconsul -- https://github.com/hashicorp/envconsul/blob/bcb270fdc53e1273b3010d51c02fcf2e67d830d0/.github/workflows/build.yml#L18
     name: "Determine Go toolchain version"
@@ -80,6 +83,7 @@ jobs:
     needs:
       - get-go-version
       - set-product-version
+      - test # Ensure the test job has run before building
     runs-on: [ 'self-hosted', 'linux', 'medium' ]
     strategy:
       fail-fast: false # recommended during development
@@ -123,6 +127,7 @@ jobs:
     needs:
       - get-go-version
       - set-product-version
+      - test # Ensure the test job has run before building
     runs-on: macos-latest
     strategy:
       matrix:
