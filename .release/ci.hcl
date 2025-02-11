@@ -85,7 +85,4 @@ event "promote-production" {
     on = "always"
   }
 
-  promotion-events {
-  }
-
 }
