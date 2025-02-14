@@ -74,7 +74,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
         with:
-         ref: '${{ github.head_ref }}'
+          ref: '${{ github.head_ref }}'
       - name: Confirm current branch with remote
         run: |
           echo "Current branch with remote: $(git rev-parse --abbrev-ref --symbolic-full-name @{u})"
@@ -94,7 +94,25 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Check Modified files
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          REPO=${{ github.repository }}
+          TOKEN=${{ secrets.GITHUB_TOKEN }}
+          CHANGED_FILES=$(curl -s -H "Authorization: token $TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/commits/$COMMIT_SHA" | jq -r '.files[] | select(.status == "added" or .status == "modified") | .filename')
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+           FILE_COUNT=$(echo "$CHANGED_FILES" | wc -l)
+          if [[ "$FILE_COUNT" -eq 2 ]] && echo "$CHANGED_FILES" | grep -q -x "go.mod" && echo "$CHANGED_FILES" | grep -q -x "go.sum"; then
+            echo "ONLY_GO_MOD_SUM=true" >> $GITHUB_ENV
+          else
+            echo "ONLY_GO_MOD_SUM=false" >> $GITHUB_ENV
+          fi
+
       - name: Run acceptance test
+        if: ${{ env.ONLY_GO_MOD_SUM == 'false' || github.actor != 'dependabot[bot]' }}
         env:
           TF_ACC: "1"
           TF_GIT_PAT_TOKEN: ${{ secrets.TF_GIT_PAT_TOKEN }}
