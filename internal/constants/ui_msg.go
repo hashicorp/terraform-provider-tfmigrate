@@ -49,4 +49,7 @@ For Gitlab, use a personal access token.`
 3. Optionally, you can set TF_MIGRATE_LOG_LEVEL=debug to see debug logs.
    This is not recommended for production environments, as it may expose sensitive information.
 4. If the issue persists, please contact HashiCorp support.`
+
+	// ErrNotGitRepo is the error displayed when the current working directory is not a git repository.
+	ErrNotGitRepo = `fatal: not a git repository (or any of the parent directories): .git`
 )
