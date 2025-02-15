@@ -17,6 +17,7 @@ import (
 	gitRemoteSvcProvider "terraform-provider-tfmigrate/internal/util/vcs/git/remote_svc_provider"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -30,8 +31,9 @@ var (
 )
 
 const (
-	GitTokenEnvName  = "TF_GIT_PAT_TOKEN"
-	HcpTerraformHost = "app.terraform.io"
+	GitTokenEnvName        = "TF_GIT_PAT_TOKEN"
+	HcpTerraformHost       = "app.terraform.io"
+	HcpMigrateBranchPrefix = "hcp-migrate-"
 )
 
 // tfmProvider is the provider implementation.
@@ -140,37 +142,22 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		)
 	}
 
-	// Validate the Git PAT token against the remote service provider
-	remoteName, err := p.gitOps.GetRemoteName()
-	if err != nil {
-		resp.Diagnostics.AddError(fmt.Sprintf(constants.ErrorFetchingRemote, err.Error()), err.Error())
+	enableTokenValidation, diag := p.enableGitTokenValidation()
+	if diag.HasError() {
+		resp.Diagnostics.Append(diag...)
 		return
 	}
-
-	repoUrl, err := p.gitOps.GetRemoteURL(remoteName)
-	if err != nil || repoUrl == "" {
-		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorFetchingRemoteURL, err)), err.Error())
+	if !enableTokenValidation {
+		// Set the Hostname provider resource data
+		resp.ResourceData = ProviderResourceData{
+			GitPatToken: gitPatToken,
+			Hostname:    hostname,
+		}
 		return
 	}
-
-	var repoIdentifier string
-	if repoIdentifier = p.gitOps.GetRepoIdentifier(repoUrl); repoIdentifier == "" {
-		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.WarnNotOnGithubOrGitlab, repoUrl)), "unable to determine the repository identifier")
+	if resp.Diagnostics = p.validateGitPatToken(); resp.Diagnostics.HasError() {
 		return
 	}
-
-	remoteVcsSvcProvider, err := p.remoteVcsSvcProviderFactory.NewRemoteVcsSvcProvider(p.gitOps.GetRemoteServiceProvider(repoUrl))
-	if err != nil {
-		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorCreatingNewTokenvalidator, err)), err.Error())
-		return
-	}
-
-	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier); err != nil {
-		resp.Diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorValidatingGitToken, err)), err.Error())
-		resp.Diagnostics.AddWarning("", suggestion)
-		return
-	}
-
 	// Set the provider resource data
 	resp.ResourceData = ProviderResourceData{
 		GitPatToken: gitPatToken,
@@ -194,4 +181,86 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewDirectoryActionResource,
 		NewStateMigrationResource,
 	}
+}
+
+func (p *tfmProvider) enableGitTokenValidation() (bool, diag.Diagnostics) {
+	/*
+	   1. Check if the working directory is a git repository or not isGitRepo() bool, err
+	   2. Check if the current working directory has a .git folder isGitRoot() bool, err
+	   3. If the Current working directory is a git repo isGitTreeClean() bool, err
+	      and is the git root, then check if the current working directory is clean
+	   4. Check the current branch has hcp-migrate prefix
+	*/
+
+	isGitRepo, err := p.gitOps.IsGitRepo()
+	if err != nil {
+		if strings.Contains(err.Error(), constants.ErrNotGitRepo) {
+			return false, nil
+		}
+		return false, diag.Diagnostics{
+			diag.NewErrorDiagnostic(
+				"Error checking if the current working directory is a git repository",
+				err.Error(),
+			),
+		}
+	}
+	isGitRoot, err := p.gitOps.IsGitRoot()
+	if err != nil {
+		return false, diag.Diagnostics{
+			diag.NewErrorDiagnostic(
+				"Error checking if the current working directory is a git root",
+				err.Error(),
+			),
+		}
+	}
+	isGitTreeClean, err := p.gitOps.IsGitTreeClean()
+	if err != nil {
+		return false, diag.Diagnostics{
+			diag.NewErrorDiagnostic(
+				"Error checking if the current working directory is clean",
+				err.Error(),
+			),
+		}
+	}
+
+	currentBranch, err := p.gitOps.GetCurrentBranch()
+	if err != nil {
+		return false, diag.Diagnostics{
+			diag.NewErrorDiagnostic(
+				"Error fetching current branch",
+				err.Error(),
+			),
+		}
+	}
+	return isGitRepo && isGitRoot && isGitTreeClean && strings.HasPrefix(currentBranch, HcpMigrateBranchPrefix), nil
+}
+func (p *tfmProvider) validateGitPatToken() diag.Diagnostics {
+	// Validate the Git PAT token against the remote service provider
+	remoteName, err := p.gitOps.GetRemoteName()
+	diagnostics := make(diag.Diagnostics, 0)
+	if err != nil {
+		diagnostics.AddError(fmt.Sprintf(constants.ErrorFetchingRemote, err.Error()), err.Error())
+		return diagnostics
+	}
+	repoUrl, err := p.gitOps.GetRemoteURL(remoteName)
+	if err != nil || repoUrl == "" {
+		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorFetchingRemoteURL, err)), err.Error())
+		return diagnostics
+	}
+	var repoIdentifier string
+	if repoIdentifier = p.gitOps.GetRepoIdentifier(repoUrl); repoIdentifier == "" {
+		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.WarnNotOnGithubOrGitlab, repoUrl)), "unable to determine the repository identifier")
+		return diagnostics
+	}
+	remoteVcsSvcProvider, err := p.remoteVcsSvcProviderFactory.NewRemoteVcsSvcProvider(p.gitOps.GetRemoteServiceProvider(repoUrl))
+	if err != nil {
+		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorCreatingNewTokenvalidator, err)), err.Error())
+		return diagnostics
+	}
+	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier); err != nil {
+		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorValidatingGitToken, err)), err.Error())
+		diagnostics.AddWarning("", suggestion)
+		return diagnostics
+	}
+	return diagnostics
 }
