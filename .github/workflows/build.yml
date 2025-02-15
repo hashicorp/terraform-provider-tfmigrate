@@ -31,7 +31,7 @@ jobs:
   get-go-version:
     # Inspired by envconsul -- https://github.com/hashicorp/envconsul/blob/bcb270fdc53e1273b3010d51c02fcf2e67d830d0/.github/workflows/build.yml#L18
     name: "Determine Go toolchain version"
-    runs-on: [ 'self-hosted', 'linux', 'medium' ]
+    runs-on: ubuntu-latest
     outputs:
       go-version: ${{ steps.get-go-version.outputs.go-version }}
     steps:
@@ -46,7 +46,7 @@ jobs:
           echo "go-version=$(go env GOVERSION | tr -d 'go')" >> "$GITHUB_OUTPUT"
 
   set-product-version:
-    runs-on: [ 'self-hosted', 'linux', 'medium' ]
+    runs-on: ubuntu-latest
     outputs:
       product-version: ${{ steps.set-product-version.outputs.product-version }}
       product-base-version: ${{ steps.set-product-version.outputs.base-product-version }}
@@ -60,7 +60,7 @@ jobs:
 
   generate-metadata-file:
     needs: set-product-version
-    runs-on: [ 'self-hosted', 'linux', 'medium' ]
+    runs-on: ubuntu-latest
     outputs:
       filepath: ${{ steps.generate-metadata-file.outputs.filepath }}
     steps:
@@ -84,7 +84,7 @@ jobs:
       - get-go-version
       - set-product-version
       - test # Ensure the test job has run before building
-    runs-on: [ 'self-hosted', 'linux', 'medium' ]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false # recommended during development
       matrix:

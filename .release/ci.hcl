@@ -18,8 +18,12 @@ project "terraform-provider-tfmigrate" {
   }
 }
 
+event "merge  {
+}
+
 event "build" {
   action "build" {
+    depends = ["merge"]
     organization = "hashicorp"
     repository   = "terraform-provider-tfmigrate"
     workflow     = "build"
@@ -61,9 +65,6 @@ event "promote-staging" {
 
   notification {
     on = "always"
-  }
-
-  promotion-events {
   }
 }
 
