@@ -43,6 +43,10 @@ type GitOperations interface {
 	PushCommitUsingGit(remoteName string, branchName string) error
 	GetRepoIdentifier(repoUrl string) string
 	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
+	GetCurrentBranch() (string, error)
+	IsGitRepo() (bool, error)
+	IsGitRoot() (bool, error)
+	IsGitTreeClean() (bool, error)
 }
 
 type GitUserConfig struct {
@@ -352,4 +356,74 @@ func (gitOps *gitOperations) getVcsProviderName() (*consts.GitServiceProvider, e
 	remoteServiceProvider := gitOps.GetRemoteServiceProvider(repoURL)
 
 	return remoteServiceProvider, err
+}
+
+// IsGitRepo() checks if the current directory is a git repository.
+func (gitOps *gitOperations) IsGitRepo() (bool, error) {
+	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if strings.Contains(string(out), consts.ErrNotGitRepo) {
+			return false, errors.New(string(out))
+		}
+		return false, fmt.Errorf("error checking if the current working directory is a git repository: %s", string(out))
+	}
+	return strings.TrimSpace(string(out)) == "true", nil
+}
+
+// IsGitRoot() checks if the current directory is the root of the git repository.
+func (gitOps *gitOperations) IsGitRoot() (bool, error) {
+	// Check if the current directory is the root of the git repository.
+	cmd := exec.Command("git", "rev-parse", "--show-cdup")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("error checking if the current directory is the root of the git repository: %s", string(out))
+	}
+	if strings.TrimSpace(string(out)) != "../" {
+		return false, nil
+	}
+
+	// Check if the current directory is inside a superproject's working tree.
+	cmd = exec.Command("git", "rev-parse", "--show-superproject-working-tree")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("error checking if the current directory is inside a superproject's working tree: %s", string(out))
+	}
+	if strings.TrimSpace(string(out)) != "" {
+		return false, nil
+	}
+	return true, nil
+}
+
+// IsGitTreeClean() checks if the current working directory is clean.
+func (gitOps *gitOperations) IsGitTreeClean() (bool, error) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("error checking if the current working directory is clean: %s", string(out))
+	}
+
+	status := strings.TrimSpace(string(out))
+	if status == "" {
+		return true, nil
+	}
+
+	lines := strings.Split(status, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, ".gitignore") {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetCurrentBranch returns the current branch.
+func (gitOps *gitOperations) GetCurrentBranch() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("error getting current branch: %s", string(out))
+	}
+	return strings.TrimSpace(string(out)), nil
 }
