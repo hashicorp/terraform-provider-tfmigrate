@@ -17,5 +17,8 @@ project {
 
     # GoReleaser tooling configuration
     ".goreleaser.yml",
+
+    # Release Engineering tooling configuration
+    ".release/*.hcl",
   ]
 }
