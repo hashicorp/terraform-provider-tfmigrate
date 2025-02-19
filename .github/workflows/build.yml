@@ -88,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false # recommended during development
       matrix:
-        goos: [ freebsd, windows, linux, darwin ]
+        goos: [ freebsd, windows, linux ]
         goarch: [ "386", "amd64", "arm", "arm64" ]
         exclude:
           - goos: freebsd
