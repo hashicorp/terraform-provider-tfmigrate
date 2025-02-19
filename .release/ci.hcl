@@ -18,7 +18,7 @@ project "terraform-provider-tfmigrate" {
   }
 }
 
-event "merge  {
+event "merge" {
 }
 
 event "build" {
