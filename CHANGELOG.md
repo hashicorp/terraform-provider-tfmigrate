@@ -1,3 +1,13 @@
+## 1.0.0-alpha20250221 (21st February 2025)
+
+NOTES:
+
+- This release contains functionality changes to validate pat token used by the customers for git operations [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/53)
+- Fixed Git Token vallidation issue where the folder is a non git repo and user chooses to skip the git operations all together [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/81)
+- It is released using new build and release Actions using CRT. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/80)
+
+More details will come in the actual GA release.
+
 ## v0.1.3 (02 October 2024)
 
 ## What's Changed
