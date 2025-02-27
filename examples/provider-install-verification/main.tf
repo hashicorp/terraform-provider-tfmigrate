@@ -7,7 +7,6 @@ terraform {
 }
 
 provider "tfmigrate" {
-  github_token = "token"
 }
 
 

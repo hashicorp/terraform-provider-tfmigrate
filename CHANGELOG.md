@@ -1,3 +1,14 @@
+## 1.0.0 (27th February 2025)
+
+NOTES:
+
+- Gitlab support [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/53)
+- Added generic name for git operation env variable - TF_GIT_PAT_TOKEN [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/53)
+- This release contains functionality changes to validate pat token used by the customers for git operations [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/53)
+- Fixed Git Token validation issue where the folder is a non-git repo and the user chooses to skip the git operations all together [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/81)
+- It is released using new build and release Actions using CRT. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/80)
+- Bumped up dependecies.
+
 ## 1.0.0-alpha20250221 (21st February 2025)
 
 NOTES:
