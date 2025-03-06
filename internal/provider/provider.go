@@ -155,7 +155,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		}
 		return
 	}
-	if resp.Diagnostics = p.validateGitPatToken(); resp.Diagnostics.HasError() {
+	if resp.Diagnostics = p.validateGitPatToken(config.GitPatToken.ValueString()); resp.Diagnostics.HasError() {
 		return
 	}
 	// Set the provider resource data
@@ -234,7 +234,7 @@ func (p *tfmProvider) enableGitTokenValidation() (bool, diag.Diagnostics) {
 	}
 	return isGitRepo && isGitRoot && isGitTreeClean && strings.HasPrefix(currentBranch, HcpMigrateBranchPrefix), nil
 }
-func (p *tfmProvider) validateGitPatToken() diag.Diagnostics {
+func (p *tfmProvider) validateGitPatToken(tokenFromProvider string) diag.Diagnostics {
 	// Validate the Git PAT token against the remote service provider
 	remoteName, err := p.gitOps.GetRemoteName()
 	diagnostics := make(diag.Diagnostics, 0)
@@ -257,7 +257,7 @@ func (p *tfmProvider) validateGitPatToken() diag.Diagnostics {
 		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorCreatingNewTokenvalidator, err)), err.Error())
 		return diagnostics
 	}
-	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier); err != nil {
+	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier, tokenFromProvider); err != nil {
 		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorValidatingGitToken, err)), err.Error())
 		diagnostics.AddWarning("", suggestion)
 		return diagnostics

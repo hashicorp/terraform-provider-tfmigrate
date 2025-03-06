@@ -17,7 +17,7 @@ type remoteSvcProviderFactory struct {
 
 // RemoteVcsSvcProvider is the interface for performing operations on remote VCS services.
 type RemoteVcsSvcProvider interface {
-	ValidateToken(repoUrl string, repoIdentifier string) (string, error)
+	ValidateToken(repoUrl string, repoIdentifier string, tokenFromProvider string) (string, error)
 	CreatePullRequest(params git.PullRequestParams) (string, error)
 }
 

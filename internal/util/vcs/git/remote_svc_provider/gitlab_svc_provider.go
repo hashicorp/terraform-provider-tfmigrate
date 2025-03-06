@@ -26,8 +26,8 @@ type GitlabSvcProvider interface {
 }
 
 // ValidateToken validates the GitLab token and repository access.
-func (g *gitlabSvcProvider) ValidateToken(repoUrl string, projectIdentifier string) (string, error) {
-	if _, err := g.git.GetGitToken(g.git.GetRemoteServiceProvider(repoUrl)); err != nil {
+func (g *gitlabSvcProvider) ValidateToken(repoUrl string, projectIdentifier string, tokenFromProvider string) (string, error) {
+	if _, err := g.git.GetGitToken(g.git.GetRemoteServiceProvider(repoUrl), tokenFromProvider); err != nil {
 		suggestions, gitTokenErr := gitTokenErrorHandler(err)
 		return suggestions, gitTokenErr
 	}
