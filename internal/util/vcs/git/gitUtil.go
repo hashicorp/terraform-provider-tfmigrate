@@ -63,7 +63,7 @@ type GitUtil interface {
 	Commit(worktree *git.Worktree, msg string, options *git.CommitOptions) (plumbing.Hash, error)
 	CommitObject(repo *git.Repository, hash plumbing.Hash) (*object.Commit, error)
 	ConfigScoped(repo *git.Repository, scope config.Scope) (*config.Config, error)
-	GetGitToken(gitServiceProvider *consts.GitServiceProvider) (string, error)
+	GetGitToken(gitServiceProvider *consts.GitServiceProvider, tokenFromProvider string) (string, error)
 	GetOrgAndRepoName(repoIdentifier string) (string, string)
 	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
 	GetRepoIdentifier(remoteURL string) string
@@ -229,12 +229,20 @@ func (g *gitUtil) OpenRepository(repoPath string) (*git.Repository, error) {
 }
 
 // GetGitToken returns the GitHub token.
-func (g *gitUtil) GetGitToken(gitServiceProvider *consts.GitServiceProvider) (string, error) {
+func (g *gitUtil) GetGitToken(gitServiceProvider *consts.GitServiceProvider, tokenFromProvider string) (string, error) {
 	if gitServiceProvider == nil || *gitServiceProvider == consts.UnknownGitServiceProvider {
 		return "", cliErrs.ErrGitServiceProviderNotSupported
 	}
 
-	gitPatToken, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
+	var gitPatToken string
+	var isSet bool
+
+	if tokenFromProvider != "" {
+		gitPatToken = tokenFromProvider
+		isSet = true
+	} else {
+		gitPatToken, isSet = os.LookupEnv("TF_GIT_PAT_TOKEN")
+	}
 
 	if !isSet {
 		return "", cliErrs.ErrTfGitPatTokenNotSet

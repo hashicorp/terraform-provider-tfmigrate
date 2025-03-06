@@ -377,9 +377,9 @@ func (_c *MockGitUtil_ConfigScoped_Call) RunAndReturn(run func(*git.Repository, 
 	return _c
 }
 
-// GetGitToken provides a mock function with given fields: gitServiceProvider
-func (_m *MockGitUtil) GetGitToken(gitServiceProvider *constants.GitServiceProvider) (string, error) {
-	ret := _m.Called(gitServiceProvider)
+// GetGitToken provides a mock function with given fields: gitServiceProvider, tokenFromProvider
+func (_m *MockGitUtil) GetGitToken(gitServiceProvider *constants.GitServiceProvider, tokenFromProvider string) (string, error) {
+	ret := _m.Called(gitServiceProvider, tokenFromProvider)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetGitToken")
@@ -387,17 +387,17 @@ func (_m *MockGitUtil) GetGitToken(gitServiceProvider *constants.GitServiceProvi
 
 	var r0 string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*constants.GitServiceProvider) (string, error)); ok {
-		return rf(gitServiceProvider)
+	if rf, ok := ret.Get(0).(func(*constants.GitServiceProvider, string) (string, error)); ok {
+		return rf(gitServiceProvider, tokenFromProvider)
 	}
-	if rf, ok := ret.Get(0).(func(*constants.GitServiceProvider) string); ok {
-		r0 = rf(gitServiceProvider)
+	if rf, ok := ret.Get(0).(func(*constants.GitServiceProvider, string) string); ok {
+		r0 = rf(gitServiceProvider, tokenFromProvider)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(*constants.GitServiceProvider) error); ok {
-		r1 = rf(gitServiceProvider)
+	if rf, ok := ret.Get(1).(func(*constants.GitServiceProvider, string) error); ok {
+		r1 = rf(gitServiceProvider, tokenFromProvider)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -412,13 +412,14 @@ type MockGitUtil_GetGitToken_Call struct {
 
 // GetGitToken is a helper method to define mock.On call
 //   - gitServiceProvider *constants.GitServiceProvider
-func (_e *MockGitUtil_Expecter) GetGitToken(gitServiceProvider interface{}) *MockGitUtil_GetGitToken_Call {
-	return &MockGitUtil_GetGitToken_Call{Call: _e.mock.On("GetGitToken", gitServiceProvider)}
+//   - tokenFromProvider string
+func (_e *MockGitUtil_Expecter) GetGitToken(gitServiceProvider interface{}, tokenFromProvider interface{}) *MockGitUtil_GetGitToken_Call {
+	return &MockGitUtil_GetGitToken_Call{Call: _e.mock.On("GetGitToken", gitServiceProvider, tokenFromProvider)}
 }
 
-func (_c *MockGitUtil_GetGitToken_Call) Run(run func(gitServiceProvider *constants.GitServiceProvider)) *MockGitUtil_GetGitToken_Call {
+func (_c *MockGitUtil_GetGitToken_Call) Run(run func(gitServiceProvider *constants.GitServiceProvider, tokenFromProvider string)) *MockGitUtil_GetGitToken_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*constants.GitServiceProvider))
+		run(args[0].(*constants.GitServiceProvider), args[1].(string))
 	})
 	return _c
 }
@@ -428,7 +429,7 @@ func (_c *MockGitUtil_GetGitToken_Call) Return(_a0 string, _a1 error) *MockGitUt
 	return _c
 }
 
-func (_c *MockGitUtil_GetGitToken_Call) RunAndReturn(run func(*constants.GitServiceProvider) (string, error)) *MockGitUtil_GetGitToken_Call {
+func (_c *MockGitUtil_GetGitToken_Call) RunAndReturn(run func(*constants.GitServiceProvider, string) (string, error)) *MockGitUtil_GetGitToken_Call {
 	_c.Call.Return(run)
 	return _c
 }
