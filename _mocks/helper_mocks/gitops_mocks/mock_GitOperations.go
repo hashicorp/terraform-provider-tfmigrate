@@ -182,6 +182,61 @@ func (_c *MockGitOperations_DeleteLocalBranch_Call) RunAndReturn(run func(string
 	return _c
 }
 
+// GetCurrentBranch provides a mock function with no fields
+func (_m *MockGitOperations) GetCurrentBranch() (string, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetCurrentBranch")
+	}
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (string, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockGitOperations_GetCurrentBranch_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetCurrentBranch'
+type MockGitOperations_GetCurrentBranch_Call struct {
+	*mock.Call
+}
+
+// GetCurrentBranch is a helper method to define mock.On call
+func (_e *MockGitOperations_Expecter) GetCurrentBranch() *MockGitOperations_GetCurrentBranch_Call {
+	return &MockGitOperations_GetCurrentBranch_Call{Call: _e.mock.On("GetCurrentBranch")}
+}
+
+func (_c *MockGitOperations_GetCurrentBranch_Call) Run(run func()) *MockGitOperations_GetCurrentBranch_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockGitOperations_GetCurrentBranch_Call) Return(_a0 string, _a1 error) *MockGitOperations_GetCurrentBranch_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockGitOperations_GetCurrentBranch_Call) RunAndReturn(run func() (string, error)) *MockGitOperations_GetCurrentBranch_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetRemoteName provides a mock function with no fields
 func (_m *MockGitOperations) GetRemoteName() (string, error) {
 	ret := _m.Called()
@@ -383,6 +438,171 @@ func (_c *MockGitOperations_GetRepoIdentifier_Call) Return(_a0 string) *MockGitO
 }
 
 func (_c *MockGitOperations_GetRepoIdentifier_Call) RunAndReturn(run func(string) string) *MockGitOperations_GetRepoIdentifier_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsGitRepo provides a mock function with no fields
+func (_m *MockGitOperations) IsGitRepo() (bool, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsGitRepo")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (bool, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockGitOperations_IsGitRepo_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsGitRepo'
+type MockGitOperations_IsGitRepo_Call struct {
+	*mock.Call
+}
+
+// IsGitRepo is a helper method to define mock.On call
+func (_e *MockGitOperations_Expecter) IsGitRepo() *MockGitOperations_IsGitRepo_Call {
+	return &MockGitOperations_IsGitRepo_Call{Call: _e.mock.On("IsGitRepo")}
+}
+
+func (_c *MockGitOperations_IsGitRepo_Call) Run(run func()) *MockGitOperations_IsGitRepo_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockGitOperations_IsGitRepo_Call) Return(_a0 bool, _a1 error) *MockGitOperations_IsGitRepo_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockGitOperations_IsGitRepo_Call) RunAndReturn(run func() (bool, error)) *MockGitOperations_IsGitRepo_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsGitRoot provides a mock function with no fields
+func (_m *MockGitOperations) IsGitRoot() (bool, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsGitRoot")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (bool, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockGitOperations_IsGitRoot_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsGitRoot'
+type MockGitOperations_IsGitRoot_Call struct {
+	*mock.Call
+}
+
+// IsGitRoot is a helper method to define mock.On call
+func (_e *MockGitOperations_Expecter) IsGitRoot() *MockGitOperations_IsGitRoot_Call {
+	return &MockGitOperations_IsGitRoot_Call{Call: _e.mock.On("IsGitRoot")}
+}
+
+func (_c *MockGitOperations_IsGitRoot_Call) Run(run func()) *MockGitOperations_IsGitRoot_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockGitOperations_IsGitRoot_Call) Return(_a0 bool, _a1 error) *MockGitOperations_IsGitRoot_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockGitOperations_IsGitRoot_Call) RunAndReturn(run func() (bool, error)) *MockGitOperations_IsGitRoot_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsGitTreeClean provides a mock function with no fields
+func (_m *MockGitOperations) IsGitTreeClean() (bool, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsGitTreeClean")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (bool, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockGitOperations_IsGitTreeClean_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsGitTreeClean'
+type MockGitOperations_IsGitTreeClean_Call struct {
+	*mock.Call
+}
+
+// IsGitTreeClean is a helper method to define mock.On call
+func (_e *MockGitOperations_Expecter) IsGitTreeClean() *MockGitOperations_IsGitTreeClean_Call {
+	return &MockGitOperations_IsGitTreeClean_Call{Call: _e.mock.On("IsGitTreeClean")}
+}
+
+func (_c *MockGitOperations_IsGitTreeClean_Call) Run(run func()) *MockGitOperations_IsGitTreeClean_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockGitOperations_IsGitTreeClean_Call) Return(_a0 bool, _a1 error) *MockGitOperations_IsGitTreeClean_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockGitOperations_IsGitTreeClean_Call) RunAndReturn(run func() (bool, error)) *MockGitOperations_IsGitTreeClean_Call {
 	_c.Call.Return(run)
 	return _c
 }
