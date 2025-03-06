@@ -22,6 +22,8 @@ func TestValidateToken_gitlab(t *testing.T) {
 	// t.Skip("skipping test")
 	repoUrl := "https://gitlab.com/demo-group614536/sample-gitlab-project"
 	projectIdentifier := "demo-group614536/sample-gitlab-project"
+	token := "gitlab_test_token"
+
 	for name, tc := range map[string]struct {
 		err     error
 		suggest string
@@ -67,7 +69,7 @@ func TestValidateToken_gitlab(t *testing.T) {
 						On("GetRemoteServiceProvider", mock.Anything).
 						Return(&constants.UnknownGitServiceProvider)
 					git.
-						On("GetGitToken", mock.Anything).
+						On("GetGitToken", mock.Anything, mock.Anything).
 						Return("", cliErrs.ErrGitServiceProviderNotSupported)
 					return
 				}
@@ -77,7 +79,7 @@ func TestValidateToken_gitlab(t *testing.T) {
 					Return(&constants.GitLab)
 
 				git.
-					On("GetGitToken", mock.Anything).
+					On("GetGitToken", mock.Anything, mock.Anything).
 					Return("gitlab_test_token", nil)
 
 				if name == "UnknownErrorOccurred" {
@@ -117,7 +119,7 @@ func TestValidateToken_gitlab(t *testing.T) {
 
 			}()
 
-			suggestions, err := g.ValidateToken(repoUrl, projectIdentifier)
+			suggestions, err := g.ValidateToken(repoUrl, projectIdentifier, token)
 			if tc.err != nil {
 				r.Equal(tc.err.Error(), err.Error())
 				r.Equal(tc.suggest, suggestions)
