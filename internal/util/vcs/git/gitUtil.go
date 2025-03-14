@@ -234,19 +234,14 @@ func (g *gitUtil) GetGitToken(gitServiceProvider *consts.GitServiceProvider, tok
 		return "", cliErrs.ErrGitServiceProviderNotSupported
 	}
 
-	var gitPatToken string
-	var isSet bool
-
-	if tokenFromProvider != "" {
-		gitPatToken = tokenFromProvider
-		isSet = true
-	} else {
-		gitPatToken, isSet = os.LookupEnv("TF_GIT_PAT_TOKEN")
-	}
-
-	if !isSet {
-		return "", cliErrs.ErrTfGitPatTokenNotSet
-	}
+	gitPatToken := tokenFromProvider  
+    if gitPatToken == "" {  
+        if token, exists := os.LookupEnv("TF_GIT_PAT_TOKEN"); exists {  
+            gitPatToken = token  
+        } else {  
+            return "", cliErrs.ErrTfGitPatTokenNotSet  
+        }  
+    }
 	if gitPatToken == "" {
 		return "", cliErrs.ErrTfGitPatTokenEmpty
 	}
