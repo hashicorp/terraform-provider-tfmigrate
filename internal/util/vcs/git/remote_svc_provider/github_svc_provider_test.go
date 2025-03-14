@@ -111,6 +111,7 @@ func TestValidateToken(t *testing.T) {
 
 	repoUrl := "git@github.com:hashicorp/tf-migrate.git"
 	repoIdentifier := "hashicorp/tf-migrate"
+	token := "github_classic_test_token"
 	for name, tc := range map[string]struct {
 		err     error
 		suggest string
@@ -192,7 +193,7 @@ func TestValidateToken(t *testing.T) {
 						On("GetRemoteServiceProvider", mock.Anything).
 						Return(&constants.UnknownGitServiceProvider)
 					git.
-						On("GetGitToken", mock.Anything).
+						On("GetGitToken", mock.Anything, mock.Anything).
 						Return("", cliErrs.ErrGitServiceProviderNotSupported)
 					return
 				}
@@ -203,34 +204,34 @@ func TestValidateToken(t *testing.T) {
 
 				if name == "ErrGithubTokenNotSet" {
 					git.
-						On("GetGitToken", mock.Anything).
+						On("GetGitToken", mock.Anything, mock.Anything).
 						Return("", cliErrs.ErrTfGitPatTokenNotSet)
 					return
 				}
 
 				if name == "ErrGithubTokenEmpty" {
 					git.
-						On("GetGitToken", mock.Anything).
+						On("GetGitToken", mock.Anything, mock.Anything).
 						Return("", cliErrs.ErrTfGitPatTokenEmpty)
 					return
 				}
 
 				if name == "ErrGithubTokenFineGrained" {
 					git.
-						On("GetGitToken", mock.Anything).
+						On("GetGitToken", mock.Anything, mock.Anything).
 						Return("", cliErrs.ErrTfGitPatTokenFineGrained)
 					return
 				}
 
 				if name == "ErrGithubTokenUnrecognized" {
 					git.
-						On("GetGitToken", mock.Anything).
+						On("GetGitToken", mock.Anything, mock.Anything).
 						Return("", cliErrs.ErrTfGitPatTokenInvalid)
 					return
 				}
 
 				git.
-					On("GetGitToken", mock.Anything).
+					On("GetGitToken", mock.Anything, mock.Anything).
 					Return("github_classic_test_token", nil)
 
 				git.
@@ -315,7 +316,7 @@ func TestValidateToken(t *testing.T) {
 
 			}()
 
-			suggest, err := g.ValidateToken(repoUrl, repoIdentifier)
+			suggest, err := g.ValidateToken(repoUrl, repoIdentifier, token)
 			r.Equal(tc.suggest, suggest)
 			if err != nil {
 				r.Error(err)
