@@ -2,7 +2,7 @@ module terraform-provider-tfmigrate
 
 go 1.23.0
 
-toolchain go1.23.5
+toolchain go1.24.1
 
 require (
 	github.com/go-git/go-git/v5 v5.14.0
@@ -16,7 +16,7 @@ require (
 	github.com/hashicorp/terraform-plugin-testing v1.11.0
 	github.com/stretchr/testify v1.10.0
 	github.com/zclconf/go-cty v1.16.2
-	gitlab.com/gitlab-org/api/client-go v0.124.0
+	gitlab.com/gitlab-org/api/client-go v0.127.0
 	golang.org/x/oauth2 v0.28.0
 
 )
