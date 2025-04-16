@@ -77,9 +77,9 @@ func (_c *MockGithubSvcProvider_CreatePullRequest_Call) RunAndReturn(run func(gi
 	return _c
 }
 
-// ValidateToken provides a mock function with given fields: repoUrl, repoIdentifier
-func (_m *MockGithubSvcProvider) ValidateToken(repoUrl string, repoIdentifier string) (string, error) {
-	ret := _m.Called(repoUrl, repoIdentifier)
+// ValidateToken provides a mock function with given fields: repoUrl, repoIdentifier, tokenFromProvider
+func (_m *MockGithubSvcProvider) ValidateToken(repoUrl string, repoIdentifier string, tokenFromProvider string) (string, error) {
+	ret := _m.Called(repoUrl, repoIdentifier, tokenFromProvider)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ValidateToken")
@@ -87,17 +87,17 @@ func (_m *MockGithubSvcProvider) ValidateToken(repoUrl string, repoIdentifier st
 
 	var r0 string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string) (string, error)); ok {
-		return rf(repoUrl, repoIdentifier)
+	if rf, ok := ret.Get(0).(func(string, string, string) (string, error)); ok {
+		return rf(repoUrl, repoIdentifier, tokenFromProvider)
 	}
-	if rf, ok := ret.Get(0).(func(string, string) string); ok {
-		r0 = rf(repoUrl, repoIdentifier)
+	if rf, ok := ret.Get(0).(func(string, string, string) string); ok {
+		r0 = rf(repoUrl, repoIdentifier, tokenFromProvider)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = rf(repoUrl, repoIdentifier)
+	if rf, ok := ret.Get(1).(func(string, string, string) error); ok {
+		r1 = rf(repoUrl, repoIdentifier, tokenFromProvider)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -113,13 +113,14 @@ type MockGithubSvcProvider_ValidateToken_Call struct {
 // ValidateToken is a helper method to define mock.On call
 //   - repoUrl string
 //   - repoIdentifier string
-func (_e *MockGithubSvcProvider_Expecter) ValidateToken(repoUrl interface{}, repoIdentifier interface{}) *MockGithubSvcProvider_ValidateToken_Call {
-	return &MockGithubSvcProvider_ValidateToken_Call{Call: _e.mock.On("ValidateToken", repoUrl, repoIdentifier)}
+//   - tokenFromProvider string
+func (_e *MockGithubSvcProvider_Expecter) ValidateToken(repoUrl interface{}, repoIdentifier interface{}, tokenFromProvider interface{}) *MockGithubSvcProvider_ValidateToken_Call {
+	return &MockGithubSvcProvider_ValidateToken_Call{Call: _e.mock.On("ValidateToken", repoUrl, repoIdentifier, tokenFromProvider)}
 }
 
-func (_c *MockGithubSvcProvider_ValidateToken_Call) Run(run func(repoUrl string, repoIdentifier string)) *MockGithubSvcProvider_ValidateToken_Call {
+func (_c *MockGithubSvcProvider_ValidateToken_Call) Run(run func(repoUrl string, repoIdentifier string, tokenFromProvider string)) *MockGithubSvcProvider_ValidateToken_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string))
+		run(args[0].(string), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -129,7 +130,7 @@ func (_c *MockGithubSvcProvider_ValidateToken_Call) Return(_a0 string, _a1 error
 	return _c
 }
 
-func (_c *MockGithubSvcProvider_ValidateToken_Call) RunAndReturn(run func(string, string) (string, error)) *MockGithubSvcProvider_ValidateToken_Call {
+func (_c *MockGithubSvcProvider_ValidateToken_Call) RunAndReturn(run func(string, string, string) (string, error)) *MockGithubSvcProvider_ValidateToken_Call {
 	_c.Call.Return(run)
 	return _c
 }
