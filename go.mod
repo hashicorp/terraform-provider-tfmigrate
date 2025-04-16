@@ -6,7 +6,7 @@ toolchain go1.23.5
 
 require (
 	github.com/go-git/go-git/v5 v5.14.0
-	github.com/hashicorp/go-tfe v1.76.0
+	github.com/hashicorp/go-tfe v1.77.0
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/hashicorp/terraform-exec v0.22.0
 	github.com/hashicorp/terraform-plugin-docs v0.21.0
