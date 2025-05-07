@@ -28,10 +28,9 @@ type GithubSvcProvider interface {
 }
 
 // ValidateToken creates a new instance of GithubSvcProvider.
-func (g *githubSvcProvider) ValidateToken(repoUrl string, repoIdentifier string) (string, error) {
-	if _, err := g.git.GetGitToken(g.git.GetRemoteServiceProvider(repoUrl)); err != nil {
-		suggestions, gitTokenErr := gitTokenErrorHandler(err)
-		return suggestions, gitTokenErr
+func (g *githubSvcProvider) ValidateToken(repoUrl string, repoIdentifier string, tokenFromProvider string) (string, error) {
+	if _, err := g.git.GetGitToken(g.git.GetRemoteServiceProvider(repoUrl), tokenFromProvider); err != nil {
+		return gitTokenErrorHandler(err)
 	}
 
 	orgName, repoName := g.git.GetOrgAndRepoName(repoIdentifier)
