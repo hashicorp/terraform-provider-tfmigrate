@@ -134,14 +134,6 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		hostname = config.Hostname.ValueString()
 	}
 
-	// Validate configurations # commenting this because git token validation is not required for now
-	//if gitPatToken == "" {
-	//	resp.Diagnostics.AddError(
-	//		"Missing Authentication Token",
-	//		"The provider requires the Git PAT token to be configured either as a Terraform variable or an environment variable.",
-	//	)
-	//}
-
 	enableTokenValidation, diags := p.enableGitTokenValidation()
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
