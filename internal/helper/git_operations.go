@@ -4,6 +4,8 @@
 package gitops
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -32,21 +34,25 @@ type gitOperations struct {
 }
 
 type GitOperations interface {
+	BranchExists(remote string, branch string) (bool, error)
 	GetRemoteName() (string, error)
 	GetRemoteURL(remoteName string) (string, error)
 	ResetToLastCommittedVersion(repoPath string) error
 	ListBranches(repoPath string) ([]string, error)
 	DeleteLocalBranch(repoPath, branchName string) error
 	CreateCommit(repoPath, message string) (string, error)
-	PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error
+	PushCommit(pushCommitParams gitUtil.PushCommitParams) error
 	CreatePullRequest(params gitUtil.PullRequestParams) (string, error)
-	PushCommitUsingGit(remoteName string, branchName string) error
+	// PushCommitUsingGit(remoteName string, branchName string) error
 	GetRepoIdentifier(repoUrl string) string
 	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
 	GetCurrentBranch() (string, error)
 	IsGitRepo() (bool, error)
 	IsGitRoot() (bool, error)
 	IsGitTreeClean() (bool, error)
+	IsSSHUrl(repoUrl string) bool
+	IsSupportedVCSProvider(repoUrl string) bool
+	GetDefaultBaseBranch() (string, error)
 }
 
 type GitUserConfig struct {
@@ -247,46 +253,74 @@ func (gitOps *gitOperations) CreateCommit(repoPath, message string) (string, err
 	return commit.String(), nil
 }
 
-// PushCommit push commit to the remote repository.
-func (gitOps *gitOperations) PushCommit(repoPath, remoteName, branchName, githubToken string, force bool) error {
-	authToken := githubToken
-	repo, err := gitOps.gitUtil.OpenRepository(repoPath)
+// PushCommit determines the type of remote URL and pushes the commit accordingly.
+func (gitOps *gitOperations) PushCommit(params gitUtil.PushCommitParams) error {
+	repo, err := gitOps.gitUtil.OpenRepository(params.RepoPath)
 	if err != nil {
 		return err
 	}
 
-	// Check out the branch.
+	remoteURL, err := gitOps.GetRemoteURL(params.RemoteName)
+	if err != nil {
+		return err
+	}
+
+	isHTTP := strings.HasPrefix(remoteURL, "http://") || strings.HasPrefix(remoteURL, "https://")
+	isSSH := strings.HasPrefix(remoteURL, "ssh://") || strings.Contains(remoteURL, "@")
+
+	switch {
+	case isHTTP:
+		return gitOps.pushForHTTPUrl(repo, params.RemoteName, params.BranchName, params.GitPatToken, params.Force)
+	case isSSH:
+		return gitOps.pushForSshUrl(params.RemoteName, params.BranchName)
+	default:
+		return fmt.Errorf("unsupported remote URL type: %s", remoteURL)
+	}
+}
+
+// pushForHTTPUrl pushes the commit to the remote repository using HTTP(S) URL.
+func (gitOps *gitOperations) pushForHTTPUrl(repo *git.Repository, remoteName, branchName, token string, force bool) error {
 	worktree, err := gitOps.gitUtil.Worktree(repo)
 	if err != nil {
 		return err
 	}
-	err = gitOps.gitUtil.Checkout(worktree, &git.CheckoutOptions{
+
+	if err := gitOps.gitUtil.Checkout(worktree, &git.CheckoutOptions{
 		Branch: plumbing.NewBranchReferenceName(branchName),
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 
-	// Push the changes to the remote repository.
 	author, err := gitOps.gitUtil.GlobalGitConfig()
 	if err != nil {
 		return err
 	}
+
 	err = gitOps.gitUtil.Push(repo, &git.PushOptions{
 		RemoteName: remoteName,
 		Auth: &transportHttp.BasicAuth{
-			Username: author.Name,
-			Password: authToken,
+			Username: author.Name, // Can be anything for GitHub
+			Password: token,
 		},
 		Force: force,
 	})
-	if err != nil {
-		if errors.Is(err, git.NoErrAlreadyUpToDate) {
-			tflog.Info(gitOps.ctx, "Everything is up-to-date")
-		} else {
-			return err
-		}
+
+	if errors.Is(err, git.NoErrAlreadyUpToDate) {
+		tflog.Info(gitOps.ctx, "Everything is up-to-date")
+		return nil
 	}
+	return err
+}
+
+// pushForSshUrl pushes the commit to the remote repository using SSH URL.
+func (gitOps *gitOperations) pushForSshUrl(remoteName, branchName string) error {
+	out, err := exec.Command("git", "push", "-u", remoteName, branchName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to push the commit: %s", out)
+	}
+	tflog.Info(context.Background(), "Pushed the commit to remote", map[string]interface{}{
+		"remote": remoteName, "branch": branchName,
+	})
 	return nil
 }
 
@@ -295,7 +329,7 @@ func (gitOps *gitOperations) CreatePullRequest(pullRequestParams gitUtil.PullReq
 
 	// Validate the repository identifier.
 	if len(strings.Split(pullRequestParams.RepoIdentifier, "/")) != 2 {
-		return "", fmt.Errorf(consts.InvalidRepositoryIdentifier, pullRequestParams.RepoIdentifier)
+		return "", fmt.Errorf(strings.ToLower(consts.InvalidRepositoryIdentifier), pullRequestParams.RepoIdentifier)
 	}
 
 	var remoteServiceProvider *consts.GitServiceProvider
@@ -327,15 +361,15 @@ func (gitOps *gitOperations) GetRemoteServiceProvider(remoteURL string) *consts.
 	return gitOps.gitUtil.GetRemoteServiceProvider(remoteURL)
 }
 
-func (gitOps *gitOperations) PushCommitUsingGit(remoteName string, branchName string) error {
-	// execute git push command.
-	out, err := exec.Command("git", "push", "-u", remoteName, branchName).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to push the commit: %s", out)
-	}
-	tflog.Info(context.Background(), "Pushed the commit to remote", map[string]interface{}{"remote": remoteName, "branch": branchName})
-	return nil
-}
+// func (gitOps *gitOperations) PushCommitUsingGit(remoteName string, branchName string) error {
+// 	// execute git push command.
+// 	out, err := exec.Command("git", "push", "-u", remoteName, branchName).CombinedOutput()
+// 	if err != nil {
+// 		return fmt.Errorf("failed to push the commit: %s", out)
+// 	}
+// 	tflog.Info(context.Background(), "Pushed the commit to remote", map[string]interface{}{"remote": remoteName, "branch": branchName})
+// 	return nil
+// }
 
 // logAndReturnErr logs the error message and returns the error.
 func (gitOps *gitOperations) logAndReturnErr(errMsg string, err error) (string, error) {
@@ -426,4 +460,54 @@ func (gitOps *gitOperations) GetCurrentBranch() (string, error) {
 		return "", fmt.Errorf("error getting current branch: %s", string(out))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// BranchExists checks if the specified branch exists in the remote
+func (gitOps *gitOperations) BranchExists(remote string, branch string) (bool, error) {
+	out, err := exec.Command("git", "ls-remote", "--heads", remote, branch).CombinedOutput()
+	if err != nil {
+		errorMessage := fmt.Sprintf("error checking if branch exists, branch: %s, remote: %s, error: %s", branch, remote, string(out))
+		tflog.Error(gitOps.ctx, errorMessage)
+		return false, err
+	}
+	return strings.Contains(strings.TrimSpace(string(out)), "refs/heads/"+branch), nil
+}
+
+func (gitOps *gitOperations) IsSSHUrl(repoUrl string) bool {
+	return strings.HasPrefix(repoUrl, "git@")
+}
+
+func (gitOps *gitOperations) IsSupportedVCSProvider(repoUrl string) bool {
+	// check if the repoUrl contains github or gitlab from global constants
+	if strings.Contains(repoUrl, string(consts.GitHub)) || strings.Contains(repoUrl, string(consts.GitLab)) {
+		return true
+	}
+	return false
+}
+func (gitOps *gitOperations) GetDefaultBaseBranch() (string, error) {
+	remoteName, err := gitOps.GetRemoteName()
+	if err != nil {
+		return "", err
+	}
+	// run git remote show command to get the default base branch.
+	cmd := exec.Command("git", "remote", "show", remoteName)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("error running git remote show: %v", err)
+	}
+	// parse the output to find the default base branch.
+	// The default base branch is usually listed as "HEAD branch: <branch_name>"
+	// in the output of git remote show.
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "  HEAD branch:") {
+			parts := strings.Split(line, ":")
+			if len(parts) == 2 {
+				return strings.TrimSpace(parts[1]), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("could not find default base branch in git remote show output")
 }

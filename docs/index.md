@@ -8,8 +8,6 @@ description: |-
 
 # tfmigrate Provider
 
-
-
 ## Example Usage
 
 ```terraform
@@ -23,5 +21,7 @@ provider "tfmigrate" {
 
 ### Optional
 
+- `allow_commit_push` (Boolean) Allow commit and then push to the remote branch.
+- `create_pr` (Boolean) Create a pull request after pushing the changes.
 - `git_pat_token` (String, Sensitive) The Git Personal Access Token (PAT) to be used for creating pull or merge requests.
 - `hostname` (String) The hostname of the TFE instance to connect to. Defaults to HCP Terraform at app.terraform.io.
