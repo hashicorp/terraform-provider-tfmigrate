@@ -462,7 +462,7 @@ func (gitOps *gitOperations) GetCurrentBranch() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// BranchExists checks if the specified branch exists in the remote
+// BranchExists checks if the specified branch exists in the remote.
 func (gitOps *gitOperations) BranchExists(remote string, branch string) (bool, error) {
 	out, err := exec.Command("git", "ls-remote", "--heads", remote, branch).CombinedOutput()
 	if err != nil {

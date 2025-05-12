@@ -163,7 +163,7 @@ func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, r
 	r.createPr = providerResourceData.CreatePr
 }
 
-// validateAndSetBranches validates and sets the source and destination branches if they are empty
+// validateAndSetBranches validates and sets the source and destination branches if they are empty.
 func (r *githubPr) validateAndSetBranches(ctx context.Context, data *GithubPrModel) error {
 	// Check if the destination branch is empty
 	// If empty, use the default base branch of the repo
@@ -200,6 +200,11 @@ func (r *githubPr) validateAndSetBranches(ctx context.Context, data *GithubPrMod
 		if !branchExists {
 			return fmt.Errorf("source branch does not exist in the remote: %s", data.SourceBranch.ValueString())
 		}
+	}
+
+	// now check bothe branches are same, if same then return error
+	if data.SourceBranch.ValueString() == data.DestinBranch.ValueString() {
+		return fmt.Errorf("source and destination branches cannot be same: %s", data.SourceBranch.ValueString())
 	}
 	return nil
 }
