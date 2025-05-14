@@ -43,7 +43,6 @@ type GitOperations interface {
 	CreateCommit(repoPath, message string) (string, error)
 	PushCommit(pushCommitParams gitUtil.PushCommitParams) error
 	CreatePullRequest(params gitUtil.PullRequestParams) (string, error)
-	// PushCommitUsingGit(remoteName string, branchName string) error
 	GetRepoIdentifier(repoUrl string) string
 	GetRemoteServiceProvider(remoteURL string) *consts.GitServiceProvider
 	GetCurrentBranch() (string, error)
@@ -299,7 +298,7 @@ func (gitOps *gitOperations) pushForHTTPUrl(repo *git.Repository, remoteName, br
 	err = gitOps.gitUtil.Push(repo, &git.PushOptions{
 		RemoteName: remoteName,
 		Auth: &transportHttp.BasicAuth{
-			Username: author.Name, // Can be anything for GitHub
+			Username: author.Name, 
 			Password: token,
 		},
 		Force: force,

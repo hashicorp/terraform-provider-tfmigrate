@@ -171,7 +171,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		createPr = config.CreatePr.ValueBool()
 	}
 
-	if err := p.ValidateGitOpsRediness(allowCommitPush, createPr, gitPatToken); err != nil {
+	if err := p.ValidateGitOpsReadiness(allowCommitPush, createPr, gitPatToken); err != nil {
 		resp.Diagnostics.AddError("Git Operations Validation Error: "+err.Error(), err.Error())
 		return
 	}
@@ -235,7 +235,7 @@ func (p *tfmProvider) validateGitPatToken(tokenFromProvider string) diag.Diagnos
 	return diagnostics
 }
 
-func (p *tfmProvider) ValidateGitOpsRediness(allowCommitPush, createPr bool, tokenFromProvider string) error {
+func (p *tfmProvider) ValidateGitOpsReadiness(allowCommitPush, createPr bool, tokenFromProvider string) error {
 	if !allowCommitPush && !createPr {
 		return nil
 	}

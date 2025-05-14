@@ -88,11 +88,9 @@ func (g *gitlabSvcProvider) CreatePullRequest(params git.PullRequestParams) (str
 		tflog.Error(g.ctx, "Failed to create GitLab client", map[string]interface{}{"error": err})
 	}
 
-	sourceBranch := "hcp-migrate-main"
-	baseBranch := "main"
 	mrOptions := &gitlab.CreateMergeRequestOptions{
-		SourceBranch: &sourceBranch,
-		TargetBranch: &baseBranch,
+		SourceBranch: &params.FeatureBranch,
+		TargetBranch: &params.BaseBranch,
 		Title:        &params.Title,
 		Description:  &params.Body,
 	}
