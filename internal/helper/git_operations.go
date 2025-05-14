@@ -298,7 +298,7 @@ func (gitOps *gitOperations) pushForHTTPUrl(repo *git.Repository, remoteName, br
 	err = gitOps.gitUtil.Push(repo, &git.PushOptions{
 		RemoteName: remoteName,
 		Auth: &transportHttp.BasicAuth{
-			Username: author.Name, 
+			Username: author.Name,
 			Password: token,
 		},
 		Force: force,
