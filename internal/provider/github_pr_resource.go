@@ -97,13 +97,6 @@ func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	// Call the helper function in the Create method
-	if err := r.validateAndSetBranches(ctx, &data); err != nil {
-		tflog.Error(ctx, "Error validating branches: "+err.Error())
-		resp.Diagnostics.AddError(fmt.Sprintf("Error validating branches: %s", err.Error()), err.Error())
-		return
-	}
-
 	createPrParams := gitUtil.PullRequestParams{
 		RepoIdentifier: data.RepoIdentifier.ValueString(),
 		BaseBranch:     data.DestinBranch.ValueString(),
@@ -112,7 +105,12 @@ func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp 
 		Body:           data.PrBody.ValueString(),
 		GitPatToken:    r.gitPatToken,
 	}
-
+	// Call the helper function in the Create method
+	if err := r.validateAndSetBranches(ctx, &createPrParams.BaseBranch, &createPrParams.FeatureBranch); err != nil {
+		tflog.Error(ctx, "Error validating branches: "+err.Error())
+		resp.Diagnostics.AddError(fmt.Sprintf("Error validating branches: %s", err.Error()), err.Error())
+		return
+	}
 	tflog.Info(ctx, "Executing GitHub PR Creation")
 
 	prURL, err := r.gitOps.CreatePullRequest(createPrParams)
@@ -164,47 +162,46 @@ func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, r
 }
 
 // validateAndSetBranches validates and sets the source and destination branches if they are empty.
-func (r *githubPr) validateAndSetBranches(ctx context.Context, data *GithubPrModel) error {
+func (r *githubPr) validateAndSetBranches(ctx context.Context, baseBranch, featureBranch *string) error {
 	// Check if the destination branch is empty
 	// If empty, use the default base branch of the repo
-	if data.DestinBranch.IsNull() || data.DestinBranch.ValueString() == "" {
+	if *baseBranch == "" {
 		// Take the default branch of the current repo
 		tflog.Debug(ctx, "Destination branch is empty, using default base branch of the repo")
 		defaultBaseBranch, err := r.gitOps.GetDefaultBaseBranch()
 		if err != nil {
 			return fmt.Errorf("error fetching default base branch: %w", err)
 		}
-		data.DestinBranch = types.StringValue(defaultBaseBranch)
+		*baseBranch = defaultBaseBranch
 	}
 
 	// Check if the source branch is empty
 	// If empty, use the current branch of the repo
-	if data.SourceBranch.IsNull() || data.SourceBranch.ValueString() == "" {
+	if *featureBranch == "" {
 		// Take the current branch of the current repo
 		tflog.Debug(ctx, "Source branch is empty, therefore using current branch of the repo")
 		defaultFeatureBranch, err := r.gitOps.GetCurrentBranch()
 		if err != nil {
 			return fmt.Errorf("error fetching default feature branch: %w", err)
 		}
-		data.SourceBranch = types.StringValue(defaultFeatureBranch)
+		*featureBranch = defaultFeatureBranch
 
 		// check if the source branch (current) is present in the remote
 		remoteName, err := r.gitOps.GetRemoteName()
 		if err != nil {
 			return fmt.Errorf("error fetching remote name: %w", err)
 		}
-		branchExists, err := r.gitOps.BranchExists(data.SourceBranch.ValueString(), remoteName)
+		branchExists, err := r.gitOps.BranchExists(*featureBranch, remoteName)
 		if err != nil {
 			return fmt.Errorf("error checking if branch exists: %w", err)
 		}
 		if !branchExists {
-			return fmt.Errorf("source branch does not exist in the remote: %s", data.SourceBranch.ValueString())
+			return fmt.Errorf("feature branch does not exist in the remote: %s", *featureBranch)
 		}
 	}
-
 	// now check bothe branches are same, if same then return error
-	if data.SourceBranch.ValueString() == data.DestinBranch.ValueString() {
-		return fmt.Errorf("source and destination branches cannot be same: %s", data.SourceBranch.ValueString())
+	if *baseBranch == *featureBranch {
+		return fmt.Errorf("source and destination branches cannot be same: %s", *baseBranch)
 	}
 	return nil
 }

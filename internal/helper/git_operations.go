@@ -361,16 +361,6 @@ func (gitOps *gitOperations) GetRemoteServiceProvider(remoteURL string) *consts.
 	return gitOps.gitUtil.GetRemoteServiceProvider(remoteURL)
 }
 
-// func (gitOps *gitOperations) PushCommitUsingGit(remoteName string, branchName string) error {
-// 	// execute git push command.
-// 	out, err := exec.Command("git", "push", "-u", remoteName, branchName).CombinedOutput()
-// 	if err != nil {
-// 		return fmt.Errorf("failed to push the commit: %s", out)
-// 	}
-// 	tflog.Info(context.Background(), "Pushed the commit to remote", map[string]interface{}{"remote": remoteName, "branch": branchName})
-// 	return nil
-// }
-
 // logAndReturnErr logs the error message and returns the error.
 func (gitOps *gitOperations) logAndReturnErr(errMsg string, err error) (string, error) {
 	err = fmt.Errorf("err: %s, details: %s", err, errMsg)
