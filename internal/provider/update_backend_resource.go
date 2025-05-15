@@ -265,8 +265,8 @@ func (r *directoryActions) Configure(_ context.Context, req resource.ConfigureRe
 
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Github Token Found",
-			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
+			"Unexpected TF_GIT_PAT_TOKEN Token Found",
+			fmt.Sprintf("providerResourceData from context is %v.", providerResourceData),
 		)
 
 		return

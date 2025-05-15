@@ -55,6 +55,14 @@ type PullRequestParams struct {
 	GitPatToken    string
 }
 
+type PushCommitParams struct {
+	RepoPath    string
+	RemoteName  string
+	BranchName  string
+	GitPatToken string
+	Force       bool
+}
+
 // GitUtil interface to mock Git operations.
 type GitUtil interface {
 	Add(worktree *git.Worktree, glob string) (plumbing.Hash, error)

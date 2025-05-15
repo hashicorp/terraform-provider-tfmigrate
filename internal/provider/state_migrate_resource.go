@@ -113,7 +113,7 @@ func (r *stateMigration) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	tflog.Info(ctx, "Migrating state from local ws : "+data.LocalWorkspace.ValueString()+" to tfc : "+data.TFCWorkspace.ValueString(),
-		map[string]interface{}{"state": string(state[:])})
+		map[string]interface{}{"state": string(state)})
 	if tfeClient == nil {
 		tfeClient, err = newTfeClient(r.Hostname)
 		if err != nil {
@@ -249,8 +249,8 @@ func (r *stateMigration) Configure(_ context.Context, req resource.ConfigureRequ
 
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Github Token Found",
-			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
+			"Unexpected TF_GIT_PAT_TOKEN Found",
+			fmt.Sprintf("providerResourceData from context is %v.", providerResourceData),
 		)
 
 		return
