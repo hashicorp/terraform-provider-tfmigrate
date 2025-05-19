@@ -15,11 +15,12 @@ on:
 # Testing only needs permissions to read the repository contents.
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   lint:
     uses: ./.github/workflows/lint.yml
-  # Ensure project builds before running testing matrix
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -33,9 +34,9 @@ jobs:
       - run: go mod download
       - run: go build -v .
       - name: Run linters
-        uses: golangci/golangci-lint-action@38e1018663fa5173f3968ea0777460d3de38f256 # v5.3.0
+        uses: golangci/golangci-lint-action@v7.0.0
         with:
-          version: latest
+          version: v2.1.2
 
   generate:
     runs-on: ubuntu-latest
@@ -60,9 +61,7 @@ jobs:
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
     name: Terraform Provider Acceptance Tests
-    needs:
-      - lint
-      - build
+    needs: [lint, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
