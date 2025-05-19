@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   golangci-lint:
-    runs-on: ['self-hosted', 'linux', 'medium']
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
