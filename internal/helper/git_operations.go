@@ -295,7 +295,7 @@ func (gitOps *gitOperations) CreatePullRequest(pullRequestParams gitUtil.PullReq
 
 	// Validate the repository identifier.
 	if len(strings.Split(pullRequestParams.RepoIdentifier, "/")) != 2 {
-		return "", fmt.Errorf(consts.InvalidRepositoryIdentifier, pullRequestParams.RepoIdentifier)
+		return "", fmt.Errorf(strings.ToLower(consts.InvalidRepositoryIdentifier), pullRequestParams.RepoIdentifier)
 	}
 
 	var remoteServiceProvider *consts.GitServiceProvider
