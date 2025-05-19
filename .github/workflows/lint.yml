@@ -1,9 +1,15 @@
 name: lint
+
 on:
   workflow_call:
   push:
     branches:
       - '**'
+  pull_request:
+    branches:
+      - '**'
+    paths-ignore:
+      - 'README.md'
 
 env:
   GOPRIVATE: github.com/hashicorp/*
