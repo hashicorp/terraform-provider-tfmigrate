@@ -14,6 +14,11 @@ on: [workflow_dispatch, push]
 env:
   PKG_NAME: "terraform-provider-tfmigrate"
 
+permissions:
+  contents: read
+  pull-requests: write
+
+
 jobs:
   # Detects the Go toolchain version to use for product builds.
   #
