@@ -4,7 +4,6 @@
 #
 # Reference: https://github.com/hashicorp/terraform-provider-crt-example/blob/main/.github/workflows/README.md
 #
-# TODO comments are provided to guide you through customizing this workflow for your provider.
 
 name: build
 
