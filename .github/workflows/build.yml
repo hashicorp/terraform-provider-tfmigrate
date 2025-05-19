@@ -1,10 +1,3 @@
-# This workflow builds the product for all supported platforms and uploads the resulting
-# binaries as Actions artifacts. The workflow also uploads a build metadata file
-# (metadata.json) -- and a Terraform Registry manifest file (terraform-registry-manifest.json).
-#
-# Reference: https://github.com/hashicorp/terraform-provider-crt-example/blob/main/.github/workflows/README.md
-#
-
 name: build
 
 # We default to running this workflow on every push to every branch.
