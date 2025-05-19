@@ -15,9 +15,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+const (
+	MigrationFeatureBranchPrefix = `hcp-migrate-`
+)
+
 type githubPr struct {
 	gitPatToken string
 	gitOps      gitops.GitOperations
+	createPr    bool
 }
 
 var (
@@ -81,6 +86,10 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 }
 
 func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if !r.createPr {
+		tflog.Debug(ctx, "Create PR is not enabled")
+		return
+	}
 	var data GithubPrModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
@@ -96,13 +105,18 @@ func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp 
 		Body:           data.PrBody.ValueString(),
 		GitPatToken:    r.gitPatToken,
 	}
-
-	tflog.Info(ctx, "Executing Git Commit")
+	// Call the helper function in the Create method
+	if err := r.validateAndSetBranches(ctx, &createPrParams.BaseBranch, &createPrParams.FeatureBranch); err != nil {
+		tflog.Error(ctx, "Error validating branches: "+err.Error())
+		resp.Diagnostics.AddError(fmt.Sprintf("Error validating branches: %s", err.Error()), err.Error())
+		return
+	}
+	tflog.Info(ctx, "Executing GitHub PR Creation")
 
 	prURL, err := r.gitOps.CreatePullRequest(createPrParams)
 	if err != nil {
 		tflog.Error(ctx, "Error creating PR: "+err.Error())
-		resp.Diagnostics.AddError("Error creating PR: ", err.Error())
+		resp.Diagnostics.AddError(fmt.Sprintf("Error creating PR: %s", err.Error()), err.Error())
 		return
 	}
 
@@ -137,11 +151,57 @@ func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, r
 	providerResourceData, ok := req.ProviderData.(ProviderResourceData)
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Git PAT Token Found",
+			"Unexpected TF_GIT_PAT_TOKEN Found",
 			fmt.Sprintf("providerResourceData from context is %v.", providerResourceData),
 		)
 		return
 	}
 
 	r.gitPatToken = providerResourceData.GitPatToken
+	r.createPr = providerResourceData.CreatePr
+}
+
+// validateAndSetBranches validates and sets the source and destination branches if they are empty.
+func (r *githubPr) validateAndSetBranches(ctx context.Context, baseBranch, featureBranch *string) error {
+	// Check if the destination branch is empty
+	// If empty, use the default base branch of the repo
+	if *baseBranch == "" {
+		// Take the default branch of the current repo
+		tflog.Debug(ctx, "Destination branch is empty, using default base branch of the repo")
+		defaultBaseBranch, err := r.gitOps.GetDefaultBaseBranch()
+		if err != nil {
+			return fmt.Errorf("error fetching default base branch: %w", err)
+		}
+		*baseBranch = defaultBaseBranch
+	}
+
+	// Check if the source branch is empty
+	// If empty, use the current branch of the repo
+	if *featureBranch == "" {
+		// Take the current branch of the current repo
+		tflog.Debug(ctx, "Source branch is empty, therefore using current branch of the repo")
+		defaultFeatureBranch, err := r.gitOps.GetCurrentBranch()
+		if err != nil {
+			return fmt.Errorf("error fetching default feature branch: %w", err)
+		}
+		*featureBranch = defaultFeatureBranch
+
+		// check if the source branch (current) is present in the remote
+		remoteName, err := r.gitOps.GetRemoteName()
+		if err != nil {
+			return fmt.Errorf("error fetching remote name: %w", err)
+		}
+		branchExists, err := r.gitOps.BranchExists(*featureBranch, remoteName)
+		if err != nil {
+			return fmt.Errorf("error checking if branch exists: %w", err)
+		}
+		if !branchExists {
+			return fmt.Errorf("feature branch does not exist in the remote: %s", *featureBranch)
+		}
+	}
+	// now check bothe branches are same, if same then return error
+	if *baseBranch == *featureBranch {
+		return fmt.Errorf("source and destination branches cannot be same: %s", *baseBranch)
+	}
+	return nil
 }

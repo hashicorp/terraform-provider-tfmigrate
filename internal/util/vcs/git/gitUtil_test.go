@@ -82,7 +82,7 @@ func TestGetGitToken(t *testing.T) {
 			}
 
 			// Act
-			token, err := gitOps.GetGitToken(tc.gitSvcPvd)
+			token, err := gitOps.GetGitToken(tc.gitSvcPvd, tc.token)
 
 			// Assert
 			if err != nil {

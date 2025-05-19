@@ -16,9 +16,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+const (
+	DefaultCommitMessage = "[skip ci] Migrating to TFC"
+)
+
 type gitCommitPush struct {
-	gitPatToken string
-	gitOps      gitops.GitOperations
+	gitPatToken     string
+	gitOps          gitops.GitOperations
+	allowCommitPush bool
 }
 
 var (
@@ -59,7 +64,7 @@ func (r *gitCommitPush) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			},
 			"enable_push": schema.BoolAttribute{
 				MarkdownDescription: "Enable Push to remote branch after commit.",
-				Required:            true,
+				Computed:            true,
 			},
 			"remote_name": schema.StringAttribute{
 				MarkdownDescription: "The name of the remote to push to e.g origin.",
@@ -83,11 +88,17 @@ func (r *gitCommitPush) Schema(_ context.Context, _ resource.SchemaRequest, resp
 
 func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 
+	if !r.allowCommitPush {
+		tflog.Debug(ctx, "Git Commit Push is not allowed in the current configuration.")
+		return
+	}
 	var data GitCommitPushModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	data.EnablePush = types.BoolValue(r.allowCommitPush)
 	dirPath := data.DirectoryPath.ValueString()
 	_, err := os.Stat(dirPath)
 	if err != nil {
@@ -96,6 +107,9 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	commitMessage := data.CommitMessage.ValueString()
+	if commitMessage == "" {
+		commitMessage = DefaultCommitMessage
+	}
 
 	tflog.Info(ctx, "Executing Git Commit")
 	commitHash, err := r.gitOps.CreateCommit(dirPath, commitMessage)
@@ -110,11 +124,30 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 
 	if data.EnablePush.ValueBool() {
-		// err = r.gitOps.PushCommit(dirPath, data.RemoteName.ValueString(), data.BranchName.ValueString(), r.gitPatToken, true)
-		err = r.gitOps.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
+		createPushParams := gitUtil.PushCommitParams{
+			RepoPath:    dirPath,
+			RemoteName:  data.RemoteName.ValueString(),
+			BranchName:  data.BranchName.ValueString(),
+			GitPatToken: r.gitPatToken,
+			Force:       true,
+		}
+		// check if the branch exists in the remote and local
+		branchExists, err := r.gitOps.BranchExists(createPushParams.RemoteName, createPushParams.BranchName)
+		if err != nil {
+			tflog.Error(ctx, "Error checking branch existence: "+err.Error())
+			resp.Diagnostics.AddError("Error checking branch existence: ", err.Error())
+			return
+		}
+		if !branchExists {
+			tflog.Info(ctx, "Current Branch does not exist in remote")
+			resp.Diagnostics.AddError("Current Branch does not exist in remote", "Please check the branch and try again.")
+			return
+		}
+		err = r.gitOps.PushCommit(createPushParams)
+		// err = r.gitOps.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
 		if err != nil {
 			tflog.Error(ctx, "Error executing Git Push: "+err.Error())
-			resp.Diagnostics.AddError("Error executing Git Push:", err.Error())
+			resp.Diagnostics.AddError(fmt.Sprintf("Error executing Git Push: %s", err.Error()), err.Error())
 			return
 		}
 		summary += "and Pushed"
@@ -152,10 +185,11 @@ func (r *gitCommitPush) Configure(_ context.Context, req resource.ConfigureReque
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected TF_GIT_PAT_TOKEN Found",
-			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
+			fmt.Sprintf("providerResourceData from context is %v.", providerResourceData),
 		)
 
 		return
 	}
 	r.gitPatToken = providerResourceData.GitPatToken
+	r.allowCommitPush = providerResourceData.AllowCommitPush
 }

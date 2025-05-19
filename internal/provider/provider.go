@@ -45,14 +45,18 @@ type tfmProvider struct {
 
 // tfmProviderModel maps provider schema data to a Go type.
 type tfmProviderModel struct {
-	GitPatToken types.String `tfsdk:"git_pat_token"`
-	Hostname    types.String `tfsdk:"hostname"`
+	GitPatToken     types.String `tfsdk:"git_pat_token"`
+	Hostname        types.String `tfsdk:"hostname"`
+	AllowCommitPush types.Bool   `tfsdk:"allow_commit_push"`
+	CreatePr        types.Bool   `tfsdk:"create_pr"`
 }
 
 // ProviderResourceData holds the provider configuration data.
 type ProviderResourceData struct {
-	GitPatToken string
-	Hostname    string
+	GitPatToken     string
+	Hostname        string
+	AllowCommitPush bool
+	CreatePr        bool
 }
 
 // New is a helper function to simplify provider server and testing implementation.
@@ -86,6 +90,16 @@ func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 				Sensitive:   false,
 				Description: "The hostname of the TFE instance to connect to. Defaults to HCP Terraform at app.terraform.io.",
 			},
+			"allow_commit_push": schema.BoolAttribute{
+				Optional:    true,
+				Sensitive:   false,
+				Description: "Allow commit and then push to the remote branch.",
+			},
+			"create_pr": schema.BoolAttribute{
+				Optional:    true,
+				Sensitive:   false,
+				Description: "Create a pull request after pushing the changes.",
+			},
 		},
 	}
 }
@@ -117,6 +131,20 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 			"The provider cannot initialize the TFE API client as the hostname is unknown. Set it in configuration.",
 		)
 	}
+	if config.AllowCommitPush.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("allow_commit_push"),
+			"Unknown Allow Commit Push",
+			"The provider cannot initialize the Git client as the allow push commit is unknown. Set it in configuration.",
+		)
+	}
+	if config.CreatePr.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("create_pr"),
+			"Unknown Create PR",
+			"The provider cannot initialize the Git client as the create PR is unknown. Set it in configuration.",
+		)
+	}
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -134,34 +162,26 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		hostname = config.Hostname.ValueString()
 	}
 
-	// Validate configurations
-	if gitPatToken == "" {
-		resp.Diagnostics.AddError(
-			"Missing Authentication Token",
-			"The provider requires the Git PAT token to be configured either as a Terraform variable or an environment variable.",
-		)
+	var allowCommitPush, createPr bool
+
+	if !config.AllowCommitPush.IsNull() {
+		allowCommitPush = config.AllowCommitPush.ValueBool()
+	}
+	if !config.CreatePr.IsNull() {
+		createPr = config.CreatePr.ValueBool()
 	}
 
-	enableTokenValidation, diag := p.enableGitTokenValidation()
-	if diag.HasError() {
-		resp.Diagnostics.Append(diag...)
+	if err := p.ValidateGitOpsReadiness(allowCommitPush, createPr, gitPatToken); err != nil {
+		resp.Diagnostics.AddError("Git Operations Validation Error: "+err.Error(), err.Error())
 		return
 	}
-	if !enableTokenValidation {
-		// Set the Hostname provider resource data
-		resp.ResourceData = ProviderResourceData{
-			GitPatToken: gitPatToken,
-			Hostname:    hostname,
-		}
-		return
-	}
-	if resp.Diagnostics = p.validateGitPatToken(); resp.Diagnostics.HasError() {
-		return
-	}
+
 	// Set the provider resource data
 	resp.ResourceData = ProviderResourceData{
-		GitPatToken: gitPatToken,
-		Hostname:    hostname,
+		GitPatToken:     gitPatToken,
+		Hostname:        hostname,
+		AllowCommitPush: allowCommitPush,
+		CreatePr:        createPr,
 	}
 }
 
@@ -183,58 +203,8 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 	}
 }
 
-func (p *tfmProvider) enableGitTokenValidation() (bool, diag.Diagnostics) {
-	/*
-	   1. Check if the working directory is a git repository or not isGitRepo() bool, err
-	   2. Check if the current working directory has a .git folder isGitRoot() bool, err
-	   3. If the Current working directory is a git repo isGitTreeClean() bool, err
-	      and is the git root, then check if the current working directory is clean
-	   4. Check the current branch has hcp-migrate prefix
-	*/
-
-	isGitRepo, err := p.gitOps.IsGitRepo()
-	if err != nil {
-		if strings.Contains(err.Error(), constants.ErrNotGitRepo) {
-			return false, nil
-		}
-		return false, diag.Diagnostics{
-			diag.NewErrorDiagnostic(
-				"Error checking if the current working directory is a git repository",
-				err.Error(),
-			),
-		}
-	}
-	isGitRoot, err := p.gitOps.IsGitRoot()
-	if err != nil {
-		return false, diag.Diagnostics{
-			diag.NewErrorDiagnostic(
-				"Error checking if the current working directory is a git root",
-				err.Error(),
-			),
-		}
-	}
-	isGitTreeClean, err := p.gitOps.IsGitTreeClean()
-	if err != nil {
-		return false, diag.Diagnostics{
-			diag.NewErrorDiagnostic(
-				"Error checking if the current working directory is clean",
-				err.Error(),
-			),
-		}
-	}
-
-	currentBranch, err := p.gitOps.GetCurrentBranch()
-	if err != nil {
-		return false, diag.Diagnostics{
-			diag.NewErrorDiagnostic(
-				"Error fetching current branch",
-				err.Error(),
-			),
-		}
-	}
-	return isGitRepo && isGitRoot && isGitTreeClean && strings.HasPrefix(currentBranch, HcpMigrateBranchPrefix), nil
-}
-func (p *tfmProvider) validateGitPatToken() diag.Diagnostics {
+// ValidateGitPatToken validates the Git PAT token against the remote service provider.
+func (p *tfmProvider) validateGitPatToken(tokenFromProvider string) diag.Diagnostics {
 	// Validate the Git PAT token against the remote service provider
 	remoteName, err := p.gitOps.GetRemoteName()
 	diagnostics := make(diag.Diagnostics, 0)
@@ -257,10 +227,58 @@ func (p *tfmProvider) validateGitPatToken() diag.Diagnostics {
 		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorCreatingNewTokenvalidator, err)), err.Error())
 		return diagnostics
 	}
-	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier); err != nil {
+	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier, tokenFromProvider); err != nil {
 		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorValidatingGitToken, err)), err.Error())
 		diagnostics.AddWarning("", suggestion)
 		return diagnostics
 	}
 	return diagnostics
+}
+
+func (p *tfmProvider) ValidateGitOpsReadiness(allowCommitPush, createPr bool, tokenFromProvider string) error {
+	if !allowCommitPush && !createPr {
+		return nil
+	}
+	isGitRepo, err := p.gitOps.IsGitRepo()
+	if err != nil {
+		return fmt.Errorf("error checking if directory is a git repository: %w", err)
+	}
+	if !isGitRepo {
+		return fmt.Errorf("current directory is not a git repository")
+	}
+	isGitRoot, err := p.gitOps.IsGitRoot()
+	if err != nil {
+		return fmt.Errorf("error checking if directory is a git root: %w", err)
+	}
+	if !isGitRoot {
+		return fmt.Errorf("current directory is not a git root")
+	}
+	remoteName, err := p.gitOps.GetRemoteName()
+	if err != nil {
+		return fmt.Errorf("error getting remote name: %w", err)
+	}
+	repoUrl, err := p.gitOps.GetRemoteURL(remoteName)
+	if err != nil {
+		return err
+	}
+	if !p.gitOps.IsSupportedVCSProvider(repoUrl) {
+		return fmt.Errorf("unsupported VCS provider")
+	}
+	validatedTokenAlready := false
+	if allowCommitPush && !p.gitOps.IsSSHUrl(repoUrl) {
+		diagnostics := p.validateGitPatToken(tokenFromProvider)
+		if diagnostics.HasError() {
+			return fmt.Errorf("git token validation failed")
+		}
+		validatedTokenAlready = true
+	}
+	if createPr {
+		if !validatedTokenAlready {
+			diagnostics := p.validateGitPatToken(tokenFromProvider)
+			if diagnostics.HasError() {
+				return fmt.Errorf("git token validation failed")
+			}
+		}
+	}
+	return nil
 }

@@ -249,8 +249,8 @@ func (r *stateMigration) Configure(_ context.Context, req resource.ConfigureRequ
 
 	if !ok {
 		resp.Diagnostics.AddError(
-			"Unexpected Github Token Found",
-			fmt.Sprintf("providerResourceData from context is %s.", providerResourceData),
+			"Unexpected TF_GIT_PAT_TOKEN Found",
+			fmt.Sprintf("providerResourceData from context is %v.", providerResourceData),
 		)
 
 		return
