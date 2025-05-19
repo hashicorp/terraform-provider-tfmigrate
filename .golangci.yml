@@ -1,27 +1,66 @@
-# Visit https://golangci-lint.run/ for usage documentation
-# and information on other useful linters
-issues:
-  max-per-linter: 0
-  max-same-issues: 0
-
+version: "2"
+run:
+  tests: true
 linters:
-  disable-all: true
   enable:
-    - durationcheck
-    - errcheck
-    - copyloopvar
-    - forcetypeassert
-    - godot
-    - gofmt
-    - gosimple
-    - ineffassign
-    - makezero
+    - bodyclose
+    - depguard
+    - gocritic
     - misspell
-    - nilerr
-    - predeclared
+    - rowserrcheck
+    - sqlclosecheck
     - staticcheck
-    - tenv
+    - testifylint
     - unconvert
-    - unparam
-    - unused
-    - govet
+    - godot
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: github.com/gogo/status
+            - pkg: github.com/gogo/codes
+            - pkg: github.com/gogo/protobuf
+    misspell:
+      locale: US
+      ignore-rules:
+        - cancelled
+    rowserrcheck:
+      packages:
+        - github.com/jmoiron/sqlx
+    staticcheck:
+      checks:
+        - all
+        - '-ST1003' # disable the rule ST1003
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - bodyclose
+        path: (.+)_test.go
+      - linters:
+          - staticcheck
+        text: 'SA1019:'
+      - path: (.+)\.go$
+        text: ifElseChain
+    paths:
+      - _mocks
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - goimports
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - _mocks
+      - third_party$
+      - builtin$
+      - examples$

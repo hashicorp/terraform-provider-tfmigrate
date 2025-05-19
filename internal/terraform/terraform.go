@@ -8,10 +8,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/hashicorp/terraform-exec/tfexec"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-exec/tfexec"
 )
 
 const (
