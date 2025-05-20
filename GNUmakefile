@@ -49,3 +49,4 @@ run:
 runverb:
 	rm -rf .terraform .terraform.lock.hcl
 	TF_LOG=INFO terraform apply -auto-approve
+
