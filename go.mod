@@ -1,8 +1,6 @@
 module terraform-provider-tfmigrate
 
-go 1.23.0
-
-toolchain go1.23.5
+go 1.23.8
 
 require (
 	github.com/go-git/go-git/v5 v5.16.0
