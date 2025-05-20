@@ -1,3 +1,14 @@
+## 1.1.0-alpha20250519 (19th May 2025)
+
+NOTES:
+
+- Added `allow_commit_push` and `create_pr` attributes for Git control. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125)
+- Token validation now conditional on Git usage. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125)
+- Improved error handling and CLI alignment. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125)
+- Fixed git_pat_token validation bug. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125)
+
+More details will come in the actual GA release.
+
 ## 1.0.0 (27th February 2025)
 
 NOTES:
