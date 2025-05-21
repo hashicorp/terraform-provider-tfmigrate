@@ -1,3 +1,48 @@
+## 1.1.0 (21st May 2025)
+
+### NOTES
+
+**VCS driven Workspaces:**
+
+This provider now supports creation of VCS driven workspaces if CE workspace terraform configuration is hosted on any supported VCS.
+
+**Granular Control Over Git Operations:**
+
+Introduced two new provider-level attributes `allow_commit_push` and `create_pr` for granular control over git operations:
+
+- `allow_commit_push`: Enables committing and pushing changes even if no migration branch is created. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125)
+- `create_pr`: Allows users to automatically trigger a PR as part of the migration process. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125)
+
+**Direct Git Control via Provider:**
+
+These attributes give users granular control over Git behaviour from the provider itself, extending functionality even when Git operations are decoupled from the CLI.
+
+**Token Validation Based on Git Actions:**
+
+The provider now performs token validation **only if required**:
+
+- If `create_pr` is `true`, the validation is done during the execute step.
+- If Git operations are skipped entirely, no token validation is performed.
+
+#### Bugs and Security Fixes
+
+**Token Validation Fix:**
+
+We have fixed one major bug related to git token used in terraform-provider-tfmigrate provider configuration.
+
+- You can read more about the bug [here](https://github.com/hashicorp/terraform-provider-tfmigrate/issues/117).
+- The fix is [here](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125).
+
+**Security Fixes:**
+
+- [GO-2025-3420](https://osv.dev/vulnerability/GO-2025-3420)
+- [GO-2024-3107](https://osv.dev/vulnerability/GO-2024-3107)
+- [GO-2024-3106](https://osv.dev/vulnerability/GO-2024-3106)
+- [GO-2024-3105](https://osv.dev/vulnerability/GO-2024-3105)
+- [GO-2024-2963](https://osv.dev/vulnerability/GO-2024-2963)
+- [GO-2025-3373](https://osv.dev/vulnerability/GO-2025-3373)
+- [GO-2025-3563](https://osv.dev/vulnerability/GO-2025-3563)
+
 ## 1.1.0-alpha20250520 (20th May 2025)
 
 NOTES:
