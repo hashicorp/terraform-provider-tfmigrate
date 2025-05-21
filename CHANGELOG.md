@@ -8,7 +8,7 @@ This provider now supports creation of VCS driven workspaces if CE workspace ter
 
 **Granular Control Over Git Operations:**
 
-Introduced two new provider-level attributes `allow_commit_push` and `create_pr` for granualar control over git operations:
+Introduced two new provider-level attributes `allow_commit_push` and `create_pr` for granular control over git operations:
 
 - `allow_commit_push`: Enables committing and pushing changes even if no migration branch is created. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125)
 - `create_pr`: Allows users to automatically trigger a PR as part of the migration process. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/125)
