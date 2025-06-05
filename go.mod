@@ -4,14 +4,14 @@ go 1.23.8
 
 require (
 	github.com/go-git/go-git/v5 v5.16.0
-	github.com/hashicorp/go-tfe v1.80.0
+	github.com/hashicorp/go-tfe v1.81.0
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/hashicorp/terraform-exec v0.23.0
 	github.com/hashicorp/terraform-plugin-docs v0.21.0
 	github.com/hashicorp/terraform-plugin-framework v1.15.0
-	github.com/hashicorp/terraform-plugin-go v0.27.0
+	github.com/hashicorp/terraform-plugin-go v0.28.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
-	github.com/hashicorp/terraform-plugin-testing v1.13.0
+	github.com/hashicorp/terraform-plugin-testing v1.13.1
 	github.com/stretchr/testify v1.10.0
 	github.com/zclconf/go-cty v1.16.3
 	gitlab.com/gitlab-org/api/client-go v0.129.0
