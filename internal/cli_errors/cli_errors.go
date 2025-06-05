@@ -5,6 +5,8 @@ var (
 
 	ErrTfGitPatTokenEmpty              = GitTokenError(`TF_GIT_PAT_TOKEN environment variable is empty`)
 	ErrTfGitPatTokenNotSet             = GitTokenError(`TF_GIT_PAT_TOKEN environment variable not set`)
+	ErrTfBitbucketTokenEmpty           = GitTokenError(`TF_BITBUCKET_TOKEN environment variable is empty`)
+	ErrTfBitbucketTokenNotSet          = GitTokenError(`TF_BITBUCKET_TOKEN environment variable not set`)
 	ErrGitServiceProviderNotSupported  = GitTokenError(`git service provider not supported`)
 	ErrRepositoryNotFound              = GitTokenError(`the repository was not found`)
 	ErrResponsePermissionsNil          = GitTokenError(`token permissions array is nil or empty`)
