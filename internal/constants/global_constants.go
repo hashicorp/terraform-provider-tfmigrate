@@ -8,4 +8,6 @@ var (
 	GitHub                    GitServiceProvider = "github.com"
 	GitLab                    GitServiceProvider = "gitlab.com"
 	UnknownGitServiceProvider GitServiceProvider = "unknown"
+
+	TerraformRPCAPICookie string = "fba0991c9bcd453982f0d88e2da95940"
 )
