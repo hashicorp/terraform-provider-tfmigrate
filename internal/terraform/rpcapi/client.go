@@ -54,20 +54,20 @@ func Connect(ctx context.Context, logger hclog.Logger, terraform string) (Client
 
 	client := plugin.NewClient(config)
 	if _, err := client.Start(); err != nil {
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to start Terraform plugin", err.Error()))
+		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to start Terraform plugin", "%s", err.Error()))
 		diags = diags.Append(diagnostics.Sourceless(diagnostics.Warning, UnsupportedTerraformVersionError, ""))
 		return nil, diags
 	}
 
 	protocol, err := client.Client()
 	if err != nil {
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to retrieve Terraform client", err.Error()))
+		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to retrieve Terraform client", "%s", err.Error()))
 		return nil, diags
 	}
 
 	raw, err := protocol.Dispense("terraform")
 	if err != nil {
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to create Terraform instance", err.Error()))
+		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to create Terraform instance", "%s", err.Error()))
 		return nil, diags
 	}
 

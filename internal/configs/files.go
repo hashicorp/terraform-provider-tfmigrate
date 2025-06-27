@@ -110,7 +110,7 @@ func (files Files) Get(filepath string) (*File, diagnostics.Diagnostics) {
 	return nil, diags
 }
 
-// CodeString returns a string that contains the code for the provided range
+// CodeString returns a string that contains the code for the provided range.
 func (file *File) CodeString(targetRange hcl.Range) (string, int) {
 	var code strings.Builder
 	var start int

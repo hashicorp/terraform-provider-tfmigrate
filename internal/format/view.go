@@ -26,6 +26,14 @@ type human struct {
 	colorize *colorstring.Colorize
 }
 
+func NewHumanReadableView(streams *Streams, colorize *colorstring.Colorize, files *config.Files) View {
+	return &human{
+		streams:  streams,
+		files:    files,
+		colorize: colorize,
+	}
+}
+
 func (h *human) Diagnostics(diags diagnostics.Diagnostics) {
 	width := h.streams.Stderr.Columns()
 

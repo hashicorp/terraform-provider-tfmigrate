@@ -26,7 +26,7 @@ type Stream struct {
 }
 
 func (stream *Stream) Columns() uint {
-	width, _, err := term.GetSize(int(stream.File.Fd()))
+	width, _, err := term.GetSize(int(stream.File.Fd())) //nolint:staticcheck
 	if err != nil {
 		return defaultColumns
 	}

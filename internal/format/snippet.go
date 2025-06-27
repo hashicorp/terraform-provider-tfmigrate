@@ -60,7 +60,7 @@ func Snippet(diag diagnostics.Diagnostic, files *configs.Files) *DiagnosticSnipp
 	return snippet
 }
 
-// normalizeRanges makes sure the provided subject (s) and context (c) contain acceptable values
+// normalizeRanges makes sure the provided subject (s) and context (c) contain acceptable values.
 func normalizeRanges(s *hcl.Range, c *hcl.Range) (hcl.Range, hcl.Range) {
 	subject := *s
 	if subject.Empty() {

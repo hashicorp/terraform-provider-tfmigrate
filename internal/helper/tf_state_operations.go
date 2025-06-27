@@ -52,10 +52,9 @@ func NewTFStateOperations(ctx context.Context, client rpcapi.Client) TFStateOper
 }
 
 // OpenSourceBundle opens a source bundle from the given path and returns a handle to it.
-// dotTFModulesPath is the path to - ".terraform/modules/"
 func (tf *tfStateOperations) OpenSourceBundle(dotTFModulesPath string) (int64, diagnostics.Diagnostics, func(format.View)) {
 	response, err := tf.client.Dependencies().OpenSourceBundle(tf.ctx, &dependencies.OpenSourceBundle_Request{
-		LocalPath: dotTFModulesPath,
+		LocalPath: dotTFModulesPath, // dotTFModulesPath is the path to - ".terraform/modules/"
 	})
 	if err != nil {
 		var diags diagnostics.Diagnostics
@@ -72,8 +71,7 @@ func (tf *tfStateOperations) OpenSourceBundle(dotTFModulesPath string) (int64, d
 				SourceBundleHandle: response.SourceBundleHandle,
 			})
 		if err != nil {
-			// Since we opened the connection successfully, we should be able to
-			// close it.
+			// Since we opened the connection successfully, we should be able to close it.
 			var diags diagnostics.Diagnostics
 			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close source bundle handle", "The Terraform RPC API failed to close the configuration source bundle: %s.\n\nThis is a bug in the program, please report it!", err))
 			view.Diagnostics(diags)
@@ -82,13 +80,12 @@ func (tf *tfStateOperations) OpenSourceBundle(dotTFModulesPath string) (int64, d
 }
 
 // OpenStacksConfiguration opens a stack configuration from the given path and returns a handle to it.
-// stackConfigPath is the path to the directory where stack configs files are stored ie "_stacks_generated/*"
 func (tf *tfStateOperations) OpenStacksConfiguration(sourceBundleHandle int64, stackConfigPath string) (int64, diagnostics.Diagnostics, func(format.View)) {
 	response, err := tf.client.Stacks().OpenStackConfiguration(tf.ctx,
 		&stacks.OpenStackConfiguration_Request{
 			SourceBundleHandle: sourceBundleHandle,
 			SourceAddress: &terraform1.SourceAddress{
-				Source: stackConfigPath,
+				Source: stackConfigPath, // stackConfigPath is the path to the directory where stack configs files are stored ie "_stacks_generated"
 			},
 		})
 	if err != nil {
@@ -108,8 +105,7 @@ func (tf *tfStateOperations) OpenStacksConfiguration(sourceBundleHandle int64, s
 				StackConfigHandle: response.StackConfigHandle,
 			})
 		if err != nil {
-			// Since we opened the connection successfully, we should be able to
-			// close it.
+			// Since we opened the connection successfully, we should be able to close it.
 			var diags diagnostics.Diagnostics
 			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close stacks configuration handle", "The Terraform RPC API failed to close the stacks configuration: %s.\n\nThis is a bug in the program, please report it!", err))
 			view.Diagnostics(diags)
@@ -118,12 +114,11 @@ func (tf *tfStateOperations) OpenStacksConfiguration(sourceBundleHandle int64, s
 }
 
 // OpenDependencyLockFile opens a dependency lock file from the given path and returns a handle to it.
-// dotTFLockFile is the path to the lock file - "./.terraform.lock.hcl"
 func (tf *tfStateOperations) OpenDependencyLockFile(handle int64, dotTFLockFile string) (int64, diagnostics.Diagnostics, func(format.View)) {
 	response, err := tf.client.Dependencies().OpenDependencyLockFile(tf.ctx, &dependencies.OpenDependencyLockFile_Request{
 		SourceBundleHandle: handle,
 		SourceAddress: &terraform1.SourceAddress{
-			Source: dotTFLockFile,
+			Source: dotTFLockFile, // dotTFLockFile is the path to the lock file - "./.terraform.lock.hcl"
 		},
 	})
 	if err != nil {
@@ -140,8 +135,7 @@ func (tf *tfStateOperations) OpenDependencyLockFile(handle int64, dotTFLockFile 
 				DependencyLocksHandle: response.DependencyLocksHandle,
 			})
 		if err != nil {
-			// Since we opened the connection successfully, we should be able to
-			// close it.
+			// Since we opened the connection successfully, we should be able to close it.
 			var diags diagnostics.Diagnostics
 			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close dependency locks handle", "The Terraform RPC API failed to close the dependency locks: %s.\n\nThis is a bug in the program, please report it!", err))
 			view.Diagnostics(diags)
@@ -150,13 +144,12 @@ func (tf *tfStateOperations) OpenDependencyLockFile(handle int64, dotTFLockFile 
 }
 
 // OpenProviderCache opens a provider cache from the given path and returns a handle to it.
-// dotTFProvidersPath is the path to the provider cache - "./.terraform/providers/"
 func (tf *tfStateOperations) OpenProviderCache(dotTFProvidersPath string) (int64, diagnostics.Diagnostics, func(format.View)) {
 	var diags diagnostics.Diagnostics
 
 	response, err := tf.client.Dependencies().OpenProviderPluginCache(tf.ctx,
 		&dependencies.OpenProviderPluginCache_Request{
-			CacheDir: dotTFProvidersPath,
+			CacheDir: dotTFProvidersPath, // dotTFProvidersPath is the path to the provider cache - "./.terraform/providers/"
 		})
 
 	if err != nil {
@@ -170,8 +163,7 @@ func (tf *tfStateOperations) OpenProviderCache(dotTFProvidersPath string) (int64
 				ProviderCacheHandle: response.ProviderCacheHandle,
 			})
 		if err != nil {
-			// Since we opened the connection successfully, we should be able to
-			// close it.
+			// Since we opened the connection successfully, we should be able to close it.
 			var diags diagnostics.Diagnostics
 			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close provider cache handle", "The Terraform RPC API failed to close the provider cache: %s.\n\nThis is a bug in the program, please report it!", err))
 			view.Diagnostics(diags)
@@ -180,14 +172,13 @@ func (tf *tfStateOperations) OpenProviderCache(dotTFProvidersPath string) (int64
 }
 
 // OpenTerraformState opens a Terraform state file from the given directory and returns a handle to it.
-// tfStateFileDir is the path to the directory where the Terraform state file is located.
 func (tf *tfStateOperations) OpenTerraformState(tfStateFileDir string) (int64, diagnostics.Diagnostics, func(format.View)) {
 	var diags diagnostics.Diagnostics
 
 	response, err := tf.client.Stacks().OpenTerraformState(tf.ctx,
 		&stacks.OpenTerraformState_Request{
 			State: &stacks.OpenTerraformState_Request_ConfigPath{
-				ConfigPath: tfStateFileDir,
+				ConfigPath: tfStateFileDir, // tfStateFileDir is the path to the directory where the Terraform state file is located.
 			},
 		})
 	if err != nil {
@@ -201,8 +192,7 @@ func (tf *tfStateOperations) OpenTerraformState(tfStateFileDir string) (int64, d
 				StateHandle: response.StateHandle,
 			})
 		if err != nil {
-			// Since we opened the connection successfully, we should be able to
-			// close it.
+			// Since we opened the connection successfully, we should be able to close it.
 			var diags diagnostics.Diagnostics
 			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close state handle", "The Terraform RPC API failed to close the state: %s.\n\nThis is a bug in the program, please report it!", err))
 			view.Diagnostics(diags)
@@ -211,7 +201,6 @@ func (tf *tfStateOperations) OpenTerraformState(tfStateFileDir string) (int64, d
 }
 
 // MigrateTFState migrates the Terraform state using the provided handles and mappings.
-// events emitted can be looped over events.Recv()
 func (tf *tfStateOperations) MigrateTFState(tfStateHandle int64, stackConfigHandle int64, dependencyLocksHandle int64, providerCacheHandle int64, resources map[string]string, modules map[string]string) (stacks.Stacks_MigrateTerraformStateClient, error) {
 
 	events, err := tf.client.Stacks().MigrateTerraformState(context.Background(),
@@ -228,6 +217,7 @@ func (tf *tfStateOperations) MigrateTFState(tfStateHandle int64, stackConfigHand
 			},
 		})
 
+	// events emitted can be looped over events.Recv()
 	return events, err
 }
 
