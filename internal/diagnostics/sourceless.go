@@ -7,12 +7,11 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/hcl/v2"
-	sev "github.com/hashicorp/terraform/tfdiags"
 )
 
 var _ Diagnostic = (*sourcelessDiagnostic)(nil)
 
-func Sourceless(severity sev.Severity, summary, detail string, args ...any) Diagnostic {
+func Sourceless(severity Severity, summary, detail string, args ...any) Diagnostic {
 	return &sourcelessDiagnostic{
 		severity: severity,
 		summary:  summary,
@@ -21,12 +20,12 @@ func Sourceless(severity sev.Severity, summary, detail string, args ...any) Diag
 }
 
 type sourcelessDiagnostic struct {
-	severity sev.Severity
+	severity Severity
 	summary  string
 	detail   string
 }
 
-func (d *sourcelessDiagnostic) Severity() sev.Severity {
+func (d *sourcelessDiagnostic) Severity() Severity {
 	return d.severity
 }
 

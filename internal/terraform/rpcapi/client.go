@@ -13,8 +13,6 @@ import (
 	"github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
-	sev "github.com/hashicorp/terraform/tfdiags"
-
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1/dependencies"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1/packages"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1/setup"
@@ -56,20 +54,20 @@ func Connect(ctx context.Context, logger hclog.Logger, terraform string) (Client
 
 	client := plugin.NewClient(config)
 	if _, err := client.Start(); err != nil {
-		diags = diags.Append(diagnostics.Sourceless(sev.Error, "Failed to start Terraform plugin", err.Error()))
-		diags = diags.Append(diagnostics.Sourceless(sev.Warning, UnsupportedTerraformVersionError, ""))
+		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to start Terraform plugin", err.Error()))
+		diags = diags.Append(diagnostics.Sourceless(diagnostics.Warning, UnsupportedTerraformVersionError, ""))
 		return nil, diags
 	}
 
 	protocol, err := client.Client()
 	if err != nil {
-		diags = diags.Append(diagnostics.Sourceless(sev.Error, "Failed to retrieve Terraform client", err.Error()))
+		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to retrieve Terraform client", err.Error()))
 		return nil, diags
 	}
 
 	raw, err := protocol.Dispense("terraform")
 	if err != nil {
-		diags = diags.Append(diagnostics.Sourceless(sev.Error, "Failed to create Terraform instance", err.Error()))
+		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to create Terraform instance", err.Error()))
 		return nil, diags
 	}
 

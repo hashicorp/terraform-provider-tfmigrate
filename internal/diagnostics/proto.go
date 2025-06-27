@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/hcl/v2"
-	sev "github.com/hashicorp/terraform/tfdiags"
 
 	terraformcore "terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1"
 )
@@ -18,12 +17,12 @@ type protoDiagnostic struct {
 	diag *terraformcore.Diagnostic
 }
 
-func (d *protoDiagnostic) Severity() sev.Severity {
+func (d *protoDiagnostic) Severity() Severity {
 	switch d.diag.Severity {
 	case terraformcore.Diagnostic_ERROR:
-		return sev.Error
+		return Error
 	case terraformcore.Diagnostic_WARNING:
-		return sev.Warning
+		return Warning
 	default:
 		panic(fmt.Sprintf("invalid severity: %d", d.diag.Severity))
 	}

@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/go-slug/sourcebundle"
 	"github.com/hashicorp/hcl/v2"
-	sev "github.com/hashicorp/terraform/tfdiags"
 )
 
 var _ Diagnostic = (*sourcebundleDiagnostic)(nil)
@@ -17,12 +16,12 @@ type sourcebundleDiagnostic struct {
 	diag sourcebundle.Diagnostic
 }
 
-func (d *sourcebundleDiagnostic) Severity() sev.Severity {
+func (d *sourcebundleDiagnostic) Severity() Severity {
 	switch d.diag.Severity() {
 	case sourcebundle.DiagError:
-		return sev.Error
+		return Error
 	case sourcebundle.DiagWarning:
-		return sev.Warning
+		return Warning
 	default:
 		panic(fmt.Sprintf("unrecognized sourebundle severity: %d", d.diag.Severity()))
 	}

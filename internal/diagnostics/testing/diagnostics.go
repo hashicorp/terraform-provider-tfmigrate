@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"terraform-provider-tfmigrate/internal/diagnostics"
-
-	sev "github.com/hashicorp/terraform/tfdiags"
 )
 
 type Diagnostic struct {
@@ -17,7 +15,7 @@ type Diagnostic struct {
 
 type Matcher func(diag diagnostics.Diagnostic) bool
 
-func Matches(severity sev.Severity, summary, detail string) Diagnostic {
+func Matches(severity diagnostics.Severity, summary, detail string) Diagnostic {
 	return Diagnostic{
 		Matches: func(diag diagnostics.Diagnostic) bool {
 			return diag.Severity() == severity && diag.Summary() == summary && diag.Detail() == detail
@@ -44,9 +42,7 @@ func ContainsExact(t *testing.T, diags diagnostics.Diagnostics, tests ...Diagnos
 	t.Helper()
 
 	unmatchedDiags := make(diagnostics.Diagnostics, len(diags))
-	for ix, diag := range diags {
-		unmatchedDiags[ix] = diag
-	}
+	copy(unmatchedDiags, diags)
 
 tests:
 	for _, test := range tests {

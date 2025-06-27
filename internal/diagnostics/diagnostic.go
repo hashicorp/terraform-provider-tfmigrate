@@ -4,12 +4,13 @@
 package diagnostics
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/hcl/v2"
-	sev "github.com/hashicorp/terraform/tfdiags"
 )
 
 type Diagnostic interface {
-	Severity() sev.Severity
+	Severity() Severity
 
 	Summary() string
 	Detail() string
@@ -18,4 +19,27 @@ type Diagnostic interface {
 	Context() *hcl.Range
 
 	Extra() interface{}
+}
+
+type Severity rune
+
+//go:generate go run golang.org/x/tools/cmd/stringer -type=Severity
+
+const (
+	Error   Severity = 'E'
+	Warning Severity = 'W'
+)
+
+// ToHCL converts a Severity to the equivalent HCL diagnostic severity.
+func (s Severity) ToHCL() hcl.DiagnosticSeverity {
+	switch s {
+	case Warning:
+		return hcl.DiagWarning
+	case Error:
+		return hcl.DiagError
+	default:
+		// The above should always be exhaustive for all of the valid
+		// Severity values in this package.
+		panic(fmt.Sprintf("unknown diagnostic severity %s", s))
+	}
 }

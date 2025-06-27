@@ -60,10 +60,7 @@ func Snippet(diag diagnostics.Diagnostic, files *configs.Files) *DiagnosticSnipp
 	return snippet
 }
 
-// normalizeRanges makes sure the provided subject (s) and context (c) contain
-// acceptable values.
-//
-// In addition,
+// normalizeRanges makes sure the provided subject (s) and context (c) contain acceptable values
 func normalizeRanges(s *hcl.Range, c *hcl.Range) (hcl.Range, hcl.Range) {
 	subject := *s
 	if subject.Empty() {
@@ -86,9 +83,7 @@ func normalizeRanges(s *hcl.Range, c *hcl.Range) (hcl.Range, hcl.Range) {
 	return subject, context
 }
 
-// normalizeByte makes sure the value is above or equal to floor, and between
-// 0 and len(snippet).
-//
+// normalizeByte makes sure the value is above or equal to floor, and between 0 and len(snippet)
 // floor will be ignored if it is less than zero.
 func normalizeByte(b, floor int, snippet string) int {
 	if floor >= 0 {

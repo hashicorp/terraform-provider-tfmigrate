@@ -14,8 +14,6 @@ import (
 
 	config "terraform-provider-tfmigrate/internal/configs"
 	"terraform-provider-tfmigrate/internal/diagnostics"
-
-	sev "github.com/hashicorp/terraform/tfdiags"
 )
 
 type View interface {
@@ -47,14 +45,14 @@ func (h *human) diagnostic(diag diagnostics.Diagnostic, width uint) {
 	var leftRuleWidth uint
 
 	switch diag.Severity() {
-	case sev.Error:
+	case diagnostics.Error:
 		leftRuleStart = h.colorize.Color("[red]╷[reset]\n")
 		leftRuleLine = h.colorize.Color("[red]│[reset] ")
 		leftRuleEnd = h.colorize.Color("[red]╵[reset]\n")
 		leftRuleWidth = 2
 
 		builder.WriteString(h.colorize.Color("[red][bold]Error: [reset]"))
-	case sev.Warning:
+	case diagnostics.Warning:
 		leftRuleStart = h.colorize.Color("[yellow]╷[reset]\n")
 		leftRuleLine = h.colorize.Color("[yellow]│[reset] ")
 		leftRuleEnd = h.colorize.Color("[yellow]╵[reset]\n")
@@ -124,9 +122,9 @@ func (h *human) plainDiagnostic(diag diagnostics.Diagnostic, width uint) {
 	var builder strings.Builder
 
 	switch diag.Severity() {
-	case sev.Error:
+	case diagnostics.Error:
 		builder.WriteString("\nError: ")
-	case sev.Warning:
+	case diagnostics.Warning:
 		builder.WriteString("\nWarning: ")
 	default:
 		builder.WriteString("\n")

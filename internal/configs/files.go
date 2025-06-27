@@ -16,14 +16,11 @@ import (
 	"github.com/hashicorp/hcl/v2/json"
 
 	"terraform-provider-tfmigrate/internal/diagnostics"
-
-	sev "github.com/hashicorp/terraform/tfdiags"
 )
 
-// Files contains our cache of opened HCL files.
-//
+// Files contains our cache of opened HCL files
 // We maintain a cache so that our diagnostic processing can easily retrieve
-// files
+// files.
 type Files struct {
 	cache  map[string]*File
 	bundle *sourcebundle.Bundle
@@ -36,8 +33,7 @@ func NewFilesForBundle(bundle *sourcebundle.Bundle) *Files {
 	}
 }
 
-// File wraps a hcl.File containing some Terraform configuration.
-//
+// File wraps a hcl.File containing some Terraform configuration
 // It embeds the raw bytes of the original file to help with the processing of
 // diagnostic source ranges.
 type File struct {
@@ -79,7 +75,7 @@ func (files Files) Get(filepath string) (*File, diagnostics.Diagnostics) {
 			return nil, nil
 		}
 
-		diags = append(diags, diagnostics.SourceAttachable(sev.Error, "Failed to open configuration file", err.Error()))
+		diags = append(diags, diagnostics.SourceAttachable(diagnostics.Error, "Failed to open configuration file", "%s", err.Error()))
 		return nil, diags
 	}
 
@@ -114,8 +110,7 @@ func (files Files) Get(filepath string) (*File, diagnostics.Diagnostics) {
 	return nil, diags
 }
 
-// CodeString returns a string that contains the code for the provided range,
-// alongside the
+// CodeString returns a string that contains the code for the provided range
 func (file *File) CodeString(targetRange hcl.Range) (string, int) {
 	var code strings.Builder
 	var start int

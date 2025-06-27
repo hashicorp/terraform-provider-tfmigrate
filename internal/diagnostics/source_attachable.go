@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/hcl/v2"
-	sev "github.com/hashicorp/terraform/tfdiags"
 )
 
 // AttachSource attaches a source range to all diagnostics that match the
@@ -30,7 +29,7 @@ type sourceAttachableDiagnostic struct {
 
 // SourceAttachable returns a Diagnostic that can be attached to a source range
 // later by the AttachSource.
-func SourceAttachable(severity sev.Severity, summary, detail string, args ...any) Diagnostic {
+func SourceAttachable(severity Severity, summary, detail string, args ...any) Diagnostic {
 	return &sourceAttachableDiagnostic{
 		sourceless: &sourcelessDiagnostic{
 			severity: severity,
@@ -40,7 +39,7 @@ func SourceAttachable(severity sev.Severity, summary, detail string, args ...any
 	}
 }
 
-func (s *sourceAttachableDiagnostic) Severity() sev.Severity {
+func (s *sourceAttachableDiagnostic) Severity() Severity {
 	return s.sourceless.Severity()
 }
 

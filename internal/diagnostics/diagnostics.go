@@ -10,9 +10,6 @@ import (
 	tfe "github.com/hashicorp/go-tfe"
 	"github.com/hashicorp/hcl/v2"
 
-	"github.com/hashicorp/terraform/tfdiags"
-
-	sev "github.com/hashicorp/terraform/tfdiags"
 	terraformcore "terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1"
 )
 
@@ -43,9 +40,9 @@ func (diags Diagnostics) Append(extra ...any) Diagnostics {
 			for _, diag := range diag {
 				diags = append(diags, &protoDiagnostic{diag})
 			}
-		case tfdiags.Diagnostic:
+		case TFDiagnostic:
 			diags = append(diags, tfDiagToDiagnostic(diag))
-		case tfdiags.Diagnostics:
+		case TFDiagnostics:
 			for _, diag := range diag {
 				diags = append(diags, tfDiagToDiagnostic(diag))
 			}
@@ -64,7 +61,7 @@ func (diags Diagnostics) Append(extra ...any) Diagnostics {
 
 func (diags Diagnostics) HasErrors() bool {
 	for _, diag := range diags {
-		if diag.Severity() == sev.Error {
+		if diag.Severity() == Error {
 			return true
 		}
 	}
@@ -74,9 +71,9 @@ func (diags Diagnostics) HasErrors() bool {
 func ErrToDiagnostics(err error, summary string) Diagnostics {
 	return Diagnostics{
 		Sourceless(
-			sev.Error,
+			Error,
 			summary,
-			err.Error(),
+			"%s", err.Error(),
 		),
 	}
 }

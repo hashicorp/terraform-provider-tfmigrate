@@ -6,8 +6,6 @@ package diagnostics
 import (
 	tfe "github.com/hashicorp/go-tfe"
 	"github.com/hashicorp/hcl/v2"
-
-	sev "github.com/hashicorp/terraform/tfdiags"
 )
 
 var _ Diagnostic = (*tfeDiagnostic)(nil)
@@ -16,14 +14,14 @@ type tfeDiagnostic struct {
 	diag tfe.StackDiagnostic
 }
 
-func (d *tfeDiagnostic) Severity() sev.Severity {
+func (d *tfeDiagnostic) Severity() Severity {
 	switch d.diag.Severity {
 	case "warning":
-		return sev.Warning
+		return Warning
 	case "error":
-		return sev.Error
+		return Error
 	default:
-		return sev.Error
+		return Error
 	}
 }
 
