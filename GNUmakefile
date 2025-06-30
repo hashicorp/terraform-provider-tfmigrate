@@ -50,3 +50,12 @@ runverb:
 	rm -rf .terraform .terraform.lock.hcl
 	TF_LOG=INFO terraform apply -auto-approve
 
+.PHONY: dev-override
+provider_tfmigrate_override.tfrc:
+	@echo 'provider_installation {' > $@
+	@echo '  dev_overrides {' >> $@
+	@echo '    "hashicorp/tfe" = "'$$(pwd)'"' >> $@
+	@echo '  }' >> $@
+	@echo '  direct {}' >> $@
+	@echo '}' >> $@
+	echo "export TF_CLI_CONFIG_FILE=$(pwd)/provider_tfmigrate_override.tfrc"

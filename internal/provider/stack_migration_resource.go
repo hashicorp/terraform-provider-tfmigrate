@@ -538,10 +538,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, req resource.Create
 	//  to wait for the stack configuration to reach a terminal state before
 	//  continuing to reset of the resource creation logic.
 
-	status, diags := r.awaitConfigCompletion(stackConfigurationId)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-	}
+	status := r.awaitConfigCompletion(ctx, stackConfigurationId)
 
 	// Set state
 	createResource := StackMigrationResourceModel{
@@ -552,6 +549,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, req resource.Create
 		Org:                    types.StringValue(r.orgName),
 		Project:                types.StringValue(r.projectName),
 	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &createResource)...)
 }
 
@@ -641,7 +639,7 @@ func (r *stackMigrationResource) Update(ctx context.Context, updateRequest resou
 		!currentState.Org.Equal(plannedState.Org) ||
 		!currentState.Project.Equal(plannedState.Project) ||
 		!currentState.Name.Equal(plannedState.Name) {
-		configId, configStatus, diags := r.updateIfSourceBundleHashUpdated(stack, plannedState.ConfigFileDir.ValueString())
+		configId, configStatus, diags := r.updateIfSourceBundleHashUpdated(ctx, stack, plannedState.ConfigFileDir.ValueString())
 		if diags.HasError() {
 			updateResponse.Diagnostics.Append(diags...)
 		}
@@ -657,12 +655,7 @@ func (r *stackMigrationResource) Update(ctx context.Context, updateRequest resou
 	   1. If the current configuration ID is different from the planned configuration ID, we need to update the configuration ID.
 	*/
 	if !currentState.CurrentConfigurationId.Equal(plannedState.CurrentConfigurationId) && !skipConfigIdUpdate {
-		status, diags := r.updateIfConfigIdUpdated(plannedState.CurrentConfigurationId.ValueString())
-		if diags.HasError() {
-			updateResponse.Diagnostics.Append(diags...)
-			return
-		}
-		// update the planned state with the new configuration status
+		status := r.awaitConfigCompletion(ctx, plannedState.CurrentConfigurationId.ValueString())
 		plannedState.ConfigStatus = types.StringValue(status.String())
 	}
 
@@ -671,12 +664,7 @@ func (r *stackMigrationResource) Update(ctx context.Context, updateRequest resou
 	   1. If the config status is different from the planned config status, we need to update the config status.
 	*/
 	if !currentState.ConfigStatus.Equal(plannedState.ConfigStatus) && !skipConfigStatusUpdate {
-		status, diags := r.updateIfConfigStatusIsUpdated(tfe.StackConfigurationStatus(plannedState.ConfigStatus.ValueString()), plannedState.CurrentConfigurationId.ValueString())
-		if diags != nil && diags.HasError() {
-			updateResponse.Diagnostics.Append(diags...)
-			return
-		}
-		// update the planned state with the new configuration status
+		status := r.awaitConfigCompletion(ctx, plannedState.CurrentConfigurationId.ValueString())
 		plannedState.ConfigStatus = types.StringValue(status.String())
 	}
 
@@ -741,20 +729,42 @@ func (r *stackMigrationResource) uploadConfig(stackId string, configFileAbsPath 
 	return configId, diagnostics
 }
 
-func (r *stackMigrationResource) awaitConfigCompletion(configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
-	var diagnostics diag.Diagnostics
-	status, err := r.tfeUtil.AwaitStackConfigurationCompletion(configId, r.tfeClient)
-	if err != nil {
-		diagnostics.AddError(
-			"Error Awaiting Stack Configuration Completion",
-			fmt.Sprintf("Could not complete polling for stack configuration completion for configuration ID %s: %s", configId, err.Error()),
-		)
-		return "", diagnostics
+func (r *stackMigrationResource) awaitConfigCompletion(ctx context.Context, configId string) tfe.StackConfigurationStatus {
+	/* NOTE:
+	   awaitConfigCompletion errors and warnings are logged but not propagated to prevent
+	   resource operation failures after successful configuration upload. The function
+	   returns the last known stack configuration status in all scenarios:
+	     1. "converged" - configuration rolled out successfully
+	     2. "canceled" - upload succeeded but rollout was canceled
+	     3. "<status>" - rollout in progress when timeout/channel closure occurred
+	     4. Error during completion wait
+	   This design ensures resource creation/update operations continue based on the
+	   last received status rather than failing due to completion monitoring issues.
+	   Timeout configured at 5 minutes
+	*/
+	status, diags := r.tfeUtil.AwaitStackConfigurationCompletion(configId, r.tfeClient)
+	if diags.HasError() {
+		var errMsg string
+		for _, errDiags := range diags.Errors() {
+			errMsg += fmt.Sprintf("%s\n", errDiags.Summary())
+		}
+
+		// log that the stack configuration was uploaded successfully, but while awaiting completion, an error occurred
+		tflog.Error(ctx, fmt.Sprintf("Stack configuration %s was uploaded successfully but while awaiting for completion, an error occurred, err: %s", configId, errMsg))
+	} else if len(diags.Warnings()) > 0 {
+		var warnMsg string
+		for _, warnDiags := range diags.Warnings() {
+			warnMsg += fmt.Sprintf("%s\n", warnDiags.Summary())
+		}
+
+		// log that the stack configuration was uploaded successfully, but while awaiting completion, a warning occurred
+		tflog.Warn(ctx, fmt.Sprintf("Stack configuration %s was uploaded successfully but while awaiting for completion, a warning occurred, warn: %s", configId, warnMsg))
 	}
-	return status, diagnostics
+
+	return status
 }
 
-func (r *stackMigrationResource) updateIfSourceBundleHashUpdated(currentStackData *tfe.Stack, sourceBundleAbsPath string) (string, tfe.StackConfigurationStatus, diag.Diagnostics) {
+func (r *stackMigrationResource) updateIfSourceBundleHashUpdated(ctx context.Context, currentStackData *tfe.Stack, sourceBundleAbsPath string) (string, tfe.StackConfigurationStatus, diag.Diagnostics) {
 	var diagnostics diag.Diagnostics
 	var shouldUploadConfig bool
 	configId := currentStackData.LatestStackConfiguration.ID
@@ -782,29 +792,6 @@ func (r *stackMigrationResource) updateIfSourceBundleHashUpdated(currentStackDat
 	}
 
 	// Await the completion of the stack configuration upload
-	status, diags := r.awaitConfigCompletion(configId)
-	if diags.HasError() {
-		diagnostics.Append(diags...)
-		return "", "", diagnostics
-	}
-
+	status := r.awaitConfigCompletion(ctx, configId)
 	return configId, status, diagnostics
-}
-
-func (r *stackMigrationResource) updateIfConfigIdUpdated(configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
-	status, diags := r.awaitConfigCompletion(configId)
-	if diags.HasError() {
-		return "", diags
-	}
-	return status, diags
-}
-
-func (r *stackMigrationResource) updateIfConfigStatusIsUpdated(status tfe.StackConfigurationStatus, configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
-
-	if slices.Contains(stacksConfigTerminatingStatuses, status) {
-		return status, nil
-	}
-
-	status, diags := r.awaitConfigCompletion(configId)
-	return status, diags
 }

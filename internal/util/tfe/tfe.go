@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -19,8 +20,12 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var (
+	configConvergenceTimeout = 5 * time.Minute // Default timeout for stack configuration completion
+)
+
 type TfeUtil interface {
-	AwaitStackConfigurationCompletion(stackConfigurationId string, client *tfe.Client) (tfe.StackConfigurationStatus, error)
+	AwaitStackConfigurationCompletion(stackConfigurationId string, client *tfe.Client) (tfe.StackConfigurationStatus, diag.Diagnostics)
 	CalculateStackSourceBundleHash(stackConfigFileAbsPath string) (string, error)
 	NewClient(config *tfe.Config) (*tfe.Client, error)
 	ReadProjectByName(organizationName, projectName string, client *tfe.Client) (*tfe.Project, error)
@@ -31,13 +36,15 @@ type TfeUtil interface {
 }
 
 type tfeUtil struct {
-	ctx context.Context
+	ctx                context.Context
+	convergenceTimeOut time.Duration
 }
 
 // NewTfeUtil creates a new instance of TfeUtil.
 func NewTfeUtil(ctx context.Context) TfeUtil {
 	return &tfeUtil{
-		ctx: ctx,
+		convergenceTimeOut: configConvergenceTimeout,
+		ctx:                ctx,
 	}
 }
 
@@ -164,45 +171,57 @@ func (u *tfeUtil) UploadStackConfigFile(stackId string, configFileDirAbsPath str
 	return stackSource.StackConfiguration.ID, nil
 }
 
-// - Error while waiting for the stack configuration to complete.
-func (u *tfeUtil) AwaitStackConfigurationCompletion(stackConfigurationId string, client *tfe.Client) (tfe.StackConfigurationStatus, error) {
+// AwaitStackConfigurationCompletion waits for the stack configuration to reach a terminal state and returns its status.
+func (u *tfeUtil) AwaitStackConfigurationCompletion(stackConfigurationId string, client *tfe.Client) (tfe.StackConfigurationStatus, diag.Diagnostics) {
+	var diags diag.Diagnostics
 
 	// Read the current stack configuration status
 	stackConfiguration, err := client.StackConfigurations.Read(u.ctx, stackConfigurationId)
 	if err != nil {
 		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack configuration %s: %v", stackConfigurationId, err))
 		err = u.handleTfeClientResourceReadError(err)
-		return tfe.StackConfigurationStatusPending, fmt.Errorf("error reading stack configuration %s, err: %v", stackConfigurationId, err)
+		diags.AddError("Error reading stack configuration",
+			fmt.Sprintf("Error reading stack configuration %s, err: %v", stackConfigurationId, err))
+		return "", diags
 	}
 
 	if stackConfiguration == nil {
 		tflog.Error(u.ctx, fmt.Sprintf("Stack configuration %s not found", stackConfigurationId))
-		return tfe.StackConfigurationStatusPending, fmt.Errorf("stack configuration %s not found", stackConfigurationId)
+		diags.AddError("Stack configuration not found",
+			fmt.Sprintf("Stack configuration %s not found", stackConfigurationId))
+		return "", diags
 	}
 
 	mostRecentConfigurationStatus := tfe.StackConfigurationStatus(stackConfiguration.Status)
 	tflog.Info(u.ctx, fmt.Sprintf("Successfully retrieved stack configuration %s with current status %s", stackConfigurationId, mostRecentConfigurationStatus))
 	tflog.Debug(u.ctx, "Beginning to poll for stack configuration completion status...")
 
-	ctxWithTimeout, cancel := context.WithTimeout(u.ctx, 5*time.Minute)
-	defer cancel()
-	statusCh := client.StackConfigurations.AwaitCompleted(ctxWithTimeout, stackConfigurationId)
+	ctxWithTimeout, cancel := context.WithTimeout(u.ctx, u.convergenceTimeOut)
 
+	defer cancel()
+
+	statusCh := client.StackConfigurations.AwaitStatus(ctxWithTimeout, stackConfigurationId, tfe.StackConfigurationStatusConverged)
 	for {
 		select {
 		case <-ctxWithTimeout.Done():
 			tflog.Error(u.ctx, fmt.Sprintf("Timeout or cancellation while waiting for stack configuration %s to complete, err: %v", stackConfigurationId, ctxWithTimeout.Err()))
-			return mostRecentConfigurationStatus, fmt.Errorf("timeout or cancellation while waiting for stack configuration %s to complete, err: %v", stackConfigurationId, ctxWithTimeout.Err())
+			diags.AddWarning("Timeout or cancellation while waiting for stack configuration completion",
+				fmt.Sprintf("Timeout or cancellation while waiting for stack configuration %s to complete, err: %v", stackConfigurationId, ctxWithTimeout.Err()))
+			return mostRecentConfigurationStatus, diags
 
 		case result, ok := <-statusCh:
 			if !ok {
 				tflog.Error(u.ctx, fmt.Sprintf("Channel closed while waiting for stack configuration %s to complete", stackConfigurationId))
-				return mostRecentConfigurationStatus, fmt.Errorf("channel closed while waiting for stack configuration %s to complete", stackConfigurationId)
+				diags.AddError("Channel closed while waiting for stack configuration completion",
+					fmt.Sprintf("Channel closed while waiting for stack configuration %s to complete", stackConfigurationId))
+				return mostRecentConfigurationStatus, diags
 			}
 
 			if result.Error != nil {
 				tflog.Error(u.ctx, fmt.Sprintf("Error while waiting for stack configuration %s to complete: %v", stackConfigurationId, result.Error))
-				return mostRecentConfigurationStatus, fmt.Errorf("error while waiting for stack configuration %s to complete: %v", stackConfigurationId, result.Error)
+				diags.AddError("Error while waiting for stack configuration completion",
+					fmt.Sprintf("Error while waiting for stack configuration %s to complete: %v", stackConfigurationId, result.Error))
+				return mostRecentConfigurationStatus, diags
 			}
 
 			// Fixme: Need to revisit this logic to handle all possible statuses when
@@ -212,19 +231,16 @@ func (u *tfeUtil) AwaitStackConfigurationCompletion(stackConfigurationId string,
 				Note:
 				      At the time of this implementation, importing the state of a deployment within a stack configuration
 				      is not supported.
-
 				      Therefore, this implementation assumes that once the stack configuration file is uploaded, the stack
 				      will eventually reach one of the following terminal states:
 				        - "converged"
 				        - "errored"
 				        - "canceled"
-
 				      The "converging" state is not currently handled, but support for it can be added in the future.
 				      When the stack is in an intermediate or transitional state such as "pending", "preparing",
 				      "enqueueing", or "queued", the system will continue polling for up to 5 minutes (or until the
 				      context is canceled) to monitor the transition to a terminal state ("converged", "errored", or
 				      "canceled").
-
 				      This polling behavior assumes that the user will take any necessary action — such as approving or
 				      canceling the rollout of the deployments — within 5 minutes of uploading the stack configuration.
 				      This expectation is critical to ensure the timely completion of migration process.
@@ -232,17 +248,19 @@ func (u *tfeUtil) AwaitStackConfigurationCompletion(stackConfigurationId string,
 			*/
 
 			switch tfe.StackConfigurationStatus(result.Status) {
-			// case tfe.StackConfigurationStatusConverging:
-			//	tflog.Info(u.ctx, fmt.Sprintf("Stack configuration %s is converging", stackConfigurationId))
 			case tfe.StackConfigurationStatusConverged:
 				tflog.Info(u.ctx, fmt.Sprintf("Stack configuration %s has converged successfully", stackConfigurationId))
 				return tfe.StackConfigurationStatusConverged, nil
 			case tfe.StackConfigurationStatusErrored:
 				tflog.Error(u.ctx, fmt.Sprintf("Stack configuration %s has errored, err %v", stackConfigurationId, result.Error))
-				return tfe.StackConfigurationStatusErrored, fmt.Errorf("stack configuration %s has errored", stackConfigurationId)
+				diags.AddError("Stack configuration errored",
+					fmt.Sprintf("Stack configuration %s has errored, err: %v", stackConfigurationId, result.Error))
+				return tfe.StackConfigurationStatusErrored, diags
 			case tfe.StackConfigurationStatusCanceled:
 				tflog.Warn(u.ctx, fmt.Sprintf("Stack configuration %s has been canceled", stackConfigurationId))
-				return tfe.StackConfigurationStatusCanceled, fmt.Errorf("stack configuration %s has been canceled", stackConfigurationId)
+				diags.AddWarning("Stack configuration canceled",
+					fmt.Sprintf("Stack configuration %s has been canceled", stackConfigurationId))
+				return tfe.StackConfigurationStatusCanceled, diags
 			default:
 				tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s is still in progress with status %s ...", stackConfigurationId, result.Status))
 				mostRecentConfigurationStatus = tfe.StackConfigurationStatus(result.Status)
@@ -296,6 +314,7 @@ func (u *tfeUtil) CalculateStackSourceBundleHash(stackConfigFileAbsPath string) 
 	return fmt.Sprintf("%x", hash[:]), nil
 }
 
+// handleTfeClientResourceReadError handles common errors when reading resources from TFE.
 func (u *tfeUtil) handleTfeClientResourceReadError(err error) error {
 	if errors.Is(err, tfe.ErrUnauthorized) {
 		tflog.Error(u.ctx, "Unauthorized access to TFE API. Please check your token and permissions.")
