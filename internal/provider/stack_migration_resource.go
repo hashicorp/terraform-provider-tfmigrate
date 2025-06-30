@@ -39,10 +39,10 @@ const (
 )
 
 var (
-	_ resource.Resource                   = &stackResource{}
-	_ resource.ResourceWithConfigure      = &stackResource{}
-	_ resource.ResourceWithValidateConfig = &stackResource{}
-	_ resource.ResourceWithModifyPlan     = &stackResource{}
+	_ resource.Resource                   = &stackMigrationResource{}
+	_ resource.ResourceWithConfigure      = &stackMigrationResource{}
+	_ resource.ResourceWithValidateConfig = &stackMigrationResource{}
+	_ resource.ResourceWithModifyPlan     = &stackMigrationResource{}
 
 	// these statuses are: "converged", "errored", "canceled".
 	stacksConfigTerminatingStatuses = []tfe.StackConfigurationStatus{
@@ -52,8 +52,8 @@ var (
 	}
 )
 
-// stackResource is the implementation of the resource.
-type stackResource struct {
+// stackMigrationResource is the implementation of the resource.
+type stackMigrationResource struct {
 	tfeClient   *tfe.Client
 	orgName     string
 	projectName string
@@ -71,12 +71,12 @@ type StackMigrationResourceModel struct {
 	Name                   types.String `tfsdk:"name"`                     // Name is the name of the stack Must be unique within the organization and project, must be a non-Vcs driven stack.
 	Org                    types.String `tfsdk:"org"`                      // Org is the HCP Terraform organization name in which the stack exists. The value can be overridden by the `TFE_ORGANIZATION` environment variable.
 	Project                types.String `tfsdk:"project"`                  // Project is the HCP Terraform project name in which the stack exists. The value can be overridden by the `TFE_PROJECT` environment variable.
-	SourceBundleHash       types.String `tfsdk:"config_hash"`              // SourceBundleHash is the hash of the configuration files in the directory. This is used to detect changes in the configuration files.
+	SourceBundleHash       types.String `tfsdk:"source_bundle_hash"`       // SourceBundleHash is the hash of the configuration files in the directory. This is used to detect changes in the configuration files.
 }
 
-// NewStackResource is a constructor for the stack resource.
-func NewStackResource() resource.Resource {
-	return &stackResource{}
+// NewStackMigrationResource is a constructor for the stack resource.
+func NewStackMigrationResource() resource.Resource {
+	return &stackMigrationResource{}
 }
 
 // Description returns the validator's description.
@@ -142,7 +142,7 @@ func (v *absolutePathValidator) ValidateString(_ context.Context, req validator.
 }
 
 // Schema defines the schema for the resource.
-func (r *stackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *stackMigrationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
 		Description:         stackMigrationResourceDescription,
@@ -183,7 +183,7 @@ func (r *stackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"config_hash": schema.StringAttribute{
+			"source_bundle_hash": schema.StringAttribute{
 				MarkdownDescription: "The hash of the configuration files in the directory. This is used to detect changes in the configuration files.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
@@ -209,7 +209,7 @@ func (r *stackResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 }
 
 // ValidateConfig validates the configuration of the resource.
-func (r *stackResource) ValidateConfig(ctx context.Context, request resource.ValidateConfigRequest, response *resource.ValidateConfigResponse) {
+func (r *stackMigrationResource) ValidateConfig(ctx context.Context, request resource.ValidateConfigRequest, response *resource.ValidateConfigResponse) {
 	var data StackMigrationResourceModel
 	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
 	if response.Diagnostics.HasError() {
@@ -312,7 +312,7 @@ func (r *stackResource) ValidateConfig(ctx context.Context, request resource.Val
 }
 
 // Configure sets up the TFE client using the provider configuration data.
-func (r *stackResource) Configure(_ context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+func (r *stackMigrationResource) Configure(_ context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
 
 	if request.ProviderData == nil {
 		response.Diagnostics.AddError(
@@ -394,7 +394,7 @@ func (r *stackResource) Configure(_ context.Context, request resource.ConfigureR
 // the diff that should be shown to the user for approval, and once
 // during the apply phase with any unknown values from configuration
 // filled in with their final values.
-func (r *stackResource) ModifyPlan(ctx context.Context, request resource.ModifyPlanRequest, response *resource.ModifyPlanResponse) {
+func (r *stackMigrationResource) ModifyPlan(ctx context.Context, request resource.ModifyPlanRequest, response *resource.ModifyPlanResponse) {
 
 	if request.Plan.Raw.IsNull() {
 		// Indicates that the plan is empty, which can happen if the resource is being created
@@ -453,7 +453,7 @@ func (r *stackResource) ModifyPlan(ctx context.Context, request resource.ModifyP
 }
 
 // Create creates the resource and sets the initial Terraform state.
-func (r *stackResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *stackMigrationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from the plan
 	var stackMigrationResource StackMigrationResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &stackMigrationResource)...)
@@ -556,7 +556,7 @@ func (r *stackResource) Create(ctx context.Context, req resource.CreateRequest, 
 }
 
 // Read refreshes the Terraform state with the latest data.
-func (r *stackResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *stackMigrationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	// Retrieve values from a state
 	var stackMigrationResourceData StackMigrationResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &stackMigrationResourceData)...)
@@ -569,7 +569,7 @@ func (r *stackResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// provided in the config_file_dir is the same as the one that is
 	// responsible for the current stack configuration state. Hence, we
 	// calculate the hash of the configuration files in the directory
-	// and set it to the config_hash attribute in the state.
+	// and set it to the source_bundle_hash attribute in the state.
 	sourceBundleHash, err := r.tfeUtil.CalculateStackSourceBundleHash(stackMigrationResourceData.ConfigFileDir.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -605,7 +605,7 @@ func (r *stackResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 // Update updates the resource and sets the updated Terraform state.
-func (r *stackResource) Update(ctx context.Context, updateRequest resource.UpdateRequest, updateResponse *resource.UpdateResponse) {
+func (r *stackMigrationResource) Update(ctx context.Context, updateRequest resource.UpdateRequest, updateResponse *resource.UpdateResponse) {
 	var currentState StackMigrationResourceModel
 	var plannedState StackMigrationResourceModel
 
@@ -686,17 +686,17 @@ func (r *stackResource) Update(ctx context.Context, updateRequest resource.Updat
 }
 
 // Delete deletes the resource and removes the Terraform state.
-func (r *stackResource) Delete(ctx context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *stackMigrationResource) Delete(ctx context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
 	tflog.Warn(ctx, DestroyActionNotSupported)
 	resp.Diagnostics.AddWarning(DestroyActionNotSupported, DestroyActionNotSupportedDetailed)
 }
 
 // Metadata returns the resource type name.
-func (r *stackResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *stackMigrationResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + stackMigrationResourceName
 }
 
-func (r *stackResource) allowCreateActionStacksConfigUpload(stack *tfe.Stack) (bool, error) {
+func (r *stackMigrationResource) allowCreateActionStacksConfigUpload(stack *tfe.Stack) (bool, error) {
 
 	if stack == nil {
 		return false, fmt.Errorf("stack cannot be nil")
@@ -727,7 +727,7 @@ func (r *stackResource) allowCreateActionStacksConfigUpload(stack *tfe.Stack) (b
 
 }
 
-func (r *stackResource) uploadConfig(stackId string, configFileAbsPath string) (string, diag.Diagnostics) {
+func (r *stackMigrationResource) uploadConfig(stackId string, configFileAbsPath string) (string, diag.Diagnostics) {
 	// Upload the configuration files to the stack
 	var diagnostics diag.Diagnostics
 	configId, err := r.tfeUtil.UploadStackConfigFile(stackId, configFileAbsPath, r.tfeClient)
@@ -741,7 +741,7 @@ func (r *stackResource) uploadConfig(stackId string, configFileAbsPath string) (
 	return configId, diagnostics
 }
 
-func (r *stackResource) awaitConfigCompletion(configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
+func (r *stackMigrationResource) awaitConfigCompletion(configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
 	var diagnostics diag.Diagnostics
 	status, err := r.tfeUtil.AwaitStackConfigurationCompletion(configId, r.tfeClient)
 	if err != nil {
@@ -754,7 +754,7 @@ func (r *stackResource) awaitConfigCompletion(configId string) (tfe.StackConfigu
 	return status, diagnostics
 }
 
-func (r *stackResource) updateIfSourceBundleHashUpdated(currentStackData *tfe.Stack, sourceBundleAbsPath string) (string, tfe.StackConfigurationStatus, diag.Diagnostics) {
+func (r *stackMigrationResource) updateIfSourceBundleHashUpdated(currentStackData *tfe.Stack, sourceBundleAbsPath string) (string, tfe.StackConfigurationStatus, diag.Diagnostics) {
 	var diagnostics diag.Diagnostics
 	var shouldUploadConfig bool
 	configId := currentStackData.LatestStackConfiguration.ID
@@ -791,7 +791,7 @@ func (r *stackResource) updateIfSourceBundleHashUpdated(currentStackData *tfe.St
 	return configId, status, diagnostics
 }
 
-func (r *stackResource) updateIfConfigIdUpdated(configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
+func (r *stackMigrationResource) updateIfConfigIdUpdated(configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
 	status, diags := r.awaitConfigCompletion(configId)
 	if diags.HasError() {
 		return "", diags
@@ -799,7 +799,7 @@ func (r *stackResource) updateIfConfigIdUpdated(configId string) (tfe.StackConfi
 	return status, diags
 }
 
-func (r *stackResource) updateIfConfigStatusIsUpdated(status tfe.StackConfigurationStatus, configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
+func (r *stackMigrationResource) updateIfConfigStatusIsUpdated(status tfe.StackConfigurationStatus, configId string) (tfe.StackConfigurationStatus, diag.Diagnostics) {
 
 	if slices.Contains(stacksConfigTerminatingStatuses, status) {
 		return status, nil

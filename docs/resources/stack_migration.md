@@ -24,6 +24,6 @@ Defines a resource for migrating existing HCP Terraform workspaces to deployment
 
 ### Read-Only
 
-- `config_hash` (String) The hash of the configuration files in the directory. This is used to detect changes in the configuration files.
 - `config_status` (String) The status of the stack configuration. This is used to track the status of the stack configuration upload.
 - `current_configuration_id` (String) The ID of the current stack configuration. This is used to track the current configuration of the stack.
+- `source_bundle_hash` (String) The hash of the configuration files in the directory. This is used to detect changes in the configuration files.

@@ -295,7 +295,7 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewGithubPrResource,
 		NewDirectoryActionResource,
 		NewStateMigrationResource,
-		NewStackResource,
+		NewStackMigrationResource,
 	}
 }
 
