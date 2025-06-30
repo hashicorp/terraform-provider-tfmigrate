@@ -22,6 +22,63 @@ func (_m *MockGitOperations) EXPECT() *MockGitOperations_Expecter {
 	return &MockGitOperations_Expecter{mock: &_m.Mock}
 }
 
+// BranchExists provides a mock function with given fields: remote, branch
+func (_m *MockGitOperations) BranchExists(remote string, branch string) (bool, error) {
+	ret := _m.Called(remote, branch)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BranchExists")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string) (bool, error)); ok {
+		return rf(remote, branch)
+	}
+	if rf, ok := ret.Get(0).(func(string, string) bool); ok {
+		r0 = rf(remote, branch)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(remote, branch)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockGitOperations_BranchExists_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BranchExists'
+type MockGitOperations_BranchExists_Call struct {
+	*mock.Call
+}
+
+// BranchExists is a helper method to define mock.On call
+//   - remote string
+//   - branch string
+func (_e *MockGitOperations_Expecter) BranchExists(remote interface{}, branch interface{}) *MockGitOperations_BranchExists_Call {
+	return &MockGitOperations_BranchExists_Call{Call: _e.mock.On("BranchExists", remote, branch)}
+}
+
+func (_c *MockGitOperations_BranchExists_Call) Run(run func(remote string, branch string)) *MockGitOperations_BranchExists_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockGitOperations_BranchExists_Call) Return(_a0 bool, _a1 error) *MockGitOperations_BranchExists_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockGitOperations_BranchExists_Call) RunAndReturn(run func(string, string) (bool, error)) *MockGitOperations_BranchExists_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateCommit provides a mock function with given fields: repoPath, message
 func (_m *MockGitOperations) CreateCommit(repoPath string, message string) (string, error) {
 	ret := _m.Called(repoPath, message)
@@ -233,6 +290,61 @@ func (_c *MockGitOperations_GetCurrentBranch_Call) Return(_a0 string, _a1 error)
 }
 
 func (_c *MockGitOperations_GetCurrentBranch_Call) RunAndReturn(run func() (string, error)) *MockGitOperations_GetCurrentBranch_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDefaultBaseBranch provides a mock function with no fields
+func (_m *MockGitOperations) GetDefaultBaseBranch() (string, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDefaultBaseBranch")
+	}
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (string, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockGitOperations_GetDefaultBaseBranch_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDefaultBaseBranch'
+type MockGitOperations_GetDefaultBaseBranch_Call struct {
+	*mock.Call
+}
+
+// GetDefaultBaseBranch is a helper method to define mock.On call
+func (_e *MockGitOperations_Expecter) GetDefaultBaseBranch() *MockGitOperations_GetDefaultBaseBranch_Call {
+	return &MockGitOperations_GetDefaultBaseBranch_Call{Call: _e.mock.On("GetDefaultBaseBranch")}
+}
+
+func (_c *MockGitOperations_GetDefaultBaseBranch_Call) Run(run func()) *MockGitOperations_GetDefaultBaseBranch_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockGitOperations_GetDefaultBaseBranch_Call) Return(_a0 string, _a1 error) *MockGitOperations_GetDefaultBaseBranch_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockGitOperations_GetDefaultBaseBranch_Call) RunAndReturn(run func() (string, error)) *MockGitOperations_GetDefaultBaseBranch_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -607,6 +719,98 @@ func (_c *MockGitOperations_IsGitTreeClean_Call) RunAndReturn(run func() (bool, 
 	return _c
 }
 
+// IsSSHUrl provides a mock function with given fields: repoUrl
+func (_m *MockGitOperations) IsSSHUrl(repoUrl string) bool {
+	ret := _m.Called(repoUrl)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsSSHUrl")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func(string) bool); ok {
+		r0 = rf(repoUrl)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// MockGitOperations_IsSSHUrl_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsSSHUrl'
+type MockGitOperations_IsSSHUrl_Call struct {
+	*mock.Call
+}
+
+// IsSSHUrl is a helper method to define mock.On call
+//   - repoUrl string
+func (_e *MockGitOperations_Expecter) IsSSHUrl(repoUrl interface{}) *MockGitOperations_IsSSHUrl_Call {
+	return &MockGitOperations_IsSSHUrl_Call{Call: _e.mock.On("IsSSHUrl", repoUrl)}
+}
+
+func (_c *MockGitOperations_IsSSHUrl_Call) Run(run func(repoUrl string)) *MockGitOperations_IsSSHUrl_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockGitOperations_IsSSHUrl_Call) Return(_a0 bool) *MockGitOperations_IsSSHUrl_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockGitOperations_IsSSHUrl_Call) RunAndReturn(run func(string) bool) *MockGitOperations_IsSSHUrl_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsSupportedVCSProvider provides a mock function with given fields: repoUrl
+func (_m *MockGitOperations) IsSupportedVCSProvider(repoUrl string) bool {
+	ret := _m.Called(repoUrl)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsSupportedVCSProvider")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func(string) bool); ok {
+		r0 = rf(repoUrl)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// MockGitOperations_IsSupportedVCSProvider_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsSupportedVCSProvider'
+type MockGitOperations_IsSupportedVCSProvider_Call struct {
+	*mock.Call
+}
+
+// IsSupportedVCSProvider is a helper method to define mock.On call
+//   - repoUrl string
+func (_e *MockGitOperations_Expecter) IsSupportedVCSProvider(repoUrl interface{}) *MockGitOperations_IsSupportedVCSProvider_Call {
+	return &MockGitOperations_IsSupportedVCSProvider_Call{Call: _e.mock.On("IsSupportedVCSProvider", repoUrl)}
+}
+
+func (_c *MockGitOperations_IsSupportedVCSProvider_Call) Run(run func(repoUrl string)) *MockGitOperations_IsSupportedVCSProvider_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockGitOperations_IsSupportedVCSProvider_Call) Return(_a0 bool) *MockGitOperations_IsSupportedVCSProvider_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockGitOperations_IsSupportedVCSProvider_Call) RunAndReturn(run func(string) bool) *MockGitOperations_IsSupportedVCSProvider_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListBranches provides a mock function with given fields: repoPath
 func (_m *MockGitOperations) ListBranches(repoPath string) ([]string, error) {
 	ret := _m.Called(repoPath)
@@ -665,17 +869,17 @@ func (_c *MockGitOperations_ListBranches_Call) RunAndReturn(run func(string) ([]
 	return _c
 }
 
-// PushCommit provides a mock function with given fields: repoPath, remoteName, branchName, githubToken, force
-func (_m *MockGitOperations) PushCommit(repoPath string, remoteName string, branchName string, githubToken string, force bool) error {
-	ret := _m.Called(repoPath, remoteName, branchName, githubToken, force)
+// PushCommit provides a mock function with given fields: pushCommitParams
+func (_m *MockGitOperations) PushCommit(pushCommitParams git.PushCommitParams) error {
+	ret := _m.Called(pushCommitParams)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PushCommit")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string, string, string, bool) error); ok {
-		r0 = rf(repoPath, remoteName, branchName, githubToken, force)
+	if rf, ok := ret.Get(0).(func(git.PushCommitParams) error); ok {
+		r0 = rf(pushCommitParams)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -689,18 +893,14 @@ type MockGitOperations_PushCommit_Call struct {
 }
 
 // PushCommit is a helper method to define mock.On call
-//   - repoPath string
-//   - remoteName string
-//   - branchName string
-//   - githubToken string
-//   - force bool
-func (_e *MockGitOperations_Expecter) PushCommit(repoPath interface{}, remoteName interface{}, branchName interface{}, githubToken interface{}, force interface{}) *MockGitOperations_PushCommit_Call {
-	return &MockGitOperations_PushCommit_Call{Call: _e.mock.On("PushCommit", repoPath, remoteName, branchName, githubToken, force)}
+//   - pushCommitParams git.PushCommitParams
+func (_e *MockGitOperations_Expecter) PushCommit(pushCommitParams interface{}) *MockGitOperations_PushCommit_Call {
+	return &MockGitOperations_PushCommit_Call{Call: _e.mock.On("PushCommit", pushCommitParams)}
 }
 
-func (_c *MockGitOperations_PushCommit_Call) Run(run func(repoPath string, remoteName string, branchName string, githubToken string, force bool)) *MockGitOperations_PushCommit_Call {
+func (_c *MockGitOperations_PushCommit_Call) Run(run func(pushCommitParams git.PushCommitParams)) *MockGitOperations_PushCommit_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string), args[3].(string), args[4].(bool))
+		run(args[0].(git.PushCommitParams))
 	})
 	return _c
 }
@@ -710,54 +910,7 @@ func (_c *MockGitOperations_PushCommit_Call) Return(_a0 error) *MockGitOperation
 	return _c
 }
 
-func (_c *MockGitOperations_PushCommit_Call) RunAndReturn(run func(string, string, string, string, bool) error) *MockGitOperations_PushCommit_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// PushCommitUsingGit provides a mock function with given fields: remoteName, branchName
-func (_m *MockGitOperations) PushCommitUsingGit(remoteName string, branchName string) error {
-	ret := _m.Called(remoteName, branchName)
-
-	if len(ret) == 0 {
-		panic("no return value specified for PushCommitUsingGit")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string) error); ok {
-		r0 = rf(remoteName, branchName)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockGitOperations_PushCommitUsingGit_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PushCommitUsingGit'
-type MockGitOperations_PushCommitUsingGit_Call struct {
-	*mock.Call
-}
-
-// PushCommitUsingGit is a helper method to define mock.On call
-//   - remoteName string
-//   - branchName string
-func (_e *MockGitOperations_Expecter) PushCommitUsingGit(remoteName interface{}, branchName interface{}) *MockGitOperations_PushCommitUsingGit_Call {
-	return &MockGitOperations_PushCommitUsingGit_Call{Call: _e.mock.On("PushCommitUsingGit", remoteName, branchName)}
-}
-
-func (_c *MockGitOperations_PushCommitUsingGit_Call) Run(run func(remoteName string, branchName string)) *MockGitOperations_PushCommitUsingGit_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string))
-	})
-	return _c
-}
-
-func (_c *MockGitOperations_PushCommitUsingGit_Call) Return(_a0 error) *MockGitOperations_PushCommitUsingGit_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockGitOperations_PushCommitUsingGit_Call) RunAndReturn(run func(string, string) error) *MockGitOperations_PushCommitUsingGit_Call {
+func (_c *MockGitOperations_PushCommit_Call) RunAndReturn(run func(git.PushCommitParams) error) *MockGitOperations_PushCommit_Call {
 	_c.Call.Return(run)
 	return _c
 }
