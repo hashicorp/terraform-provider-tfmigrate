@@ -5,38 +5,29 @@ package gitops
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"os"
-	"os/exec"
-	"terraform-provider-tfmigrate/internal/constants"
-	"terraform-provider-tfmigrate/internal/diagnostics"
-	"terraform-provider-tfmigrate/internal/format"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1/dependencies"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1/stacks"
-	"time"
 )
 
 // Order of execution:
-// 1. StartTFRPCServer
-// 2. OpenTerraformState
-// 3. OpenSourceBundle
-// 4. OpenStacksConfiguration
-// 5. OpenDependencyLockFile
-// 6. OpenProviderCache
-// 7. MigrateTFState
+// Start the RPC server
+// 1. OpenTerraformState
+// 2. OpenSourceBundle
+// 3. OpenStacksConfiguration
+// 4. OpenDependencyLockFile
+// 5. OpenProviderCache
+// 6. MigrateTFState
 // close open handles and stop the RPC server
 
 type TFStateOperations interface {
-	OpenSourceBundle(dotTFModulesPath string) (int64, diagnostics.Diagnostics, func(format.View))
-	OpenStacksConfiguration(sourceBundleHandle int64, stackConfigPath string) (int64, diagnostics.Diagnostics, func(format.View))
-	OpenDependencyLockFile(handle int64, dotTFLockFile string) (int64, diagnostics.Diagnostics, func(format.View))
-	OpenProviderCache(dotTFProvidersPath string) (int64, diagnostics.Diagnostics, func(format.View))
-	OpenTerraformState(tfStateFileDir string) (int64, diagnostics.Diagnostics, func(format.View))
+	OpenSourceBundle(dotTFModulesPath string) (int64, func() error, error)
+	OpenStacksConfiguration(sourceBundleHandle int64, stackConfigPath string) (int64, func() error, error)
+	OpenDependencyLockFile(handle int64, dotTFLockFile string) (int64, func() error, error)
+	OpenProviderCache(dotTFProvidersPath string) (int64, func() error, error)
+	OpenTerraformState(tfStateFileDir string) (int64, func() error, error)
 	MigrateTFState(tfStateHandle int64, stackConfigHandle int64, dependencyLocksHandle int64, providerCacheHandle int64, resources map[string]string, modules map[string]string) (stacks.Stacks_MigrateTerraformStateClient, error)
-	StartTFRPCServer() (StopTFRPCAPIServer func(), err error)
 }
 
 type tfStateOperations struct {
@@ -52,35 +43,25 @@ func NewTFStateOperations(ctx context.Context, client rpcapi.Client) TFStateOper
 }
 
 // OpenSourceBundle opens a source bundle from the given path and returns a handle to it.
-func (tf *tfStateOperations) OpenSourceBundle(dotTFModulesPath string) (int64, diagnostics.Diagnostics, func(format.View)) {
+func (tf *tfStateOperations) OpenSourceBundle(dotTFModulesPath string) (int64, func() error, error) {
 	response, err := tf.client.Dependencies().OpenSourceBundle(tf.ctx, &dependencies.OpenSourceBundle_Request{
 		LocalPath: dotTFModulesPath, // dotTFModulesPath is the path to - ".terraform/modules/"
 	})
 	if err != nil {
-		var diags diagnostics.Diagnostics
-		diags = diags.Append(diagnostics.Sourceless(
-			diagnostics.Error,
-			"Failed to open source bundle",
-			"Error returned by Terraform API: %s.", err.Error()))
-		return -1, diags, nil
+		return -1, nil, err
 	}
 
-	return response.SourceBundleHandle, nil, func(view format.View) {
+	return response.SourceBundleHandle, func() error {
 		_, err := tf.client.Dependencies().CloseSourceBundle(context.Background(),
 			&dependencies.CloseSourceBundle_Request{
 				SourceBundleHandle: response.SourceBundleHandle,
 			})
-		if err != nil {
-			// Since we opened the connection successfully, we should be able to close it.
-			var diags diagnostics.Diagnostics
-			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close source bundle handle", "The Terraform RPC API failed to close the configuration source bundle: %s.\n\nThis is a bug in the program, please report it!", err))
-			view.Diagnostics(diags)
-		}
-	}
+		return err
+	}, nil
 }
 
 // OpenStacksConfiguration opens a stack configuration from the given path and returns a handle to it.
-func (tf *tfStateOperations) OpenStacksConfiguration(sourceBundleHandle int64, stackConfigPath string) (int64, diagnostics.Diagnostics, func(format.View)) {
+func (tf *tfStateOperations) OpenStacksConfiguration(sourceBundleHandle int64, stackConfigPath string) (int64, func() error, error) {
 	response, err := tf.client.Stacks().OpenStackConfiguration(tf.ctx,
 		&stacks.OpenStackConfiguration_Request{
 			SourceBundleHandle: sourceBundleHandle,
@@ -88,92 +69,64 @@ func (tf *tfStateOperations) OpenStacksConfiguration(sourceBundleHandle int64, s
 				Source: stackConfigPath, // stackConfigPath is the path to the directory where stack configs files are stored ie "_stacks_generated"
 			},
 		})
+
 	if err != nil {
-		var diags diagnostics.Diagnostics
-		diags = diags.Append(diagnostics.Sourceless(
-			diagnostics.Error,
-			"Failed to open configuration",
-			"Error returned by Terraform API: %s.", err.Error()))
-		return -1, diags, nil
+		return -1, nil, err
 	}
 
-	var diags diagnostics.Diagnostics
-	diags = diags.Append(response.Diagnostics)
-	return response.StackConfigHandle, diags, func(view format.View) {
+	return response.StackConfigHandle, func() error {
 		_, err := tf.client.Stacks().CloseStackConfiguration(tf.ctx,
 			&stacks.CloseStackConfiguration_Request{
 				StackConfigHandle: response.StackConfigHandle,
 			})
-		if err != nil {
-			// Since we opened the connection successfully, we should be able to close it.
-			var diags diagnostics.Diagnostics
-			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close stacks configuration handle", "The Terraform RPC API failed to close the stacks configuration: %s.\n\nThis is a bug in the program, please report it!", err))
-			view.Diagnostics(diags)
-		}
-	}
+		return err
+	}, nil
 }
 
 // OpenDependencyLockFile opens a dependency lock file from the given path and returns a handle to it.
-func (tf *tfStateOperations) OpenDependencyLockFile(handle int64, dotTFLockFile string) (int64, diagnostics.Diagnostics, func(format.View)) {
+func (tf *tfStateOperations) OpenDependencyLockFile(handle int64, dotTFLockFile string) (int64, func() error, error) {
 	response, err := tf.client.Dependencies().OpenDependencyLockFile(tf.ctx, &dependencies.OpenDependencyLockFile_Request{
 		SourceBundleHandle: handle,
 		SourceAddress: &terraform1.SourceAddress{
 			Source: dotTFLockFile, // dotTFLockFile is the path to the lock file - "./.terraform.lock.hcl"
 		},
 	})
+
 	if err != nil {
-		var diags diagnostics.Diagnostics
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to open lock file", "This could be because `tfstacks providers lock` wasn't executed. The Terraform API returned the following error: %s.", err.Error()))
-		return -1, diags, func(_ format.View) {}
+		return -1, nil, err
 	}
 
-	var diags diagnostics.Diagnostics
-	diags = diags.Append(response.Diagnostics)
-	return response.DependencyLocksHandle, diags, func(view format.View) {
+	return response.DependencyLocksHandle, func() error {
 		_, err := tf.client.Dependencies().CloseDependencyLocks(context.Background(),
 			&dependencies.CloseDependencyLocks_Request{
 				DependencyLocksHandle: response.DependencyLocksHandle,
 			})
-		if err != nil {
-			// Since we opened the connection successfully, we should be able to close it.
-			var diags diagnostics.Diagnostics
-			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close dependency locks handle", "The Terraform RPC API failed to close the dependency locks: %s.\n\nThis is a bug in the program, please report it!", err))
-			view.Diagnostics(diags)
-		}
-	}
+		return err
+	}, nil
 }
 
 // OpenProviderCache opens a provider cache from the given path and returns a handle to it.
-func (tf *tfStateOperations) OpenProviderCache(dotTFProvidersPath string) (int64, diagnostics.Diagnostics, func(format.View)) {
-	var diags diagnostics.Diagnostics
-
+func (tf *tfStateOperations) OpenProviderCache(dotTFProvidersPath string) (int64, func() error, error) {
 	response, err := tf.client.Dependencies().OpenProviderPluginCache(tf.ctx,
 		&dependencies.OpenProviderPluginCache_Request{
 			CacheDir: dotTFProvidersPath, // dotTFProvidersPath is the path to the provider cache - "./.terraform/providers/"
 		})
 
 	if err != nil {
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to open provider cache", "This could be because `tfstacks providers lock` wasn't executed. The Terraform API returned the following error: %s.", err.Error()))
-		return -1, diags, func(_ format.View) {}
+		return -1, nil, err
 	}
 
-	return response.ProviderCacheHandle, diags, func(view format.View) {
+	return response.ProviderCacheHandle, func() error {
 		_, err := tf.client.Dependencies().CloseProviderPluginCache(context.Background(),
 			&dependencies.CloseProviderPluginCache_Request{
 				ProviderCacheHandle: response.ProviderCacheHandle,
 			})
-		if err != nil {
-			// Since we opened the connection successfully, we should be able to close it.
-			var diags diagnostics.Diagnostics
-			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close provider cache handle", "The Terraform RPC API failed to close the provider cache: %s.\n\nThis is a bug in the program, please report it!", err))
-			view.Diagnostics(diags)
-		}
-	}
+		return err
+	}, nil
 }
 
 // OpenTerraformState opens a Terraform state file from the given directory and returns a handle to it.
-func (tf *tfStateOperations) OpenTerraformState(tfStateFileDir string) (int64, diagnostics.Diagnostics, func(format.View)) {
-	var diags diagnostics.Diagnostics
+func (tf *tfStateOperations) OpenTerraformState(tfStateFileDir string) (int64, func() error, error) {
 
 	response, err := tf.client.Stacks().OpenTerraformState(tf.ctx,
 		&stacks.OpenTerraformState_Request{
@@ -181,23 +134,18 @@ func (tf *tfStateOperations) OpenTerraformState(tfStateFileDir string) (int64, d
 				ConfigPath: tfStateFileDir, // tfStateFileDir is the path to the directory where the Terraform state file is located.
 			},
 		})
+
 	if err != nil {
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to open state", "The Terraform API returned the following error: %s.", err.Error()))
-		return -1, diags, func(_ format.View) {}
+		return -1, nil, err
 	}
-	diags = diags.Append(response.Diagnostics)
-	return response.StateHandle, diags, func(view format.View) {
+
+	return response.StateHandle, func() error {
 		_, err := tf.client.Stacks().CloseTerraformState(context.Background(),
 			&stacks.CloseTerraformState_Request{
 				StateHandle: response.StateHandle,
 			})
-		if err != nil {
-			// Since we opened the connection successfully, we should be able to close it.
-			var diags diagnostics.Diagnostics
-			diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to close state handle", "The Terraform RPC API failed to close the state: %s.\n\nThis is a bug in the program, please report it!", err))
-			view.Diagnostics(diags)
-		}
-	}
+		return err
+	}, nil
 }
 
 // MigrateTFState migrates the Terraform state using the provided handles and mappings.
@@ -219,27 +167,4 @@ func (tf *tfStateOperations) MigrateTFState(tfStateHandle int64, stackConfigHand
 
 	// events emitted can be looped over events.Recv()
 	return events, err
-}
-
-// StartTFRPCServer starts the Terraform RPC API server and returns a function to stop it.
-func (tf *tfStateOperations) StartTFRPCServer() (stopTFRPCAPIServer func(), err error) {
-	cmd := exec.Command(fmt.Sprintf("TERRAFORM_RPCAPI_COOKIE=%s", constants.TerraformRPCAPICookie), "terraform", "rpcapi")
-
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	time.Sleep(2 * time.Second) // naive wait
-
-	stopTFRPCAPIServer = func() {
-		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
-	}
-
-	if err := cmd.Process.Signal(os.Signal(nil)); err != nil && !errors.Is(err, os.ErrInvalid) {
-		stopTFRPCAPIServer()
-		return nil, errors.New("rpcapi process exited unexpectedly")
-	}
-
-	return stopTFRPCAPIServer, nil
 }

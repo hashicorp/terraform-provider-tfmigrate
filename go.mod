@@ -4,30 +4,25 @@ go 1.24.2
 
 require (
 	github.com/go-git/go-git/v5 v5.16.2
-	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-tfe v1.84.0
-	github.com/hashicorp/hcl/v2 v2.23.1-0.20250203194505-ba0759438da2
-	github.com/hashicorp/terraform v1.12.2
+	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/hashicorp/terraform-exec v0.23.0
 	github.com/hashicorp/terraform-plugin-docs v0.21.0
 	github.com/hashicorp/terraform-plugin-framework v1.15.0
 	github.com/hashicorp/terraform-plugin-go v0.28.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.13.2
-	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db
 	github.com/stretchr/testify v1.10.0
 	github.com/zclconf/go-cty v1.16.3
 	gitlab.com/gitlab-org/api/client-go v0.130.1
 	golang.org/x/oauth2 v0.30.0
-	golang.org/x/term v0.32.0
 )
 
 require (
-	github.com/apparentlymart/go-versions v1.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/spf13/afero v1.9.5 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 )
 
@@ -65,7 +60,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.6.3
 	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
-	github.com/hashicorp/go-slug v0.16.7
+	github.com/hashicorp/go-slug v0.16.7 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/hashicorp/hc-install v0.9.2 // indirect
@@ -84,7 +79,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
-	github.com/mitchellh/go-wordwrap v1.0.1
+	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/oklog/run v1.0.0 // indirect

@@ -7,12 +7,11 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"terraform-provider-tfmigrate/internal/diagnostics"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
+	"terraform-provider-tfmigrate/internal/constants"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1/dependencies"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1/packages"
 	"terraform-provider-tfmigrate/internal/terraform/rpcapi/terraform1/setup"
@@ -30,17 +29,16 @@ type Client interface {
 	Stop()
 }
 
-func Connect(ctx context.Context, logger hclog.Logger, terraform string) (Client, diagnostics.Diagnostics) {
-	var diags diagnostics.Diagnostics
+func Connect(ctx context.Context) (Client, error) {
 
-	cmd := exec.CommandContext(ctx, terraform, "rpcapi")
+	cmd := exec.CommandContext(ctx, "terraform", "rpcapi")
 	cmd.Dir = "."
 
 	config := &plugin.ClientConfig{
 		HandshakeConfig: plugin.HandshakeConfig{
 			ProtocolVersion:  1,
-			MagicCookieKey:   "TERRAFORM_RPCAPI_COOKIE",
-			MagicCookieValue: "fba0991c9bcd453982f0d88e2da95940",
+			MagicCookieKey:   constants.TerraformMagicCookieKey,
+			MagicCookieValue: constants.TerraformRPCAPICookie,
 		},
 		Cmd:              cmd,
 		AutoMTLS:         true,
@@ -49,31 +47,26 @@ func Connect(ctx context.Context, logger hclog.Logger, terraform string) (Client
 		Plugins: map[string]plugin.Plugin{
 			"terraform": &TerraformPlugin{},
 		},
-		Logger: logger,
 	}
 
 	client := plugin.NewClient(config)
 	if _, err := client.Start(); err != nil {
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to start Terraform plugin", "%s", err.Error()))
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Warning, UnsupportedTerraformVersionError, ""))
-		return nil, diags
+		return nil, err
 	}
 
 	protocol, err := client.Client()
 	if err != nil {
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to retrieve Terraform client", "%s", err.Error()))
-		return nil, diags
+		return nil, err
 	}
 
 	raw, err := protocol.Dispense("terraform")
 	if err != nil {
-		diags = diags.Append(diagnostics.Sourceless(diagnostics.Error, "Failed to create Terraform instance", "%s", err.Error()))
-		return nil, diags
+		return nil, err
 	}
 
 	grpcClient := raw.(*grpcClient)
 	grpcClient.pluginClient = client
-	return grpcClient, diags
+	return grpcClient, err
 }
 
 type grpcClient struct {
