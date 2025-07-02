@@ -12,7 +12,7 @@ import (
 )
 
 // Order of execution:
-// Start the RPC server
+// Create the RPC Client
 // 1. OpenTerraformState
 // 2. OpenSourceBundle
 // 3. OpenStacksConfiguration
