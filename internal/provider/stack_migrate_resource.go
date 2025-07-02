@@ -48,14 +48,6 @@ func (r *stackMigrate) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 func (r *stackMigrate) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Sample RPC call flow, to be integrated with - terraform-provider-tfmigrate/pull/166
 
-	stopTFRPCServer, err := rpcapi.StartTFRPCServer()
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to start RPC API server",
-			"An error occurred while trying to start the RPC API server: "+err.Error())
-		return
-	}
-	defer stopTFRPCServer()
-
 	client, err := rpcapi.Connect(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to connect to RPC API",
