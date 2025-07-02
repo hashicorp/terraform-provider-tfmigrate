@@ -103,7 +103,7 @@ func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 			"hostname": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   false,
-				Description: "The hostname of the TFE instance. Defaults to app.terraform.io for HCP Terraform. Can be configured using the TFE_HOSTNAME environment variable, which takes precedence.",
+				Description: "The hostname of the TFE instance. Can be configured using the TFE_HOSTNAME environment variable, If both are set, the configuration value takes precedence. Defaults to 'app.terraform.io' when neither is set.",
 			},
 			"allow_commit_push": schema.BoolAttribute{
 				Optional:    true,
@@ -118,12 +118,12 @@ func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 			"tfe_token": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "Token for interacting with HCP Terraform. If not set, the Terraform login token is used. Can be configured using the TFE_TOKEN environment variable, which takes precedence and is required for stack migration.",
+				Description: "The TFE token to be used for accessing the TFE API. Can be configured using the TFE_TOKEN environment variable, If both are set, the configuration value takes precedence. Uses the TFE login token when neither is set.",
 			},
 			"ssl_skip_verify": schema.BoolAttribute{
 				Optional:    true,
 				Sensitive:   false,
-				Description: "Skip SSL verification for the TFE API. Defaults to false. Can be configured using the TFE_SSL_SKIP_VERIFY environment variable, which takes precedence. Not required for stacks migration as we do not support TFE at the moment.",
+				Description: "Skip SSL verification for the TFE API. Can be configured using the TFE_SSL_SKIP_VERIFY environment variable. If both are set, the configuration value takes precedence. Defaults to false when neither is set.",
 			},
 		},
 	}
@@ -191,21 +191,32 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	// Default values to environment variables, but override
-	// with Terraform configuration values if set
-	gitPatToken := os.Getenv(GitTokenEnvName)
-	tfeToken := os.Getenv(TfeTokenEnvName)
+	// configure host name
+	hostname, diags := p.getProviderHostNameConfig(config.Hostname)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	// these can be overridden by environment variables
-	hostname := HcpTerraformHost // Default to HCP Terraform app.terraform.io
-	sslSkipVerify := false       // Default to false for Skipping SSL verification
+	// configure tfe token
+	tfeToken, diags := p.getProviderTfeTokenConfig(config.TfeToken, hostname)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// configure SSL skip verify
+	sslSkipVerify, diags := p.getProviderSSLSkipVerifyConfig(config.SSLSkipVerify)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Retrieve environment variables
+	gitPatToken := os.Getenv(GitTokenEnvName)
 
 	if !config.GitPatToken.IsNull() {
 		gitPatToken = config.GitPatToken.ValueString()
-	}
-
-	if !config.Hostname.IsNull() {
-		hostname = config.Hostname.ValueString()
 	}
 
 	var allowCommitPush, createPr bool
@@ -216,51 +227,6 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 
 	if !config.CreatePr.IsNull() {
 		createPr = config.CreatePr.ValueBool()
-	}
-
-	if !config.TfeToken.IsNull() {
-		tfeToken = config.TfeToken.ValueString()
-	}
-
-	if !config.SSLSkipVerify.IsNull() {
-		sslSkipVerify = config.SSLSkipVerify.ValueBool()
-	}
-
-	// if the TFE_SSL_SKIP_VERIFY environment variable is set, override the default value
-	if sslSkipVerifyEnvVal, envVariableSet := os.LookupEnv(TfeSslSkipVerifyEnvName); envVariableSet {
-		sslSkipVerifyBolVal, err := strconv.ParseBool(sslSkipVerifyEnvVal)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid SSL Skip Verify Value",
-				fmt.Sprintf("The value for %s is not a valid boolean: %s", TfeSslSkipVerifyEnvName, err.Error()),
-			)
-			return
-		}
-		sslSkipVerify = sslSkipVerifyBolVal
-	}
-
-	// If the TFE_HOSTNAME environment variable is set, override the default value
-	if tfeHostEnvVal, envVariableSet := os.LookupEnv(TfeHostEnvName); envVariableSet {
-		if tfeHostEnvVal == "" {
-			resp.Diagnostics.AddError(
-				"Invalid TFE Hostname Value",
-				fmt.Sprintf("The value for %s cannot be empty", TfeHostEnvName),
-			)
-			return
-		}
-		hostname = tfeHostEnvVal
-	}
-
-	// If the TFE_TOKEN environment variable is set, override the default value
-	if tfeTokenEnvVal, envVariableSet := os.LookupEnv(TfeTokenEnvName); envVariableSet {
-		if tfeTokenEnvVal == "" {
-			resp.Diagnostics.AddError(
-				"Invalid TFE Token Value",
-				fmt.Sprintf("The value for %s cannot be empty", TfeTokenEnvName),
-			)
-			return
-		}
-		tfeToken = tfeTokenEnvVal
 	}
 
 	if err := p.ValidateGitOpsReadiness(allowCommitPush, createPr, gitPatToken); err != nil {
@@ -377,4 +343,147 @@ func (p *tfmProvider) ValidateGitOpsReadiness(allowCommitPush, createPr bool, to
 		}
 	}
 	return nil
+}
+
+// getProviderHostNameConfig retrieves the hostname configuration for the provider.
+func (p *tfmProvider) getProviderHostNameConfig(hostNameConfigVal types.String) (string, diag.Diagnostics) {
+	var hostName string
+	var diags diag.Diagnostics
+	configValueIsNotNull := false
+
+	if !hostNameConfigVal.IsNull() {
+		hostName = hostNameConfigVal.ValueString()
+		configValueIsNotNull = true
+	}
+
+	if hostName != "" {
+		return hostName, diags
+	}
+
+	if configValueIsNotNull {
+		diags.AddAttributeError(
+			path.Root("hostname"),
+			"Invalid Hostname",
+			"The hostname cannot be empty. Please provide a valid hostname or set the TFE_HOSTNAME environment variable. If both are set, the configuration value takes precedence.")
+		return "", diags
+	}
+
+	if hostNameEnvVal, envVariableSet := os.LookupEnv(TfeHostEnvName); !envVariableSet {
+		hostName = HcpTerraformHost // Default to HCP Terraform host
+	} else {
+		hostName = hostNameEnvVal // Use the environment variable value if set
+	}
+
+	if hostName != "" {
+		return hostName, diags
+	}
+
+	diags.AddAttributeError(
+		path.Root("hostname"),
+		"Invalid Hostname",
+		"The hostname cannot be empty. Please provide a valid hostname or set the TFE_HOSTNAME environment variable. If both are set, the configuration value takes precedence.")
+	return "", diags
+}
+
+// getProviderTfeTokenConfig retrieves the TFE token configuration for the provider.
+func (p *tfmProvider) getProviderTfeTokenConfig(tfeTokenConfigVal types.String, hostName string) (string, diag.Diagnostics) {
+	var tfeToken string
+	var diags diag.Diagnostics
+	var configValueIsNotNull bool
+
+	if !tfeTokenConfigVal.IsNull() {
+		tfeToken = tfeTokenConfigVal.ValueString()
+		configValueIsNotNull = true
+	}
+
+	if tfeToken != "" {
+		return tfeToken, diags
+	}
+
+	// If the configured token value via the `tfe_token` attribute is not null but empty,
+	// add an error to the diagnostics and return
+	if configValueIsNotNull {
+		diags.AddAttributeError(
+			path.Root("tfe_token"),
+			"Invalid TFE Token",
+			"The TFE token cannot be empty. Please provide a valid TFE token or set the TFE_TOKEN environment variable. If both are set, the configuration value takes precedence.")
+		return "", diags
+	}
+
+	tfeTokenEnvVal, envVariableSet := os.LookupEnv(TfeTokenEnvName)
+	if envVariableSet {
+		// If the `TFE_TOKEN` environment variable is set to an empty string,
+		// add an error to the diagnostics and return
+		if tfeTokenEnvVal == "" {
+			diags.AddAttributeError(
+				path.Root("tfe_token"),
+				"Invalid TFE Token",
+				"The TFE token cannot be empty. Please provide a valid TFE token or set the TFE_TOKEN environment variable. If both are set, the configuration value takes precedence.")
+			return "", diags
+		}
+		return tfeTokenEnvVal, diags
+	}
+
+	// if the `TFE_TOKEN` environment variable is not set,
+	// read the TFE login token
+	tfeToken, err := p.tfutil.ReadTfeToken(hostName)
+	if err != nil {
+		// If there is an error reading the TFE token,
+		// add an error to the diagnostics and return
+		diags.AddError(
+			"Error Reading TFE Token",
+			fmt.Sprintf("An error occurred while reading the TFE token: %s", err.Error()),
+		)
+		return "", diags
+	}
+
+	if tfeToken == "" {
+		// If the read token is empty,
+		// add an error to the diagnostics and return
+		diags.AddAttributeError(
+			path.Root("tfe_token"),
+			"Empty TFE Login Token",
+			"The TFE login token is empty. Run terraform login to get a valid token ")
+		return "", diags
+	}
+
+	return tfeToken, diags
+
+}
+
+// getProviderSSLSkipVerifyConfig retrieves the SSL skip verify configuration for the provider.
+func (p *tfmProvider) getProviderSSLSkipVerifyConfig(sslSkipVerifyConfigVal types.Bool) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	if !sslSkipVerifyConfigVal.IsNull() {
+		return sslSkipVerifyConfigVal.ValueBool(), diags
+	}
+
+	// If the configured value via the `ssl_skip_verify` attribute is not set try to read the environment variable
+	sslSkipVerifyEnvVal, envVariableSet := os.LookupEnv(TfeSslSkipVerifyEnvName)
+	if !envVariableSet {
+		return false, diags // Default to false if not set
+	}
+
+	if sslSkipVerifyEnvVal == "" {
+		diags.AddAttributeError(
+			path.Root("ssl_skip_verify"),
+			"Invalid SSL Skip Verify Value",
+			"The SSL skip verify value cannot be empty. Please provide a valid boolean value or set the TFE_SSL_SKIP_VERIFY environment variable. If both are set, the configuration value takes precedence.",
+		)
+		return false, diags
+	}
+
+	// If the environment variable is set, parse it to a boolean
+	sslSkipVerifyBolVal, err := strconv.ParseBool(sslSkipVerifyEnvVal)
+	if err != nil {
+		diags.AddAttributeError(
+			path.Root("ssl_skip_verify"),
+			"Invalid SSL Skip Verify Value",
+			fmt.Sprintf("The value for %s is not a valid boolean: %s", TfeSslSkipVerifyEnvName, err.Error()),
+		)
+		return false, diags
+	}
+
+	return sslSkipVerifyBolVal, diags
 }

@@ -18,12 +18,15 @@ Defines a resource for migrating existing HCP Terraform workspaces to deployment
 ### Required
 
 - `config_file_dir` (String) The directory path containing configuration files. Must be an absolute path.
-- `name` (String) The stack name.
-- `org` (String) The organization name. This is the organization where the stack exists. The value can be  overridden `TFE_ORGANIZATION` environment variable.
-- `project` (String) The project name. This is the project where the stack exists. The value can be overridden by `TFE_PROJECT` environment variable.
+- `name` (String) The stack name. Must be unique within the organization and project, must be a non-VCS driven stack.
+
+### Optional
+
+- `organization` (String) The organization name to which the stack belongs. This must reference an existing organization. Either this attribute or the TFE_ORGANIZATION environment variable is required; if both are set, the attribute value takes precedence.
+- `project` (String) The project name to which the stack belongs. This must reference an existing project. Either this attribute or the TFE_PROJECT environment variable is required; if both are set, the attribute value takes precedence.
 
 ### Read-Only
 
-- `config_status` (String) The status of the stack configuration. This is used to track the status of the stack configuration upload.
 - `current_configuration_id` (String) The ID of the current stack configuration. This is used to track the current configuration of the stack.
-- `source_bundle_hash` (String) The hash of the configuration files in the directory. This is used to detect changes in the configuration files.
+- `current_configuration_status` (String) The status of the stack configuration. This is used to track the status of the stack configuration upload.
+- `source_bundle_hash` (String) The hash of the configuration files in the directory. This is used to detect changes in the stack configuration files.

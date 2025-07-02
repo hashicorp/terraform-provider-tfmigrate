@@ -59,7 +59,7 @@ TFRC_PATH := $(CURDIR)/$(TFRC_FILE)
 dev-override:
 	@echo 'provider_installation {' > $(TFRC_FILE)
 	@echo '  dev_overrides {' >> $(TFRC_FILE)
-	@echo '    "hashicorp/tfmigrate" = "$(TFRC_PATH)"' >> $(TFRC_FILE)
+	@echo '    "hashicorp/tfmigrate" = "$(CURDIR)"' >> $(TFRC_FILE)
 	@echo '  }' >> $(TFRC_FILE)
 	@echo '  direct {}' >> $(TFRC_FILE)
 	@echo '}' >> $(TFRC_FILE)
