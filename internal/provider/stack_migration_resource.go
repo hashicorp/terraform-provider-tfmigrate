@@ -236,21 +236,21 @@ func (r *stackMigrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 
 // Create is called when the resource is created. It uploads the stack configuration files to the stack and waits for the stack configuration to converge, cancel, or error out.
 func (r *stackMigrationResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
-	var state StackMigrationResourceModel
+	var plan StackMigrationResourceModel
 	var currentConfigurationId string
 	var currentConfigurationStatus string
 	var currentSourceBundleHash string
 	var diags diag.Diagnostics
 
-	// Retrieve values from the plan into state
-	response.Diagnostics.Append(request.Plan.Get(ctx, &state)...)
+	// Retrieve values from the plan into plan
+	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
 	if response.Diagnostics.HasError() {
 		tflog.Error(ctx, "Failed to get plan values")
 		return
 	}
 
 	// Validate preconditions
-	response.Diagnostics.Append(r.createActionPreconditions(ctx, state)...)
+	response.Diagnostics.Append(r.createActionPreconditions(ctx, plan)...)
 	if response.Diagnostics.HasError() {
 		tflog.Error(ctx, "Preconditions for resource creation failed")
 		return
@@ -269,11 +269,11 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 
 	// Attempt to upload a source bundle if allowed else sync existing stack configuration data
 	if uploadNewConfig {
-		tflog.Info(ctx, fmt.Sprintf("Uploading source bundle for stack %s from directory %s", r.existingStack.Name, state.ConfigurationDir.ValueString()))
-		currentConfigurationId, currentSourceBundleHash, diags = r.uploadSourceBundle(ctx, r.existingStack.ID, state.ConfigurationDir.ValueString(), true)
+		tflog.Info(ctx, fmt.Sprintf("Uploading source bundle for stack %s from directory %s", r.existingStack.Name, plan.ConfigurationDir.ValueString()))
+		currentConfigurationId, currentSourceBundleHash, diags = r.uploadSourceBundle(ctx, r.existingStack.ID, plan.ConfigurationDir.ValueString(), true)
 	} else {
-		tflog.Info(ctx, fmt.Sprintf("Syncing existing stack configuration data for stack %s from directory %s", r.existingStack.Name, state.ConfigurationDir.ValueString()))
-		currentConfigurationId, currentSourceBundleHash, diags = r.syncExistingStackConfigurationData(ctx, r.existingStack, state.ConfigurationDir.ValueString())
+		tflog.Info(ctx, fmt.Sprintf("Syncing existing stack configuration data for stack %s from directory %s", r.existingStack.Name, plan.ConfigurationDir.ValueString()))
+		currentConfigurationId, currentSourceBundleHash, diags = r.syncExistingStackConfigurationData(ctx, r.existingStack, plan.ConfigurationDir.ValueString())
 	}
 
 	response.Diagnostics.Append(diags...)
@@ -288,7 +288,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 
 	// handle converging status
 	if tfe.StackConfigurationStatus(currentConfigurationStatus) == tfe.StackConfigurationStatusConverging {
-		tflog.Info(ctx, fmt.Sprintf("The stack configuration %s is converging. awaiting to be in a non-running plan state", currentConfigurationId))
+		tflog.Info(ctx, fmt.Sprintf("The stack configuration %s is converging. awaiting to be in a non-running plan plan", currentConfigurationId))
 		configStatusFromConvergingHandler := r.tfeUtil.HandleConvergingStatus(currentConfigurationId, r.tfeClient)
 
 		if configStatusFromConvergingHandler != "" {
@@ -320,6 +320,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 	}
 
 	// Set values on the Terraform state model
+	state := StackMigrationResourceModel{}
 	state.CurrentConfigurationId = types.StringValue(currentConfigurationId)
 	state.CurrentConfigurationStatus = types.StringValue(currentConfigurationStatus)
 	state.Name = types.StringValue(r.existingStack.Name)
@@ -337,7 +338,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 	}
 	r.logFinalConfigStatusMsg(ctx, tfe.StackConfigurationStatus(currentConfigurationStatus), finalLogMsgMetadata)
 
-	// Save state
+	// Save plan
 	response.Diagnostics.Append(response.State.Set(ctx, &state)...)
 }
 
@@ -496,8 +497,8 @@ func (r *stackMigrationResource) createActionPreconditions(ctx context.Context, 
 // logFinalConfigStatusMsg logs a final message with based on the last known stack configuration status.
 func (r *stackMigrationResource) logFinalConfigStatusMsg(ctx context.Context, status tfe.StackConfigurationStatus, metadata map[string]interface{}) {
 	var statusMsg string
-	stackName := metadata["stack_name"].(string)
-	configId := metadata["stack_configuration_id"].(string)
+	stackName := metadata[stackNameMetadata].(string)
+	configId := metadata[stackConfigurationIdMetadata].(string)
 	switch status {
 	case tfe.StackConfigurationStatusErrored:
 		statusMsg = fmt.Sprintf(configErrored, configId, stackName)
@@ -518,7 +519,7 @@ func (r *stackMigrationResource) logFinalConfigStatusMsg(ctx context.Context, st
 
 }
 
-// syncExistingStackConfigurationData reads the current stack configuration ID and status, and calculates the source bundle hash of the configuration files in the directory.
+// syncExistingStackConfigurationData reads the current stack configuration ID and status and calculates the source bundle hash of the configuration files in the directory.
 func (r *stackMigrationResource) syncExistingStackConfigurationData(ctx context.Context, stack *tfe.Stack, configDir string) (string, string, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
@@ -615,6 +616,13 @@ func (r *stackMigrationResource) watchStackConfigurationUntilTerminalStatus(ctx 
 			errMsg += fmt.Sprintf("%s\n", errDiags.Summary())
 		}
 		tflog.Error(ctx, fmt.Sprintf("Error while awaiting stack configuration %s completion, err: %s", configId, errMsg))
+	}
+
+	if status == "" {
+		// This is highly unexpected, as we should always receive a status after waiting for completion.
+		// However, if we do not receive a status, we log an error and default to pending optimistically.
+		tflog.Error(ctx, fmt.Sprintf("No status received for stack configuration %s after waiting for completion. This is unexpected behavior.", configId))
+		status = tfe.StackConfigurationStatusPending // Default to pending if no status is received
 	}
 
 	return status
