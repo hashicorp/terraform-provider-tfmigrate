@@ -120,5 +120,6 @@ jobs:
         env:
           TF_ACC: "1"
           TF_GIT_PAT_TOKEN: ${{ secrets.TF_GIT_PAT_TOKEN }}
+          TFE_TOKEN: ${{ secrets.TFE_TOKEN }}
         run: go test -v -cover ./internal/provider/
         timeout-minutes: 10
