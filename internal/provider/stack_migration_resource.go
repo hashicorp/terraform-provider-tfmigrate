@@ -321,6 +321,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 
 	// Set values on the Terraform state model
 	state := StackMigrationResourceModel{}
+	state.ConfigurationDir = types.StringValue(plan.ConfigurationDir.ValueString())
 	state.CurrentConfigurationId = types.StringValue(currentConfigurationId)
 	state.CurrentConfigurationStatus = types.StringValue(currentConfigurationStatus)
 	state.Name = types.StringValue(r.existingStack.Name)
@@ -343,8 +344,102 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 }
 
 func (r *stackMigrationResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
-	// TODO implement me
-	panic("implement me")
+	var state StackMigrationResourceModel
+	var err error
+	r.tfeUtil.UpdateContext(ctx)
+
+	// read the current state
+	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
+	if response.Diagnostics.HasError() {
+		tflog.Error(ctx, "Failed to get state values")
+		return
+	}
+
+	tflog.Info(ctx, "Successfully read the current state for stack migration resource")
+
+	// read the organization.
+	if r.existingOrganization, err = r.tfeUtil.ReadOrgByName(state.Organization.ValueString(), r.tfeClient); err != nil {
+		response.Diagnostics.AddError(
+			"Error Reading organization",
+			fmt.Sprintf("The organization %q does not exist or could not be accessed: %s", state.Organization.ValueString(), err.Error()),
+		)
+	}
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	// read the project.
+	r.existingProject, err = r.tfeUtil.ReadProjectByName(r.existingOrganization.Name, state.Project.ValueString(), r.tfeClient)
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Error Reading project",
+			fmt.Sprintf("The project %q does not exist or could not be accessed in organization %q: %s", state.Project.ValueString(), r.existingOrganization.Name, err.Error()),
+		)
+	}
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	// check read stack already.
+	r.existingStack, err = r.tfeUtil.ReadStackByName(r.existingOrganization.Name, r.existingProject.ID, state.Name.ValueString(), r.tfeClient)
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Error Reading stack",
+			fmt.Sprintf("The stack %q does not exist or could not be accessed in organization %q and project %q: %s", state.Name.ValueString(), r.existingOrganization.Name, r.existingProject.Name, err.Error()),
+		)
+	}
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	// if the stack is a VCS-driven stack, throw an error.
+	if r.existingStack.VCSRepo != nil {
+		response.Diagnostics.AddError(
+			"Migration to VCS backed stacks is not supported",
+			fmt.Sprintf("The stack %q in organization %q and project %q is a VCS backed stacks. The `tfmigrate_stack_migration` resource supports migration to non-VCS backed stacks only ", r.existingStack.Name, r.existingOrganization.Name, r.existingProject.Name),
+		)
+		return
+	}
+
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	/* NOTE:
+	   calculate the hash of the configuration files in the directory
+	   during raed it is assumed that the hash of the configuration files
+	   provided in the config_file_dir is the same as the one that is
+	   responsible for the current stack configuration state. Hence, we
+	   calculate the hash of the configuration files in the directory
+	   and set it to the source_bundle_hash attribute in the state.
+	*/
+	sourceBundleHash, err := r.tfeUtil.CalculateStackSourceBundleHash(state.ConfigurationDir.ValueString())
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Error Calculating Configuration Hash",
+			fmt.Sprintf("Could not calculate the hash of the configuration files in the directory %q: %s", state.ConfigurationDir.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// update the values in the updatedState
+	updatedState := StackMigrationResourceModel{}
+	updatedState.ConfigurationDir = state.ConfigurationDir
+	updatedState.CurrentConfigurationId = types.StringValue(r.existingStack.LatestStackConfiguration.ID)
+	updatedState.CurrentConfigurationStatus = types.StringValue(r.existingStack.LatestStackConfiguration.Status)
+	updatedState.Name = types.StringValue(r.existingStack.Name)
+	updatedState.Organization = types.StringValue(r.existingOrganization.Name)
+	updatedState.Project = types.StringValue(r.existingProject.Name)
+	updatedState.SourceBundleHash = types.StringValue(sourceBundleHash)
+
+	// save the updated state
+	response.Diagnostics.Append(response.State.Set(ctx, &updatedState)...)
+
+	tflog.Info(ctx, "Successfully updated the state for stack migration resource")
+
 }
 
 func (r *stackMigrationResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
