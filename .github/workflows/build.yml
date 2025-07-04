@@ -25,6 +25,13 @@ jobs:
   # The implementation is inspired by envconsul -- https://go.hashi.co/get-go-version-example
   test:
     uses: ./.github/workflows/test.yml
+    with:
+      TF_ACC: '1'
+      ONLY_GO_MOD_SUM: 'false'
+    secrets:
+      TF_GIT_PAT_TOKEN: ${{ secrets.TF_GIT_PAT_TOKEN }}
+      TFE_TOKEN: ${{ secrets.TFE_TOKEN }}
+
 
   get-go-version:
     name: "Detect Go toolchain version"
