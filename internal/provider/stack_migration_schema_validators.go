@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -145,7 +144,7 @@ func (o orgEnvNameValidator) ValidateString(ctx context.Context, req validator.S
 	}
 
 	// validate organization name against regex `^[a-zA-Z0-9 _-]+$`
-	if !regexp.MustCompile(nameRegex).MatchString(orgVal) {
+	if !nameRegex.MatchString(orgVal) {
 		resp.Diagnostics.AddAttributeError(
 			req.Path,
 			"Organization name constraint Violation",
@@ -213,7 +212,7 @@ func (p projectEnvNameValidator) ValidateString(ctx context.Context, req validat
 	}
 
 	// validate project name against regex `^[a-zA-Z0-9 _-]+$`
-	if !regexp.MustCompile(nameRegex).MatchString(projectVal) {
+	if !nameRegex.MatchString(projectVal) {
 		resp.Diagnostics.AddAttributeError(
 			req.Path,
 			"Project name constraint Violation",

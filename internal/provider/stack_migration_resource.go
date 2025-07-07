@@ -29,8 +29,7 @@ import (
 
 // Define constants for the stack resource.
 const (
-	stackMigrationResourceName = `_stack_migration`  // stackMigrationResourceName is the name of the resource for migrating existing HCP Terraform workspaces to deployments within a non-VCS stack.
-	nameRegex                  = `^[a-zA-Z0-9 _-]+$` // nameRegex Regex for valid organization, project, and stack names
+	stackMigrationResourceName = `_stack_migration` // stackMigrationResourceName is the name of the resource for migrating existing HCP Terraform workspaces to deployments within a non-VCS stack.
 
 	// Attribute names.
 	attrConfigurationDir           = `config_file_dir`              // attrConfigurationDir is the attribute for the directory containing the stack configuration files.
@@ -125,6 +124,9 @@ const (
 var (
 	_ resource.Resource              = &stackMigrationResource{}
 	_ resource.ResourceWithConfigure = &stackMigrationResource{}
+
+	nameRegex = regexp.MustCompile(`^[a-zA-Z0-9 _-]{3,40}$`) // nameRegex Regex for valid organization, project, and stack names
+
 )
 
 // StackMigrationResourceModel is the data model for the stack migration resource used by the Terraform provider
@@ -189,7 +191,7 @@ func (r *stackMigrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.LengthBetween(1, 90),
-					stringvalidator.RegexMatches(regexp.MustCompile(nameRegex), stackNameConstraintViolationMsg),
+					stringvalidator.RegexMatches(nameRegex, stackNameConstraintViolationMsg),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -204,7 +206,7 @@ func (r *stackMigrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 				Validators: []validator.String{
 					stringvalidator.LengthBetween(3, 40),
-					stringvalidator.RegexMatches(regexp.MustCompile(nameRegex), organizationNameConstraintViolationMsg),
+					stringvalidator.RegexMatches(nameRegex, organizationNameConstraintViolationMsg),
 					&orgEnvNameValidator{},
 				},
 				Default: stringdefault.StaticString(os.Getenv(TfeOrganizationEnvName)),
@@ -218,7 +220,7 @@ func (r *stackMigrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 				Validators: []validator.String{
 					stringvalidator.LengthBetween(3, 40),
-					stringvalidator.RegexMatches(regexp.MustCompile(nameRegex), projectNameConstraintViolationMsg),
+					stringvalidator.RegexMatches(nameRegex, projectNameConstraintViolationMsg),
 					&projectEnvNameValidator{},
 				},
 				Default: stringdefault.StaticString(os.Getenv(TfeProjectEnvName)),
@@ -297,7 +299,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 
 		// if the status is still converging after handling, we log a warning and continue
 		if tfe.StackConfigurationStatus(currentConfigurationStatus) == tfe.StackConfigurationStatusConverging {
-			tflog.Warn(ctx, fmt.Sprintf("Awaited for convierging configuration with %s to complete, but no update", currentConfigurationId))
+			tflog.Warn(ctx, fmt.Sprintf("Awaited for converging configuration with %s to complete, but no update", currentConfigurationId))
 		}
 	}
 
@@ -443,8 +445,80 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 }
 
 func (r *stackMigrationResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	// TODO implement me
-	panic("implement me")
+	var plan, state StackMigrationResourceModel
+	var _ diag.Diagnostics
+	var err error
+
+	// Retrieve values from the plan
+	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
+	if response.Diagnostics.HasError() {
+		tflog.Error(ctx, "Failed to get plan values")
+		return
+	}
+
+	// Retrieve values from the state
+	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
+	if response.Diagnostics.HasError() {
+		tflog.Error(ctx, "Failed to get state values")
+		return
+	}
+
+	// handle write field changes
+	if plan.Organization != state.Organization ||
+		plan.Project != state.Project ||
+		plan.Name != state.Name {
+		panic("Upload configuration files and wait for the stack configuration to converge, cancel, or error out")
+	}
+
+	// Handle configuration directory changes
+	// irrespective of the value difference between plan and state;
+	// for `config_file_dir` attribute, we calculate the source bundle hash
+	// if the current source bundle hash differs from the one in the state,
+	// we check for updatability
+	currentSourceBundleHash, err := r.tfeUtil.CalculateStackSourceBundleHash(plan.ConfigurationDir.ValueString())
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Error Calculating Configuration Hash",
+			fmt.Sprintf("Could not calculate the hash of the configuration files in the directory %q: %s", plan.ConfigurationDir.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	if currentSourceBundleHash != state.SourceBundleHash.ValueString() {
+		panic("Upload configuration files and wait for the stack configuration to converge, cancel, or error out")
+	}
+
+	// Handle non-write field changes,
+	// only one of the following fields can deffer between plan and state:
+	// 1. `current_configuration_id`
+	// 2. `current_configuration_status`
+
+	// Handle current_configuration_id changes
+	if plan.CurrentConfigurationId != state.CurrentConfigurationId {
+		panic(`
+    1. if the new configuration has cancelled, or errored out, Upload configuration files and wait for the stack configuration to converge, cancel, or error out
+    2. if the configuration is still converging check for updatability and take one of the following actions:
+    - Upload configuration files and wait for the stack configuration to converge, cancel, or error out
+    - Or save save the current status from plan as is
+    NOTE: we leave the converged status because the source bundle hash is unchanged and we do not need to upload the configuration files again.`,
+		)
+	}
+
+	// Handle current_configuration_status changes
+	if plan.CurrentConfigurationStatus != state.CurrentConfigurationStatus {
+		panic(`
+	1. if the new plan configuration has canceled, or errored out, Upload configuration files and wait for the stack configuration to converge, cancel, or error out
+	2. if the configuration is still converging check for updatability and take one of the following actions:
+	- Upload configuration files and wait for the stack configuration to converge, cancel, or error out
+	- Or save save the current status from plan as is`,
+		)
+	}
+
+	/*
+	  So the crux of the update operation is always to upload the configuration files and await for the stack configuration to converge, cancel, or error out,
+	  or just save the current status from plan as is.
+	*/
+
 }
 
 // Delete is called when the resource is deleted.

@@ -127,7 +127,7 @@ func (u *tfeUtil) NewClient(config *tfe.Config) (*tfe.Client, error) {
 // HandleConvergingStatus handles the converging status of a stack configuration.
 func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string {
 	tflog.Debug(u.ctx, fmt.Sprintf("Handling converging status for stack configuration ID: %s", currentConfigurationId))
-	ctx, cancel := context.WithTimeout(u.ctx, 5*time.Minute)
+	ctx, cancel := context.WithTimeout(u.ctx, configConvergenceTimeout)
 	defer cancel()
 	resultChan := pollConvergingConfigurationsForRunningStackPlans(ctx, currentConfigurationId, client)
 	for result := range resultChan {
