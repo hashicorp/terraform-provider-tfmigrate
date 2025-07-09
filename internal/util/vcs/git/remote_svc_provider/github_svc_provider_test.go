@@ -118,7 +118,7 @@ func TestValidateToken(t *testing.T) {
 	}{
 		"UnknownGitServiceProvider": {
 			err:     cliErrs.ErrGitServiceProviderNotSupported,
-			suggest: constants.SuggestUsingGithubOrGitlab,
+			suggest: constants.SuggestUsingSupportedVcsProvider,
 		},
 		"ErrGithubTokenNotSet": {
 			err:     cliErrs.ErrTfGitPatTokenNotSet,

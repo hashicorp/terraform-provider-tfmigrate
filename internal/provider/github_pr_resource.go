@@ -86,14 +86,17 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 }
 
 func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	if !r.createPr {
-		tflog.Debug(ctx, "Create PR is not enabled")
-		return
-	}
 	var data GithubPrModel
-
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !r.createPr {
+		tflog.Debug(ctx, "Create PR is not enabled")
+		data.Summary = types.StringValue("PR creation is disabled")
+		data.PrUrl = types.StringValue("")
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
 

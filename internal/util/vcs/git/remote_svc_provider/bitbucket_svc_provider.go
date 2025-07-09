@@ -1,132 +1,158 @@
 package remote_svc_provider
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"os"
 	"strings"
 
+	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
+	"terraform-provider-tfmigrate/internal/constants"
 	"terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/ktrysmt/go-bitbucket"
 )
 
-// BitbucketSvcProvider is used to interact with the Bitbucket API
-type BitbucketSvcProvider struct {
-	client *http.Client
-	ctx    context.Context
-}
-
-// NewBitbucketSvcProvider creates a new Bitbucket service provider
-func NewBitbucketSvcProvider(ctx context.Context) *BitbucketSvcProvider {
-	return &BitbucketSvcProvider{
-		client: &http.Client{},
-		ctx:    ctx,
-	}
-}
-
-// ValidateToken checks if the Bitbucket token is set and valid
-func (b *BitbucketSvcProvider) ValidateToken() error {
-	token, isSet := os.LookupEnv("TF_BITBUCKET_TOKEN")
-	if !isSet || token == "" {
-		return fmt.Errorf("TF_BITBUCKET_TOKEN not set or empty")
-	}
-	return nil
-}
-
-// CreateCommit creates a new commit in the specified repository
-func (b *BitbucketSvcProvider) CreateCommit(owner, repo, branch, message, filePath, content string) error {
-	token := os.Getenv("TF_BITBUCKET_TOKEN")
-	url := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/src", owner, repo)
-	body := &bytes.Buffer{}
-	writer := json.NewEncoder(body)
-	payload := map[string]interface{}{
-		"branch":  branch,
-		"message": message,
-		filePath:  content,
-	}
-	if err := writer.Encode(payload); err != nil {
-		return err
-	}
-	request, err := http.NewRequestWithContext(b.ctx, "POST", url, body)
-	if err != nil {
-		return err
-	}
-	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("Content-Type", "application/json")
-	resp, err := b.client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("failed to create commit: %s", resp.Status)
-	}
-	return nil
-}
-
-// bitbucketSvcProvider implements RemoteVcsSvcProvider for Bitbucket
-var _ RemoteVcsSvcProvider = (*bitbucketSvcProvider)(nil)
-
+// bitbucketSvcProvider implements BitbucketSvcProvider.
 type bitbucketSvcProvider struct {
 	ctx           context.Context
 	git           git.GitUtil
 	bitbucketUtil git.BitbucketUtil
 }
+type Response struct {
+	*http.Response
+}
 
+// BitbucketSvcProvider extends RemoteVcsSvcProvider for Bitbucket-specific token validation.
+type BitbucketSvcProvider interface {
+	RemoteVcsSvcProvider
+}
+
+// ValidateToken checks if the Bitbucket token is set and valid.
 func (b *bitbucketSvcProvider) ValidateToken(repoUrl string, repoIdentifier string, tokenFromProvider string) (string, error) {
-	if err := b.bitbucketUtil.ValidateToken(); err != nil {
-		return "", err
+	// do something with the token
+	if _, err := b.git.GetGitToken(b.git.GetRemoteServiceProvider(repoUrl), tokenFromProvider); err != nil {
+		return gitTokenErrorHandler(err)
 	}
-	return "Bitbucket token is valid", nil
+	orgName, repoName := b.git.GetOrgAndRepoName(repoIdentifier)
+
+	if statusCode, err := b.validateBitbucketTokenRepoAccess(orgName, repoName, tokenFromProvider); err != nil {
+		return gitTokenErrorHandler(err, statusCode)
+	}
+	return "", nil
+}
+
+// validateBitbucketTokenRepoAccess checks if the Bitbucket App Password has access to the repository and PR permissions.
+func (b *bitbucketSvcProvider) validateBitbucketTokenRepoAccess(owner, repo, token string) (int, error) {
+	scopes, tokenType, resp, err := b.bitbucketUtil.CheckTokenTypeAndScopes(owner, repo, token)
+	if err != nil {
+		tflog.Error(b.ctx, fmt.Sprintf("error checking token type and scopes: %v", err))
+		return 0, err
+	}
+	if resp == nil {
+		tflog.Error(b.ctx, "received nil response from Bitbucket API")
+		return 0, cliErrs.ErrUnknownError
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		tflog.Error(b.ctx, fmt.Sprintf("error fetching repository details: %s", resp.Status))
+		return handleNonSuccessResponseFromVcsApi(resp)
+	}
+
+	if tokenType != git.TokenTypeRepoAccessToken {
+		return http.StatusOK, cliErrs.ErrBitbucketTokenTypeNotSupported
+	}
+
+	if !b.bitbucketUtil.ContainsScope(scopes, git.ScopeRepositoryWrite) {
+		if b.bitbucketUtil.ContainsScope(scopes, git.ScopePullRequestWrite) {
+			return http.StatusOK, nil
+		}
+		return http.StatusOK, cliErrs.ErrTokenDoesNotHaveWritePermission
+	}
+
+	if !b.bitbucketUtil.ContainsScope(scopes, git.ScopePullRequestWrite) {
+		return http.StatusOK, cliErrs.ErrTokenDoesNotHavePrWritePermission
+	}
+	return http.StatusOK, nil
 }
 
 // CreatePullRequest creates a pull request on the Bitbucket repository.
 func (b *bitbucketSvcProvider) CreatePullRequest(params git.PullRequestParams) (string, error) {
-	// Bitbucket expects repoIdentifier as "owner/repo"
+
 	parts := strings.Split(params.RepoIdentifier, "/")
 	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid repository identifier. It should be in the format: owner/repository")
+		return "", fmt.Errorf(constants.ErrBitbucketInvalidRepoIdentifier)
 	}
 	owner := parts[0]
 	repo := parts[1]
 
-	// Create bitbucket client with the token
-	client := bitbucket.NewBasicAuth("", params.GitPatToken)
+	url := fmt.Sprintf(git.BitbucketPullRequestAPIURL, owner, repo)
 
-	// Create the pull request
-	pr, err := client.Repositories.PullRequests.Create(&bitbucket.PullRequestsOptions{
-		Owner:             owner,
-		RepoSlug:          repo,
-		Title:             params.Title,
-		Description:       params.Body,
-		SourceBranch:      params.FeatureBranch,
-		DestinationBranch: params.BaseBranch,
-		CloseSourceBranch: false,
-	})
-
-	if err != nil {
-		tflog.Error(b.ctx, "Failed to create pull request", map[string]interface{}{
-			"owner": owner,
-			"repo":  repo,
-			"title": params.Title,
-			"error": err.Error(),
-		})
-		return "", fmt.Errorf("failed to create pull request: %v", err)
+	payload := map[string]any{
+		"title": params.Title,
+		"source": map[string]any{
+			"branch": map[string]any{
+				"name": params.FeatureBranch,
+			},
+		},
+		"destination": map[string]any{
+			"branch": map[string]any{
+				"name": params.BaseBranch,
+			},
+		},
+		"description":         params.Body,
+		"close_source_branch": false,
 	}
 
-	// Extract the HTML URL from the response
-	if links, ok := pr.(map[string]interface{})["links"].(map[string]interface{}); ok {
-		if html, ok := links["html"].(map[string]interface{}); ok {
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf(constants.ErrBitbucketMarshalPayload, err)
+	}
+
+	req, err := http.NewRequestWithContext(b.ctx, http.MethodPost, url, strings.NewReader(string(jsonPayload)))
+	if err != nil {
+		return "", fmt.Errorf(constants.ErrBitbucketCreateHTTPRequest, err)
+	}
+	req.Header.Set(git.AuthorizationHeader, git.BearerPrefix+params.GitPatToken)
+	req.Header.Set(git.AcceptHeader, git.ApplicationJSONType)
+	req.Header.Set(git.ContentTypeHeader, git.ApplicationJSONType)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf(constants.ErrBitbucketSendHTTPRequest, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf(constants.ErrBitbucketReadResponseBody, err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		tflog.Error(b.ctx, git.CreatePullRequestFailedLog, map[string]any{
+			"owner":      owner,
+			"repo":       repo,
+			"title":      params.Title,
+			"statusCode": resp.StatusCode,
+			"body":       string(body),
+		})
+		return "", fmt.Errorf(constants.ErrBitbucketCreatePullRequestFailed, string(body))
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf(constants.ErrBitbucketParseResponse, err)
+	}
+
+	if links, ok := result["links"].(map[string]any); ok {
+		if html, ok := links["html"].(map[string]any); ok {
 			if href, ok := html["href"].(string); ok {
 				return href, nil
 			}
 		}
 	}
 
-	return "", fmt.Errorf("could not extract pull request URL from response")
+	return "", fmt.Errorf(constants.ErrBitbucketExtractPullRequestURL)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	consts "terraform-provider-tfmigrate/internal/constants"
@@ -21,9 +22,10 @@ import (
 )
 
 const (
-	githubClassicTokenPrefix     = `ghp_`
-	githubFineGrainedTokenPrefix = `github_pat_`
-	gitlabTokenPrefix            = `glpat-`
+	githubClassicTokenPrefix      = `ghp_`
+	githubFineGrainedTokenPrefix  = `github_pat_`
+	gitlabTokenPrefix             = `glpat-`
+	bitbucketRepoAccessTokenRegex = `ATCTT3xFfGN0[A-Za-z0-9_-]{116,}=[A-F0-9]{8}`
 )
 
 var err error
@@ -34,10 +36,11 @@ type GitUserConfig struct {
 }
 
 var (
-	ClassicToken     TokenType = "classic"
-	FineGrainedToken TokenType = "fine-grained"
-	Unrecognized     TokenType = "unrecognized"
-	GitlabPat        TokenType = "gitlabToken"
+	ClassicToken             TokenType = "classic"
+	FineGrainedToken         TokenType = "fine-grained"
+	Unrecognized             TokenType = "unrecognized"
+	GitlabPat                TokenType = "gitlabToken"
+	BitbucketRepoAccessToken TokenType = "bitbucketRepoAccessToken"
 )
 
 type TokenType string
@@ -260,6 +263,9 @@ func (g *gitUtil) GetGitToken(gitServiceProvider *consts.GitServiceProvider, tok
 	case consts.GitLab:
 		tflog.Info(context.Background(), fmt.Sprintf("Fetched GitLab token set: %s", gitPatToken))
 		return g.getGitlabPatToken(gitPatToken)
+	case consts.Bitbucket:
+		tflog.Info(context.Background(), fmt.Sprintf("Fetched Bitbucket token set: %s", gitPatToken))
+		return getBitBucketAppPassword(gitPatToken)
 	}
 
 	return "", cliErrs.ErrGitServiceProviderNotSupported
@@ -292,6 +298,16 @@ func (g *gitUtil) getGitlabPatToken(gitPatToken string) (string, error) {
 	return "", cliErrs.ErrTfGitPatTokenInvalid
 }
 
+// getBitBucketAppPassword returns the Bitbucket App Password.
+func getBitBucketAppPassword(gitPatToken string) (string, error) {
+	tokenType := getTokenType(gitPatToken)
+	if tokenType == BitbucketRepoAccessToken {
+		return gitPatToken, nil
+	}
+
+	return "", cliErrs.ErrTfGitPatTokenInvalid
+}
+
 // GetRepoIdentifier gets the repo identifier.
 // In case of GitHub, the repo identifier is in the format "owner/repo".
 // In case of GitLab, the repo identifier is in the format "group/repo".
@@ -304,6 +320,8 @@ func (g *gitUtil) GetRepoIdentifier(remoteURL string) string {
 		repoIdentifier = g.getRepoIdentifierFromRemoteURl(remoteURL, consts.GitHub)
 	case consts.GitLab:
 		repoIdentifier = g.getRepoIdentifierFromRemoteURl(remoteURL, consts.GitLab)
+	case consts.Bitbucket:
+		repoIdentifier = g.getRepoIdentifierFromRemoteURl(remoteURL, consts.Bitbucket)
 	default:
 		return ""
 	}
@@ -335,10 +353,13 @@ func (g *gitUtil) GetRemoteServiceProvider(remoteURL string) *consts.GitServiceP
 	if strings.Contains(remoteURL, string(consts.GitLab)) {
 		return &consts.GitLab
 	}
+	if strings.Contains(remoteURL, string(consts.Bitbucket)) {
+		return &consts.Bitbucket
+	}
 	return &consts.UnknownGitServiceProvider
 }
 
-// getTokenType returns the type of GitHub token.
+// getTokenType returns the type of token.
 func getTokenType(gitPatToken string) TokenType {
 	switch {
 	case strings.HasPrefix(gitPatToken, githubClassicTokenPrefix):
@@ -347,6 +368,9 @@ func getTokenType(gitPatToken string) TokenType {
 		return FineGrainedToken
 	case strings.HasPrefix(gitPatToken, gitlabTokenPrefix):
 		return GitlabPat
+	// match the regex for Bitbucket App Passwords
+	case regexp.MustCompile(bitbucketRepoAccessTokenRegex).MatchString(gitPatToken):
+		return BitbucketRepoAccessToken
 	default:
 		return Unrecognized
 	}

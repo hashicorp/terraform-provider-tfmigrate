@@ -107,8 +107,8 @@ func TestGetRepoIdentifier(t *testing.T) {
 		repoIdentifier string
 		repoUrl        string
 	}{
-		"nonSupportedRepoUrl": {
-			repoIdentifier: "",
+		"bitbucketRepoUrl": {
+			repoIdentifier: "hashicorp/terraform-provider-aws",
 			repoUrl:        "https://bitbucket.org/hashicorp/terraform-provider-aws.git",
 		},
 		"githubSshRepoUrl": {
@@ -137,7 +137,7 @@ func TestGetRepoIdentifier(t *testing.T) {
 			repoIdentifier := gitOps.GetRepoIdentifier(tc.repoUrl)
 
 			// Assert
-			r.Equal(repoIdentifier, tc.repoIdentifier)
+			r.Equal(tc.repoIdentifier, repoIdentifier)
 		})
 	}
 
