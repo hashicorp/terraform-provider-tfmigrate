@@ -34,6 +34,7 @@ func (g *githubSvcProvider) ValidateToken(repoUrl string, repoIdentifier string,
 	}
 
 	orgName, repoName := g.git.GetOrgAndRepoName(repoIdentifier)
+
 	if statusCode, err := g.validateGithubTokenRepoAccess(orgName, repoName); err != nil {
 		return gitTokenErrorHandler(err, statusCode)
 	}

@@ -31,7 +31,6 @@ var (
 )
 
 func TestGitRemoteName(t *testing.T) {
-	t.Skip("Skipping test as it requires a git repository need to spend some time with docker remote repo setup")
 	for name, tc := range map[string]struct {
 		remoteName string
 		error      error
@@ -533,8 +532,8 @@ func TestGetRepoIdentifier(t *testing.T) {
 		repoIdentifier string
 		repoUrl        string
 	}{
-		"nonSupportedRepoUrl": {
-			repoIdentifier: "",
+		"bitbucketRepoUrl": {
+			repoIdentifier: "hashicorp/terraform-provider-aws",
 			repoUrl:        "https://bitbucket.org/hashicorp/terraform-provider-aws.git",
 		},
 		"githubSshRepoUrl": {
@@ -564,7 +563,7 @@ func TestGetRepoIdentifier(t *testing.T) {
 			repoIdentifier := gitOps.GetRepoIdentifier(tc.repoUrl)
 
 			// Assert
-			r.Equal(repoIdentifier, tc.repoIdentifier)
+			r.Equal(tc.repoIdentifier, repoIdentifier)
 		})
 	}
 }
@@ -659,6 +658,28 @@ func TestCreatePullRequest(t *testing.T) {
 			expectedErr:    errors.New("failed to create MR"),
 			expectedURL:    "",
 		},
+		"successful Bitbucket pull request": {
+			repoIdentifier: "owner/repo",
+			baseBranch:     "main",
+			featureBranch:  "feature-branch",
+			title:          "Test PR",
+			body:           "Test PR body",
+			gitPatToken:    "fake-token",
+			remoteService:  "Bitbucket",
+			expectedErr:    nil,
+			expectedURL:    "https://bitbucket.org/owner/repo/pull-requests/1",
+		},
+		"failed Bitbucket pull request creation": {
+			repoIdentifier: "owner/repo",
+			baseBranch:     "main",
+			featureBranch:  "feature-branch",
+			title:          "Test PR",
+			body:           "Test PR body",
+			gitPatToken:    "fake-token",
+			remoteService:  "Bitbucket",
+			expectedErr:    errors.New("failed to create PR"),
+			expectedURL:    "",
+		},
 		"unsupported remote service provider": {
 			repoIdentifier: "owner/repo",
 			baseBranch:     "main",
@@ -680,9 +701,11 @@ func TestCreatePullRequest(t *testing.T) {
 			mockGitLabClient := &gitlab.Client{}
 			mockGithubSvcProvider := new(remote_svc_provider_mocks.MockGithubSvcProvider)
 			mockGitlabSvcProvider := new(remote_svc_provider_mocks.MockGitlabSvcProvider)
+			mockBitbucketSvcProvider := new(remote_svc_provider_mocks.MockBitbucketSvcProvider)
 
 			pr := "https://github.com/owner/repo/pull/1"
 			mr := "https://gitlab.com/group/project/merge_requests/1"
+			bbpr := "https://bitbucket.org/owner/repo/pull-requests/1"
 
 			pullRequestParams := &gitUtil.PullRequestParams{
 				RepoIdentifier: tc.repoIdentifier,
@@ -750,6 +773,24 @@ func TestCreatePullRequest(t *testing.T) {
 				}
 			}
 
+			if tc.remoteService == "Bitbucket" {
+
+				mockOps.On("GetRemoteName").Return("origin", nil)
+				mockOps.On("GetRemoteURL", "origin").Return("git@bitbucket.org:owner/repo.git", nil)
+				mockOps.On("GetRemoteServiceProvider", "git@bitbucket.org:owner/repo.git").Return(&consts.Bitbucket)
+				mockUtil.On("GetRemoteServiceProvider", "git@bitbucket.org:owner/repo.git").Return(&consts.Bitbucket)
+
+				if name == "successful Bitbucket pull request" {
+					mockBitbucketSvcProvider.On("CreatePullRequest", pullRequestParams).Return(bbpr, nil)
+					return
+				}
+
+				if name == "failed Bitbucket pull request creation" {
+					mockBitbucketSvcProvider.On("CreatePullRequest", pullRequestParams).Return("", errors.New("failed to create PR"))
+					return
+				}
+			}
+
 			if name == "unsupported remote service provider" {
 				mockOps.On("GetRemoteName").Return("origin", nil)
 				mockOps.On("GetRemoteURL", "origin").Return("git@github.com:hashicorp/tf-migrate.git", nil)
@@ -771,6 +812,7 @@ func TestCreatePullRequest(t *testing.T) {
 			// Verify mock expectations
 			mockOps.AssertExpectations(t)
 			mockUtil.AssertExpectations(t)
+			mockBitbucketSvcProvider.AssertExpectations(t)
 		})
 	}
 }

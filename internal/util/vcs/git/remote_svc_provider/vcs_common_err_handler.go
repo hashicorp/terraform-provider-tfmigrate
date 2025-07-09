@@ -56,7 +56,7 @@ func gitTokenErrorHandler(err error, statusCode ...int) (string, error) {
 
 	switch {
 	case errors.Is(err, cliErrs.ErrGitServiceProviderNotSupported):
-		return constants.SuggestUsingGithubOrGitlab, err
+		return constants.SuggestUsingSupportedVcsProvider, err
 	case
 		errors.Is(err, cliErrs.ErrTfGitPatTokenNotSet),
 		errors.Is(err, cliErrs.ErrTfGitPatTokenEmpty),
@@ -71,6 +71,10 @@ func gitTokenErrorHandler(err error, statusCode ...int) (string, error) {
 		return constants.SuggestProvidingRepoReadPermissionToToken, err
 	case errors.Is(err, cliErrs.ErrTokenDoesNotHaveWritePermission):
 		return constants.SuggestProvidingRepoWritePermissionToToken, err
+	case errors.Is(err, cliErrs.ErrBitbucketTokenTypeNotSupported):
+		return constants.SuggestSettingValidTokenValue, err
+	case errors.Is(err, cliErrs.ErrTokenDoesNotHavePrWritePermission):
+		return constants.SuggestCheckingApiDocs, err
 	case errors.Is(err, cliErrs.ErrRepositoryNotFound):
 		return constants.SuggestValidatingRepoNameOrTokenDoesNotHaveAccessToRead, err
 	case errors.Is(err, cliErrs.ErrResponsePermissionsNil),

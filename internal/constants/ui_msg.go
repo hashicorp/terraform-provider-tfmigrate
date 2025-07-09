@@ -15,14 +15,15 @@ const (
 	ErrorCreatingNewTokenvalidator = `Error creating new token validator: %v`
 	// ErrorCreatingBranch is the warning message displayed when the tool is unable to create a branch.
 	ErrorCreatingBranch = `Error creating or checking out branch %s, err: %v.`
-	// WarnNotOnGithubOrGitlab is the warning displayed when the user's repository is not on GitHub.
-	WarnNotOnGithubOrGitlab = `Your repository URL is %s. Only GitHub and Gitlab is supported.`
-	// SuggestSettingValidTokenValue is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is not set with a classic GitHub token.
+	// WarnNotOnSupportedVcsProvider is the warning displayed when the user's repository is not on GitHub, Gitlab and Bitbucket.
+	WarnNotOnSupportedVcsProvider = `Your repository URL is %s. Only GitHub, Gitlab and Bitbucket is supported. Terraform Migrate will skip all Git operations.`
+	// SuggestSettingValidTokenValue is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is not set with a a classic GitHub, a Gitlab PAT token or an Bitbucket App Password.
 	SuggestSettingValidTokenValue = `Set the value of the TF_GIT_PAT_TOKEN environment variable with a proper VCS token to see all git operation related options.
 For GitHub, use a classic token.
-For Gitlab, use a personal access token.`
-	// SuggestUsingGithub is the suggestion displayed when the repository is not hosted on GitHub.
-	SuggestUsingGithubOrGitlab = `Repository must be hosted on GitHub Or Gitlab to see all git operation related options.`
+For Gitlab, use a personal access token.
+For Bitbucket, use a repository access token.`
+	// SuggestUsingSupportedVcsProvider is the suggestion displayed when the repository is not hosted on GitHub, Gitlab or Bitbucket.
+	SuggestUsingSupportedVcsProvider = `Repository must be hosted on GitHub, Gitlab or Bitbucket to see all git operation related options.`
 	// SuggestSettingUnexpiredToken is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is set with an expired token.
 	SuggestSettingUnexpiredToken = `Set the TF_GIT_PAT_TOKEN environment variable with a non-expired classic GitHub token to enable all git operation related options.`
 	// SuggestProvidingAccessToToken is the suggestion displayed when the token does not have access to the required organization.
@@ -52,4 +53,28 @@ For Gitlab, use a personal access token.`
 
 	// ErrNotGitRepo is the error displayed when the current working directory is not a git repository.
 	ErrNotGitRepo = `fatal: not a git repository (or any of the parent directories): .git`
+
+	// Bitbucket-specific error messages
+	// ErrBitbucketInvalidRepoIdentifier is the error displayed when the repository identifier for Bitbucket is invalid.
+	ErrBitbucketInvalidRepoIdentifier = `invalid repository identifier. It should be in the format: owner/repository`
+	// ErrBitbucketMarshalPayload is the error displayed when marshaling the pull request payload fails.
+	ErrBitbucketMarshalPayload = `failed to marshal pull request payload: %v`
+	// ErrBitbucketCreateHTTPRequest is the error displayed when creating an HTTP request fails.
+	ErrBitbucketCreateHTTPRequest = `failed to create HTTP request: %v`
+	// ErrBitbucketSendHTTPRequest is the error displayed when sending an HTTP request fails.
+	ErrBitbucketSendHTTPRequest = `failed to send HTTP request: %v`
+	// ErrBitbucketReadResponseBody is the error displayed when reading the response body fails.
+	ErrBitbucketReadResponseBody = `failed to read response body: %v`
+	// ErrBitbucketCreatePullRequestFailed is the error displayed when creating a pull request fails.
+	ErrBitbucketCreatePullRequestFailed = `failed to create pull request: %s`
+	// ErrBitbucketParseResponse is the error displayed when parsing the pull request response fails.
+	ErrBitbucketParseResponse = `failed to parse pull request response: %v`
+	// ErrBitbucketExtractPullRequestURL is the error displayed when extracting the pull request URL from response fails.
+	ErrBitbucketExtractPullRequestURL = `could not extract pull request URL from response`
+
+	// BitbucketUtil error messages
+	// ErrBitbucketCreateHTTPRequestUtil is the error displayed when creating HTTP request fails in BitbucketUtil.
+	ErrBitbucketCreateHTTPRequestUtil = `failed to create HTTP request: %w`
+	// ErrBitbucketMakeHTTPRequestUtil is the error displayed when making HTTP request fails in BitbucketUtil.
+	ErrBitbucketMakeHTTPRequestUtil = `failed to make HTTP request: %w`
 )
