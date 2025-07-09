@@ -239,109 +239,26 @@ func (r *stackMigrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 // Create is called when the resource is created. It uploads the stack configuration files to the stack and waits for the stack configuration to converge, cancel, or error out.
 func (r *stackMigrationResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var plan StackMigrationResourceModel
-	var currentConfigurationId string
-	var currentConfigurationStatus string
-	var currentSourceBundleHash string
-	var diags diag.Diagnostics
+	tflog.Debug(ctx, "Starting Create operation for stack migration resource")
 
-	// Retrieve values from the plan into plan
+	// retrieve values from the plan
 	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
 	if response.Diagnostics.HasError() {
-		tflog.Error(ctx, "Failed to get plan values")
 		return
 	}
+	tflog.Debug(ctx, fmt.Sprintf("Received plan for stack migration resource: %+v", plan))
 
-	// Validate preconditions
-	response.Diagnostics.Append(r.createActionPreconditions(ctx, plan)...)
-	if response.Diagnostics.HasError() {
-		tflog.Error(ctx, "Preconditions for resource creation failed")
-		return
-	}
+	// update the context of the tfeUtil with the current context
+	r.tfeUtil.UpdateContext(ctx)
 
-	// Check if the stack configuration directory is set
-	uploadNewConfig, err := r.allowSourceBundleUpload(ctx, r.existingStack.LatestStackConfiguration)
-	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf("Failed to check if source bundle upload is allowed for stack %s: %s", r.existingStack.Name, err.Error()))
-		response.Diagnostics.AddError(
-			"Error Checking Source Bundle Upload",
-			fmt.Sprintf("Failed to check if source bundle upload is allowed for stack %s: %s", r.existingStack.Name, err.Error()),
-		)
-		return
-	}
-
-	// Attempt to upload a source bundle if allowed else sync existing stack configuration data
-	if uploadNewConfig {
-		tflog.Info(ctx, fmt.Sprintf("Uploading source bundle for stack %s from directory %s", r.existingStack.Name, plan.ConfigurationDir.ValueString()))
-		currentConfigurationId, currentSourceBundleHash, diags = r.uploadSourceBundle(ctx, r.existingStack.ID, plan.ConfigurationDir.ValueString(), true)
-	} else {
-		tflog.Info(ctx, fmt.Sprintf("Syncing existing stack configuration data for stack %s from directory %s", r.existingStack.Name, plan.ConfigurationDir.ValueString()))
-		currentConfigurationId, currentSourceBundleHash, diags = r.syncExistingStackConfigurationData(ctx, r.existingStack, plan.ConfigurationDir.ValueString())
-	}
-
+	// start the stack migration process
+	tflog.Info(ctx, "Starting to apply stack migration configuration to a new stack migration resource")
+	state, diags := r.applyStackConfiguration(ctx, plan.Organization.ValueString(), plan.Project.ValueString(), plan.Name.ValueString(), plan.ConfigurationDir.ValueString())
 	response.Diagnostics.Append(diags...)
 	if response.Diagnostics.HasError() {
-		tflog.Error(ctx, fmt.Sprintf("Failed to get currentConfigurationId and sourceBundleHash for stack %s", r.existingStack.Name))
 		return
 	}
-
-	tflog.Info(ctx, fmt.Sprintf("Starting to poll for current configuration ID: %s", currentConfigurationId))
-	currentConfigurationStatus = r.watchStackConfigurationUntilTerminalStatus(ctx, currentConfigurationId).String()
-	tflog.Info(ctx, fmt.Sprintf("Received status: %s for configuration ID: %s after polling ", currentConfigurationStatus, currentConfigurationId))
-
-	// handle converging status
-	if tfe.StackConfigurationStatus(currentConfigurationStatus) == tfe.StackConfigurationStatusConverging {
-		tflog.Info(ctx, fmt.Sprintf("The stack configuration %s is converging. awaiting to be in a non-running plan plan", currentConfigurationId))
-		configStatusFromConvergingHandler := r.tfeUtil.HandleConvergingStatus(currentConfigurationId, r.tfeClient)
-
-		if configStatusFromConvergingHandler != "" {
-			currentConfigurationStatus = configStatusFromConvergingHandler
-		}
-
-		// if the status is still converging after handling, we log a warning and continue
-		if tfe.StackConfigurationStatus(currentConfigurationStatus) == tfe.StackConfigurationStatusConverging {
-			tflog.Warn(ctx, fmt.Sprintf("Awaited for converging configuration with %s to complete, but no update", currentConfigurationId))
-		}
-	}
-
-	// Ensure the currentConfigurationId is not empty before proceeding
-	if currentConfigurationId == "" {
-		response.Diagnostics.AddError(
-			"Post create validation failure: Missing Configuration ID",
-			"After uploading or syncing the stack configuration, the resulting configuration ID was empty. This indicates an internal logic or API error. Aborting resource creation.",
-		)
-		return
-	}
-
-	// Ensure the currentConfigurationStatus is not empty before proceeding
-	if currentConfigurationStatus == "" {
-		response.Diagnostics.AddError(
-			"Post create validation failure: Missing Configuration Status",
-			"After uploading or syncing the stack configuration, the resulting configuration status was empty. This indicates an internal logic or API error. Aborting resource creation.",
-		)
-		return
-	}
-
-	// Set values on the Terraform state model
-	state := StackMigrationResourceModel{}
-	state.ConfigurationDir = types.StringValue(plan.ConfigurationDir.ValueString())
-	state.CurrentConfigurationId = types.StringValue(currentConfigurationId)
-	state.CurrentConfigurationStatus = types.StringValue(currentConfigurationStatus)
-	state.Name = types.StringValue(r.existingStack.Name)
-	state.Organization = types.StringValue(r.existingOrganization.Name)
-	state.Project = types.StringValue(r.existingProject.Name)
-	state.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-
-	// Prepare and log a final status message
-	finalLogMsgMetadata := map[string]interface{}{
-		organizationNameMetadata:         r.existingOrganization.Name,
-		projectNameMetadata:              r.existingProject.Name,
-		stackConfigurationIdMetadata:     currentConfigurationId,
-		stackConfigurationStatusMetadata: currentConfigurationStatus,
-		stackNameMetadata:                r.existingStack.Name,
-	}
-	r.logFinalConfigStatusMsg(ctx, tfe.StackConfigurationStatus(currentConfigurationStatus), finalLogMsgMetadata)
-
-	// Save plan
+	tflog.Info(ctx, "Successfully applied stack migration configuration to a new stack migration resource")
 	response.Diagnostics.Append(response.State.Set(ctx, &state)...)
 }
 
@@ -516,18 +433,18 @@ func (r *stackMigrationResource) Update(ctx context.Context, request resource.Up
 
 	/*
 	  So the crux of the update operation is always to upload the configuration files and await for the stack configuration to converge, cancel, or error out,
-	  or just save the current status from plan as is.
+	  or just save the current status from the plan as is.
 	*/
 
 }
 
-// Delete is called when the resource is deleted.
-// Since the stack migration resource does not support deletion, it logs a warning and adds a warning to the response diagnostics.
+// Delete is called when the resource is deleted, since the stack migration resource does not support deletion, it logs a warning and adds a warning to the response diagnostics.
 func (r *stackMigrationResource) Delete(ctx context.Context, _ resource.DeleteRequest, response *resource.DeleteResponse) {
 	tflog.Warn(ctx, DestroyActionNotSupported)
 	response.Diagnostics.AddWarning(DestroyActionNotSupported, DestroyActionNotSupportedDetailed)
 }
 
+// Configure is called when the resource is configured, it sets up the TFE client and validates the provider configuration.
 func (r *stackMigrationResource) Configure(ctx context.Context, configureRequest resource.ConfigureRequest, configureResponse *resource.ConfigureResponse) {
 	tflog.Debug(ctx, fmt.Sprintf("Configuring Stack Migration PR Resource with ProviderData: %+v", configureRequest.ProviderData))
 	if configureRequest.ProviderData == nil {
@@ -593,6 +510,106 @@ func (r *stackMigrationResource) Metadata(_ context.Context, request resource.Me
 	response.TypeName = request.ProviderTypeName + stackMigrationResourceName
 }
 
+// applyStackConfiguration uploads the stack configuration files to the stack and waits for the stack configuration to converge, cancel, or error out.
+func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, orgName string, projectName string, stackName string, configDirAbsPath string) (StackMigrationResourceModel, diag.Diagnostics) {
+	var currentConfigurationId string
+	var currentConfigurationStatus string
+	var currentSourceBundleHash string
+	var diags diag.Diagnostics
+	var state StackMigrationResourceModel
+
+	// Validate preconditions
+	diags.Append(r.createActionPreconditions(orgName, projectName, stackName)...)
+	if diags.HasError() {
+		tflog.Error(ctx, "Preconditions for resource creation failed")
+		return state, diags
+	}
+
+	// Check if a new source bundle config is allowed to be uploaded
+	uploadNewConfig, err := r.allowSourceBundleUpload(ctx, r.existingStack.LatestStackConfiguration)
+	if err != nil {
+		tflog.Error(ctx, fmt.Sprintf("Failed to check if source bundle upload is allowed for stack %s: %s", r.existingStack.Name, err.Error()))
+		diags.AddError(
+			"Error Checking Source Bundle Upload",
+			fmt.Sprintf("Failed to check if source bundle upload is allowed for stack %s: %s", r.existingStack.Name, err.Error()),
+		)
+		return state, diags
+	}
+
+	// Attempt to upload a source bundle if allowed else sync existing stack configuration data
+	if uploadNewConfig {
+		tflog.Info(ctx, fmt.Sprintf("Uploading source bundle for stack %s from directory %s", r.existingStack.Name, configDirAbsPath))
+		currentConfigurationId, currentSourceBundleHash, diags = r.uploadSourceBundle(ctx, r.existingStack.ID, configDirAbsPath, true)
+	} else {
+		tflog.Info(ctx, fmt.Sprintf("Syncing existing stack configuration data for stack %s from directory %s", r.existingStack.Name, configDirAbsPath))
+		currentConfigurationId, currentSourceBundleHash, diags = r.syncExistingStackConfigurationData(ctx, r.existingStack, configDirAbsPath)
+	}
+
+	diags.Append(diags...)
+	if diags.HasError() {
+		tflog.Error(ctx, fmt.Sprintf("Failed to get currentConfigurationId and sourceBundleHash for stack %s", r.existingStack.Name))
+		return state, diags
+	}
+
+	// Attempt to poll for the current configuration status and await for it to converge, cancel, or error out.
+	tflog.Info(ctx, fmt.Sprintf("Starting to poll for current configuration ID: %s", currentConfigurationId))
+	currentConfigurationStatus = r.watchStackConfigurationUntilTerminalStatus(ctx, currentConfigurationId).String()
+	tflog.Info(ctx, fmt.Sprintf("Received status: %s for configuration ID: %s after polling ", currentConfigurationStatus, currentConfigurationId))
+
+	// handle converging status
+	if tfe.StackConfigurationStatus(currentConfigurationStatus) == tfe.StackConfigurationStatusConverging {
+		tflog.Info(ctx, fmt.Sprintf("The stack configuration %s is converging. awaiting to be in a non-running plan plan", currentConfigurationId))
+		configStatusFromConvergingHandler := r.tfeUtil.HandleConvergingStatus(currentConfigurationId, r.tfeClient)
+
+		if configStatusFromConvergingHandler != "" {
+			currentConfigurationStatus = configStatusFromConvergingHandler
+		}
+
+		// if the status is still converging after handling, we log a warning and continue
+		if tfe.StackConfigurationStatus(currentConfigurationStatus) == tfe.StackConfigurationStatusConverging {
+			tflog.Warn(ctx, fmt.Sprintf("Awaited for converging configuration with %s to complete, but no update", currentConfigurationId))
+		}
+	}
+
+	// Ensure the currentConfigurationId is not empty before proceeding
+	if currentConfigurationId == "" {
+		diags.AddError(
+			"Post create validation failure: Missing Configuration ID",
+			"After uploading or syncing the stack configuration, the resulting configuration ID was empty. This indicates an internal logic or API error. Aborting resource creation.",
+		)
+		return state, diags
+	}
+
+	// Ensure the currentConfigurationStatus is not empty before proceeding
+	if currentConfigurationStatus == "" {
+		diags.AddError(
+			"Post create validation failure: Missing Configuration Status",
+			"After uploading or syncing the stack configuration, the resulting configuration status was empty. This indicates an internal logic or API error. Aborting resource creation.",
+		)
+		return state, diags
+	}
+
+	state.ConfigurationDir = types.StringValue(configDirAbsPath)
+	state.CurrentConfigurationId = types.StringValue(currentConfigurationId)
+	state.CurrentConfigurationStatus = types.StringValue(currentConfigurationStatus)
+	state.Name = types.StringValue(r.existingStack.Name)
+	state.Organization = types.StringValue(r.existingOrganization.Name)
+	state.Project = types.StringValue(r.existingProject.Name)
+	state.SourceBundleHash = types.StringValue(currentSourceBundleHash)
+
+	// Prepare and log a final status message
+	finalLogMsgMetadata := map[string]interface{}{
+		organizationNameMetadata:         r.existingOrganization.Name,
+		projectNameMetadata:              r.existingProject.Name,
+		stackConfigurationIdMetadata:     currentConfigurationId,
+		stackConfigurationStatusMetadata: currentConfigurationStatus,
+		stackNameMetadata:                r.existingStack.Name,
+	}
+	r.logFinalConfigStatusMsg(ctx, tfe.StackConfigurationStatus(currentConfigurationStatus), finalLogMsgMetadata)
+
+	return state, diags
+}
+
 // allowSourceBundleUpload checks if the stack configuration is in a state that allows uploading a new source bundle.
 func (r *stackMigrationResource) allowSourceBundleUpload(ctx context.Context, configuration *tfe.StackConfiguration) (bool, error) {
 	if configuration == nil || len(configuration.DeploymentNames) == 0 {
@@ -617,36 +634,35 @@ func (r *stackMigrationResource) allowSourceBundleUpload(ctx context.Context, co
 }
 
 // createActionPreconditions checks if the resource passes the preconditions for the create action.
-func (r *stackMigrationResource) createActionPreconditions(ctx context.Context, plan StackMigrationResourceModel) diag.Diagnostics {
+func (r *stackMigrationResource) createActionPreconditions(orgName string, projectName string, stackName string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	var err error
-	r.tfeUtil.UpdateContext(ctx)
 
 	// check if the organization exists
-	if r.existingOrganization, err = r.tfeUtil.ReadOrgByName(plan.Organization.ValueString(), r.tfeClient); err != nil {
+	if r.existingOrganization, err = r.tfeUtil.ReadOrgByName(orgName, r.tfeClient); err != nil {
 		diags.AddError(
 			"Error Reading organization",
-			fmt.Sprintf("The organization %q does not exist or could not be accessed: %s", plan.Organization.ValueString(), err.Error()),
+			fmt.Sprintf("The organization %q does not exist or could not be accessed: %s", orgName, err.Error()),
 		)
 		return diags
 	}
 
 	// check if the project exists
-	r.existingProject, err = r.tfeUtil.ReadProjectByName(r.existingOrganization.Name, plan.Project.ValueString(), r.tfeClient)
+	r.existingProject, err = r.tfeUtil.ReadProjectByName(r.existingOrganization.Name, projectName, r.tfeClient)
 	if err != nil {
 		diags.AddError(
 			"Error Reading project",
-			fmt.Sprintf("The project %q does not exist or could not be accessed in organization %q: %s", plan.Project.ValueString(), r.existingOrganization.Name, err.Error()),
+			fmt.Sprintf("The project %q does not exist or could not be accessed in organization %q: %s", projectName, r.existingOrganization.Name, err.Error()),
 		)
 		return diags
 	}
 
 	// check if the stack already exists
-	r.existingStack, err = r.tfeUtil.ReadStackByName(r.existingOrganization.Name, r.existingProject.ID, plan.Name.ValueString(), r.tfeClient)
+	r.existingStack, err = r.tfeUtil.ReadStackByName(r.existingOrganization.Name, r.existingProject.ID, stackName, r.tfeClient)
 	if err != nil {
 		diags.AddError(
 			"Error Reading stack",
-			fmt.Sprintf("The stack %q does not exist or could not be accessed in organization %q and project %q: %s", plan.Name.ValueString(), r.existingOrganization.Name, r.existingProject.Name, err.Error()),
+			fmt.Sprintf("The stack %q does not exist or could not be accessed in organization %q and project %q: %s", stackName, r.existingOrganization.Name, r.existingProject.Name, err.Error()),
 		)
 		return diags
 	}
