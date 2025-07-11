@@ -33,14 +33,15 @@ var (
 )
 
 const (
-	GitTokenEnvName         = "TF_GIT_PAT_TOKEN"
-	HcpMigrateBranchPrefix  = "hcp-migrate-"
-	HcpTerraformHost        = "app.terraform.io"
-	TfeTokenEnvName         = "TFE_TOKEN"
-	TfeOrganizationEnvName  = "TFE_ORGANIZATION"
-	TfeProjectEnvName       = "TFE_PROJECT"
-	TfeHostEnvName          = "TFE_HOSTNAME"
-	TfeSslSkipVerifyEnvName = "TFE_SSL_SKIP_VERIFY"
+	GitTokenEnvName                   = "TF_GIT_PAT_TOKEN"
+	HcpMigrateBranchPrefix            = "hcp-migrate-"
+	HcpTerraformHost                  = "app.terraform.io"
+	TfeHostEnvName                    = "TFE_HOSTNAME"
+	TfeOrganizationEnvName            = "TFE_ORGANIZATION"
+	TfeProjectEnvName                 = "TFE_PROJECT"
+	TfeSslSkipVerifyEnvName           = "TFE_SSL_SKIP_VERIFY"
+	TfeTokenEnvName                   = "TFE_TOKEN"
+	TfMigrateResyncOnConvergedEnvName = "TF_MIGRATE_STACK_ALLOW_RESYNC_ON_CONVERGED"
 )
 
 // tfmProvider is the provider implementation.
@@ -48,7 +49,7 @@ type tfmProvider struct {
 	version                     string
 	gitOps                      gitops.GitOperations
 	remoteVcsSvcProviderFactory gitRemoteSvcProvider.RemoteVcsSvcProviderFactory
-	tfutil                      tfeUtil.TfeUtil
+	tfeUtility                  tfeUtil.TfeUtil
 }
 
 // tfmProviderModel maps provider schema data to a Go type.
@@ -63,13 +64,13 @@ type tfmProviderModel struct {
 
 // ProviderResourceData holds the provider configuration data.
 type ProviderResourceData struct {
-	AllowCommitPush bool
-	CreatePr        bool
-	GitPatToken     string
-	Hostname        string
-	SslSkipVerify   bool
-	TfeToken        string
-	TfeUtil         tfeUtil.TfeUtil
+	AllowCommitPush bool            // AllowCommitPush determines if the provider should allow commit and push operations.
+	CreatePr        bool            // CreatePr determines if the provider should create a pull request after pushing changes.
+	GitPatToken     string          // GitPatToken is the Git Personal Access Token (PAT) used for creating pull or merge requests.
+	Hostname        string          // Hostname is the hostname of the TFE instance.
+	SslSkipVerify   bool            // SslSkipVerify determines if the provider should skip SSL verification for the TFE API.
+	TfeToken        string          // TfeToken is the TFE token used for accessing the TFE API.
+	TfeUtil         tfeUtil.TfeUtil // TfeUtil is the utility for interacting with TFE.
 }
 
 // New is a helper function to simplify provider server and testing implementation.
@@ -80,7 +81,7 @@ func New(version string) func() provider.Provider {
 			version:                     version,
 			gitOps:                      gitops.NewGitOperations(ctx, gitUtil.NewGitUtil(ctx)),
 			remoteVcsSvcProviderFactory: gitRemoteSvcProvider.NewRemoteSvcProviderFactory(ctx),
-			tfutil:                      tfeUtil.NewTfeUtil(ctx),
+			tfeUtility:                  tfeUtil.NewTfeUtil(ctx),
 		}
 	}
 }
@@ -229,7 +230,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		createPr = config.CreatePr.ValueBool()
 	}
 
-	if err := p.ValidateGitOpsReadiness(allowCommitPush, createPr, gitPatToken); err != nil {
+	if err := p.validateGitOpsReadiness(allowCommitPush, createPr, gitPatToken); err != nil {
 		resp.Diagnostics.AddError("Git Operations Validation Error: "+err.Error(), err.Error())
 		return
 	}
@@ -242,7 +243,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		Hostname:        hostname,
 		SslSkipVerify:   sslSkipVerify,
 		TfeToken:        tfeToken,
-		TfeUtil:         p.tfutil,
+		TfeUtil:         p.tfeUtility,
 	}
 }
 
@@ -297,7 +298,8 @@ func (p *tfmProvider) validateGitPatToken(tokenFromProvider string) diag.Diagnos
 	return diagnostics
 }
 
-func (p *tfmProvider) ValidateGitOpsReadiness(allowCommitPush, createPr bool, tokenFromProvider string) error {
+// validateGitOpsReadiness checks if the Git operations are ready for commit and push or PR creation.
+func (p *tfmProvider) validateGitOpsReadiness(allowCommitPush, createPr bool, tokenFromProvider string) error {
 	if !allowCommitPush && !createPr {
 		return nil
 	}
@@ -426,7 +428,7 @@ func (p *tfmProvider) getProviderTfeTokenConfig(tfeTokenConfigVal types.String, 
 
 	// if the `TFE_TOKEN` environment variable is not set,
 	// read the TFE login token
-	tfeToken, err := p.tfutil.ReadTfeToken(hostName)
+	tfeToken, err := p.tfeUtility.ReadTfeToken(hostName)
 	if err != nil {
 		// If there is an error reading the TFE token,
 		// add an error to the diagnostics and return
