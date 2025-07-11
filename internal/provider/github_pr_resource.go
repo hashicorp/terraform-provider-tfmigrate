@@ -6,7 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
-	gitops "terraform-provider-tfmigrate/internal/helper"
+	"terraform-provider-tfmigrate/internal/gitops"
 	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
