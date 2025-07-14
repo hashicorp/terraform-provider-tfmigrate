@@ -8,4 +8,5 @@ var (
 	GitHub                    GitServiceProvider = "github.com"
 	GitLab                    GitServiceProvider = "gitlab.com"
 	UnknownGitServiceProvider GitServiceProvider = "unknown"
+	TfRemoteScheme                               = `https`
 )

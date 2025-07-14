@@ -18,12 +18,18 @@ packages:
       GithubUtil:
       GitlabUtil:
       GitUtil:
-  terraform-provider-tfmigrate/internal/helper:
+  terraform-provider-tfmigrate/internal/gitops:
     config:
       dir: "_mocks/helper_mocks/gitops_mocks"
       outpkg: "gitops_mocks"
     interfaces:
       GitOperations:
+  terraform-provider-tfmigrate/internal/util/tfe:
+    config:
+      dir: "_mocks/util_mocks/tfe_mocks"
+      outpkg: "tfe_mocks"
+    interfaces:
+      TfeUtil:
   github.com/go-git/go-git/v5/plumbing/storer:
     config:
       dir: "_mocks/helper_mocks/iter_mocks"
