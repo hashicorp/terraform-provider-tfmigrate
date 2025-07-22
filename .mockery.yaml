@@ -24,6 +24,12 @@ packages:
       outpkg: "gitops_mocks"
     interfaces:
       GitOperations:
+  terraform-provider-tfmigrate/internal/helper:
+    config:
+      dir: "_mocks/helper_mocks"
+      outpkg: "helper_mocks"
+    interfaces:
+      TfStateOperations:
   terraform-provider-tfmigrate/internal/util/tfe:
     config:
       dir: "_mocks/util_mocks/tfe_mocks"

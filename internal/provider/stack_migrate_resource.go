@@ -22,7 +22,7 @@ var (
 )
 
 type stackMigrate struct {
-	stateOps stateOps.TFStateOperations
+	stateOps stateOps.TfStateOperations
 }
 
 var (
@@ -56,7 +56,7 @@ func (r *stackMigrate) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 	defer client.Stop()
 
-	r.stateOps = stateOps.NewTFStateOperations(ctx, client)
+	r.stateOps = stateOps.NewTfStateOperations(ctx, client)
 
 	tfStateHandle, closeTFState, err := r.stateOps.OpenTerraformState(".")
 	if err != nil {

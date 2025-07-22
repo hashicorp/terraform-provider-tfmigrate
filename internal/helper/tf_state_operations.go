@@ -21,7 +21,7 @@ import (
 // 6. MigrateTFState
 // close open handles and stop the RPC server
 
-type TFStateOperations interface {
+type TfStateOperations interface {
 	OpenSourceBundle(dotTFModulesPath string) (int64, func() error, error)
 	OpenStacksConfiguration(sourceBundleHandle int64, stackConfigPath string) (int64, func() error, error)
 	OpenDependencyLockFile(handle int64, dotTFLockFile string) (int64, func() error, error)
@@ -35,7 +35,7 @@ type tfStateOperations struct {
 	client rpcapi.Client
 }
 
-func NewTFStateOperations(ctx context.Context, client rpcapi.Client) TFStateOperations {
+func NewTfStateOperations(ctx context.Context, client rpcapi.Client) TfStateOperations {
 	return &tfStateOperations{
 		ctx:    ctx,
 		client: client,
