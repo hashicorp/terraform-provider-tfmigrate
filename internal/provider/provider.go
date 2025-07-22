@@ -7,9 +7,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"terraform-provider-tfmigrate/internal/constants"
-	gitops "terraform-provider-tfmigrate/internal/helper"
+	"terraform-provider-tfmigrate/internal/gitops"
+	tfeUtil "terraform-provider-tfmigrate/internal/util/tfe"
 	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -31,9 +33,15 @@ var (
 )
 
 const (
-	GitTokenEnvName        = "TF_GIT_PAT_TOKEN"
-	HcpTerraformHost       = "app.terraform.io"
-	HcpMigrateBranchPrefix = "hcp-migrate-"
+	GitTokenEnvName                   = "TF_GIT_PAT_TOKEN"
+	HcpMigrateBranchPrefix            = "hcp-migrate-"
+	HcpTerraformHost                  = "app.terraform.io"
+	TfeHostEnvName                    = "TFE_HOSTNAME"
+	TfeOrganizationEnvName            = "TFE_ORGANIZATION"
+	TfeProjectEnvName                 = "TFE_PROJECT"
+	TfeSslSkipVerifyEnvName           = "TFE_SSL_SKIP_VERIFY"
+	TfeTokenEnvName                   = "TFE_TOKEN"
+	TfMigrateResyncOnConvergedEnvName = "TF_MIGRATE_STACK_ALLOW_RESYNC_ON_CONVERGED"
 )
 
 // tfmProvider is the provider implementation.
@@ -41,31 +49,39 @@ type tfmProvider struct {
 	version                     string
 	gitOps                      gitops.GitOperations
 	remoteVcsSvcProviderFactory gitRemoteSvcProvider.RemoteVcsSvcProviderFactory
+	tfeUtility                  tfeUtil.TfeUtil
 }
 
 // tfmProviderModel maps provider schema data to a Go type.
 type tfmProviderModel struct {
-	GitPatToken     types.String `tfsdk:"git_pat_token"`
-	Hostname        types.String `tfsdk:"hostname"`
 	AllowCommitPush types.Bool   `tfsdk:"allow_commit_push"`
 	CreatePr        types.Bool   `tfsdk:"create_pr"`
+	GitPatToken     types.String `tfsdk:"git_pat_token"`
+	Hostname        types.String `tfsdk:"hostname"`
+	SSLSkipVerify   types.Bool   `tfsdk:"ssl_skip_verify"`
+	TfeToken        types.String `tfsdk:"tfe_token"`
 }
 
 // ProviderResourceData holds the provider configuration data.
 type ProviderResourceData struct {
-	GitPatToken     string
-	Hostname        string
-	AllowCommitPush bool
-	CreatePr        bool
+	AllowCommitPush bool            // AllowCommitPush determines if the provider should allow commit and push operations.
+	CreatePr        bool            // CreatePr determines if the provider should create a pull request after pushing changes.
+	GitPatToken     string          // GitPatToken is the Git Personal Access Token (PAT) used for creating pull or merge requests.
+	Hostname        string          // Hostname is the hostname of the TFE instance.
+	SslSkipVerify   bool            // SslSkipVerify determines if the provider should skip SSL verification for the TFE API.
+	TfeToken        string          // TfeToken is the TFE token used for accessing the TFE API.
+	TfeUtil         tfeUtil.TfeUtil // TfeUtil is the utility for interacting with TFE.
 }
 
 // New is a helper function to simplify provider server and testing implementation.
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
+		ctx := context.Background()
 		return &tfmProvider{
 			version:                     version,
-			gitOps:                      gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
-			remoteVcsSvcProviderFactory: gitRemoteSvcProvider.NewRemoteSvcProviderFactory(context.Background()),
+			gitOps:                      gitops.NewGitOperations(ctx, gitUtil.NewGitUtil(ctx)),
+			remoteVcsSvcProviderFactory: gitRemoteSvcProvider.NewRemoteSvcProviderFactory(ctx),
+			tfeUtility:                  tfeUtil.NewTfeUtil(ctx),
 		}
 	}
 }
@@ -83,22 +99,32 @@ func (p *tfmProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 			"git_pat_token": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "The Git Personal Access Token (PAT) to be used for creating pull or merge requests.",
+				Description: "The Git Personal Access Token (PAT) to be used for creating pull or merge requests. Not required for stacks migration as we do not support any vcs operation at the moment.",
 			},
 			"hostname": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   false,
-				Description: "The hostname of the TFE instance to connect to. Defaults to HCP Terraform at app.terraform.io.",
+				Description: "The hostname of the TFE instance. Can be configured using the TFE_HOSTNAME environment variable, If both are set, the configuration value takes precedence. Defaults to 'app.terraform.io' when neither is set.",
 			},
 			"allow_commit_push": schema.BoolAttribute{
 				Optional:    true,
 				Sensitive:   false,
-				Description: "Allow commit and then push to the remote branch.",
+				Description: "Allow commit and then push to the remote branch. Not required for stacks migration as we do not support any vcs operation at the moment.",
 			},
 			"create_pr": schema.BoolAttribute{
 				Optional:    true,
 				Sensitive:   false,
-				Description: "Create a pull request after pushing the changes.",
+				Description: "Create a pull request after pushing the changes. Not required for stacks migration as we do not support any vcs operation at the moment.",
+			},
+			"tfe_token": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "The TFE token to be used for accessing the TFE API. Can be configured using the TFE_TOKEN environment variable, If both are set, the configuration value takes precedence. Uses the TFE login token when neither is set.",
+			},
+			"ssl_skip_verify": schema.BoolAttribute{
+				Optional:    true,
+				Sensitive:   false,
+				Description: "Skip SSL verification for the TFE API. Can be configured using the TFE_SSL_SKIP_VERIFY environment variable. If both are set, the configuration value takes precedence. Defaults to false when neither is set.",
 			},
 		},
 	}
@@ -146,20 +172,52 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		)
 	}
 
+	if config.TfeToken.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("tfe_token"),
+			"Unknown TFE Token",
+			"The provider cannot initialize the TFE client as the TFE token is unknown. Set it as an environment variable or in configuration.",
+		)
+	}
+
+	if config.SSLSkipVerify.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("ssl_skip_verify"),
+			"Unknown SSL Skip Verify",
+			"The provider cannot initialize the TFE client as the SSL skip verify is unknown. Set it in configuration.",
+		)
+	}
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Default values to environment variables, but override
-	// with Terraform configuration values if set
+	// configure host name
+	hostname, diags := p.getProviderHostNameConfig(config.Hostname)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// configure tfe token
+	tfeToken, diags := p.getProviderTfeTokenConfig(config.TfeToken, hostname)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// configure SSL skip verify
+	sslSkipVerify, diags := p.getProviderSSLSkipVerifyConfig(config.SSLSkipVerify)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Retrieve environment variables
 	gitPatToken := os.Getenv(GitTokenEnvName)
-	hostname := HcpTerraformHost
 
 	if !config.GitPatToken.IsNull() {
 		gitPatToken = config.GitPatToken.ValueString()
-	}
-	if !config.Hostname.IsNull() {
-		hostname = config.Hostname.ValueString()
 	}
 
 	var allowCommitPush, createPr bool
@@ -167,21 +225,25 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	if !config.AllowCommitPush.IsNull() {
 		allowCommitPush = config.AllowCommitPush.ValueBool()
 	}
+
 	if !config.CreatePr.IsNull() {
 		createPr = config.CreatePr.ValueBool()
 	}
 
-	if err := p.ValidateGitOpsReadiness(allowCommitPush, createPr, gitPatToken); err != nil {
+	if err := p.validateGitOpsReadiness(allowCommitPush, createPr, gitPatToken); err != nil {
 		resp.Diagnostics.AddError("Git Operations Validation Error: "+err.Error(), err.Error())
 		return
 	}
 
 	// Set the provider resource data
 	resp.ResourceData = ProviderResourceData{
-		GitPatToken:     gitPatToken,
-		Hostname:        hostname,
 		AllowCommitPush: allowCommitPush,
 		CreatePr:        createPr,
+		GitPatToken:     gitPatToken,
+		Hostname:        hostname,
+		SslSkipVerify:   sslSkipVerify,
+		TfeToken:        tfeToken,
+		TfeUtil:         p.tfeUtility,
 	}
 }
 
@@ -190,7 +252,7 @@ func (p *tfmProvider) DataSources(_ context.Context) []func() datasource.DataSou
 	return nil
 }
 
-// Resources defines the resources implemented in the provider.
+// Resources define the resources implemented in the provider.
 func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewTerraformInitResource,
@@ -200,7 +262,7 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewGithubPrResource,
 		NewDirectoryActionResource,
 		NewStateMigrationResource,
-		// NewStackMigrateResource, // Uncomment when the resource is implemented
+		NewStackMigrationResource,
 	}
 }
 
@@ -236,7 +298,8 @@ func (p *tfmProvider) validateGitPatToken(tokenFromProvider string) diag.Diagnos
 	return diagnostics
 }
 
-func (p *tfmProvider) ValidateGitOpsReadiness(allowCommitPush, createPr bool, tokenFromProvider string) error {
+// validateGitOpsReadiness checks if the Git operations are ready for commit and push or PR creation.
+func (p *tfmProvider) validateGitOpsReadiness(allowCommitPush, createPr bool, tokenFromProvider string) error {
 	if !allowCommitPush && !createPr {
 		return nil
 	}
@@ -282,4 +345,147 @@ func (p *tfmProvider) ValidateGitOpsReadiness(allowCommitPush, createPr bool, to
 		}
 	}
 	return nil
+}
+
+// getProviderHostNameConfig retrieves the hostname configuration for the provider.
+func (p *tfmProvider) getProviderHostNameConfig(hostNameConfigVal types.String) (string, diag.Diagnostics) {
+	var hostName string
+	var diags diag.Diagnostics
+	configValueIsNotNull := false
+
+	if !hostNameConfigVal.IsNull() {
+		hostName = hostNameConfigVal.ValueString()
+		configValueIsNotNull = true
+	}
+
+	if hostName != "" {
+		return hostName, diags
+	}
+
+	if configValueIsNotNull {
+		diags.AddAttributeError(
+			path.Root("hostname"),
+			"Invalid Hostname",
+			"The hostname cannot be empty. Please provide a valid hostname or set the TFE_HOSTNAME environment variable. If both are set, the configuration value takes precedence.")
+		return "", diags
+	}
+
+	if hostNameEnvVal, envVariableSet := os.LookupEnv(TfeHostEnvName); !envVariableSet {
+		hostName = HcpTerraformHost // Default to HCP Terraform host
+	} else {
+		hostName = hostNameEnvVal // Use the environment variable value if set
+	}
+
+	if hostName != "" {
+		return hostName, diags
+	}
+
+	diags.AddAttributeError(
+		path.Root("hostname"),
+		"Invalid Hostname",
+		"The hostname cannot be empty. Please provide a valid hostname or set the TFE_HOSTNAME environment variable. If both are set, the configuration value takes precedence.")
+	return "", diags
+}
+
+// getProviderTfeTokenConfig retrieves the TFE token configuration for the provider.
+func (p *tfmProvider) getProviderTfeTokenConfig(tfeTokenConfigVal types.String, hostName string) (string, diag.Diagnostics) {
+	var tfeToken string
+	var diags diag.Diagnostics
+	var configValueIsNotNull bool
+
+	if !tfeTokenConfigVal.IsNull() {
+		tfeToken = tfeTokenConfigVal.ValueString()
+		configValueIsNotNull = true
+	}
+
+	if tfeToken != "" {
+		return tfeToken, diags
+	}
+
+	// If the configured token value via the `tfe_token` attribute is not null but empty,
+	// add an error to the diagnostics and return
+	if configValueIsNotNull {
+		diags.AddAttributeError(
+			path.Root("tfe_token"),
+			"Invalid TFE Token",
+			"The TFE token cannot be empty. Please provide a valid TFE token or set the TFE_TOKEN environment variable. If both are set, the configuration value takes precedence.")
+		return "", diags
+	}
+
+	tfeTokenEnvVal, envVariableSet := os.LookupEnv(TfeTokenEnvName)
+	if envVariableSet {
+		// If the `TFE_TOKEN` environment variable is set to an empty string,
+		// add an error to the diagnostics and return
+		if tfeTokenEnvVal == "" {
+			diags.AddAttributeError(
+				path.Root("tfe_token"),
+				"Invalid TFE Token",
+				"The TFE token cannot be empty. Please provide a valid TFE token or set the TFE_TOKEN environment variable. If both are set, the configuration value takes precedence.")
+			return "", diags
+		}
+		return tfeTokenEnvVal, diags
+	}
+
+	// if the `TFE_TOKEN` environment variable is not set,
+	// read the TFE login token
+	tfeToken, err := p.tfeUtility.ReadTfeToken(hostName)
+	if err != nil {
+		// If there is an error reading the TFE token,
+		// add an error to the diagnostics and return
+		diags.AddError(
+			"Error Reading TFE Token",
+			fmt.Sprintf("An error occurred while reading the TFE token: %s", err.Error()),
+		)
+		return "", diags
+	}
+
+	if tfeToken == "" {
+		// If the read token is empty,
+		// add an error to the diagnostics and return
+		diags.AddAttributeError(
+			path.Root("tfe_token"),
+			"Empty TFE Login Token",
+			"The TFE login token is empty. Run terraform login to get a valid token ")
+		return "", diags
+	}
+
+	return tfeToken, diags
+
+}
+
+// getProviderSSLSkipVerifyConfig retrieves the SSL skip verify configuration for the provider.
+func (p *tfmProvider) getProviderSSLSkipVerifyConfig(sslSkipVerifyConfigVal types.Bool) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	if !sslSkipVerifyConfigVal.IsNull() {
+		return sslSkipVerifyConfigVal.ValueBool(), diags
+	}
+
+	// If the configured value via the `ssl_skip_verify` attribute is not set try to read the environment variable
+	sslSkipVerifyEnvVal, envVariableSet := os.LookupEnv(TfeSslSkipVerifyEnvName)
+	if !envVariableSet {
+		return false, diags // Default to false if not set
+	}
+
+	if sslSkipVerifyEnvVal == "" {
+		diags.AddAttributeError(
+			path.Root("ssl_skip_verify"),
+			"Invalid SSL Skip Verify Value",
+			"The SSL skip verify value cannot be empty. Please provide a valid boolean value or set the TFE_SSL_SKIP_VERIFY environment variable. If both are set, the configuration value takes precedence.",
+		)
+		return false, diags
+	}
+
+	// If the environment variable is set, parse it to a boolean
+	sslSkipVerifyBolVal, err := strconv.ParseBool(sslSkipVerifyEnvVal)
+	if err != nil {
+		diags.AddAttributeError(
+			path.Root("ssl_skip_verify"),
+			"Invalid SSL Skip Verify Value",
+			fmt.Sprintf("The value for %s is not a valid boolean: %s", TfeSslSkipVerifyEnvName, err.Error()),
+		)
+		return false, diags
+	}
+
+	return sslSkipVerifyBolVal, diags
 }

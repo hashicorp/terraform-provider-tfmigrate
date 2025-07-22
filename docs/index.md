@@ -22,7 +22,9 @@ provider "tfmigrate" {
 
 ### Optional
 
-- `allow_commit_push` (Boolean) Allow commit and then push to the remote branch.
-- `create_pr` (Boolean) Create a pull request after pushing the changes.
-- `git_pat_token` (String, Sensitive) The Git Personal Access Token (PAT) to be used for creating pull or merge requests.
-- `hostname` (String) The hostname of the TFE instance to connect to. Defaults to HCP Terraform at app.terraform.io.
+- `allow_commit_push` (Boolean) Allow commit and then push to the remote branch. Not required for stacks migration as we do not support any vcs operation at the moment.
+- `create_pr` (Boolean) Create a pull request after pushing the changes. Not required for stacks migration as we do not support any vcs operation at the moment.
+- `git_pat_token` (String, Sensitive) The Git Personal Access Token (PAT) to be used for creating pull or merge requests. Not required for stacks migration as we do not support any vcs operation at the moment.
+- `hostname` (String) The hostname of the TFE instance. Can be configured using the TFE_HOSTNAME environment variable, If both are set, the configuration value takes precedence. Defaults to 'app.terraform.io' when neither is set.
+- `ssl_skip_verify` (Boolean) Skip SSL verification for the TFE API. Can be configured using the TFE_SSL_SKIP_VERIFY environment variable. If both are set, the configuration value takes precedence. Defaults to false when neither is set.
+- `tfe_token` (String, Sensitive) The TFE token to be used for accessing the TFE API. Can be configured using the TFE_TOKEN environment variable, If both are set, the configuration value takes precedence. Uses the TFE login token when neither is set.

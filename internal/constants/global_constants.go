@@ -9,6 +9,7 @@ var (
 	GitLab                    GitServiceProvider = "gitlab.com"
 	UnknownGitServiceProvider GitServiceProvider = "unknown"
 
-	TerraformRPCAPICookie   string = "fba0991c9bcd453982f0d88e2da95940"
-	TerraformMagicCookieKey string = "TERRAFORM_RPCAPI_COOKIE"
+	TerraformRPCAPICookie   = "fba0991c9bcd453982f0d88e2da95940"
+	TerraformMagicCookieKey = "TERRAFORM_RPCAPI_COOKIE"
+	TfRemoteScheme          = `https`
 )
