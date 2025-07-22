@@ -20,9 +20,7 @@ import (
 )
 
 const (
-	gitlabBadTokenBody = `{"message":"401 Unauthorized"}`
-	gitlabNotFoundBody = `{"message":"404 Project Not Found"}`
-	gitlabSuccessBody  = `{
+	gitlabSuccessBody = `{
 		"id": 123,
 		"name": "test-project",
 		"path_with_namespace": "test-owner/test-project",

@@ -13,13 +13,12 @@ import (
 
 // Package level constants for Bitbucket operations.
 const (
-	BitbucketRepositoryAPIURL = "https://api.bitbucket.org/2.0/repositories/%s/%s"
-
+	BitbucketRepositoryAPIURL  = "https://api.bitbucket.org/2.0/repositories/%s/%s"
+	BitbucketPullRequestAPIURL = "https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests"
 	OauthScopesHeader          = "X-Oauth-Scopes"
 	CredentialTypeHeader       = "X-Credential-Type"
 	CreateRequestFailedLog     = "failed to create HTTP request"
 	MakeRequestFailedLog       = "failed to make HTTP request"
-	BitbucketPullRequestAPIURL = "https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests"
 	CreatePullRequestFailedLog = "Failed to create pull request"
 
 	// HTTP headers.
@@ -30,9 +29,7 @@ const (
 	BearerPrefix        = "Bearer "
 
 	// Bitbucket scopes.
-	ScopePullRequestRead     = "pullrequest"
 	ScopePullRequestWrite    = "pullrequest:write"
-	ScopeRepositoryRead      = "repository"
 	ScopeRepositoryWrite     = "repository:write"
 	TokenTypeRepoAccessToken = "repo_access_token"
 )

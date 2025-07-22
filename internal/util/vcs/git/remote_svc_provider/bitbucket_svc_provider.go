@@ -65,14 +65,14 @@ func (b *bitbucketSvcProvider) validateBitbucketTokenRepoAccess(owner, repo, tok
 		return http.StatusOK, cliErrs.ErrBitbucketTokenTypeNotSupported
 	}
 
-	if !b.bitbucketUtil.ContainsScope(scopes, git.ScopeRepositoryWrite) {
-		if b.bitbucketUtil.ContainsScope(scopes, git.ScopePullRequestWrite) {
-			return http.StatusOK, nil
-		}
+	hasRepoWrite := b.bitbucketUtil.ContainsScope(scopes, git.ScopeRepositoryWrite)
+	hasPrWrite := b.bitbucketUtil.ContainsScope(scopes, git.ScopePullRequestWrite)
+
+	if !hasRepoWrite && !hasPrWrite {
 		return http.StatusOK, cliErrs.ErrTokenDoesNotHaveWritePermission
 	}
 
-	if !b.bitbucketUtil.ContainsScope(scopes, git.ScopePullRequestWrite) {
+	if !hasPrWrite {
 		return http.StatusOK, cliErrs.ErrTokenDoesNotHavePrWritePermission
 	}
 	return http.StatusOK, nil

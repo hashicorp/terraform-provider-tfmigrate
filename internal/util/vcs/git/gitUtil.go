@@ -28,19 +28,19 @@ const (
 	bitbucketRepoAccessTokenRegex = `ATCTT3xFfGN0[A-Za-z0-9_-]{116,}=[A-F0-9]{8}`
 )
 
-var err error
-
 type GitUserConfig struct {
 	Name  string
 	Email string
 }
 
 var (
-	ClassicToken             TokenType = "classic"
-	FineGrainedToken         TokenType = "fine-grained"
-	Unrecognized             TokenType = "unrecognized"
-	GitlabPat                TokenType = "gitlabToken"
-	BitbucketRepoAccessToken TokenType = "bitbucketRepoAccessToken"
+	ClassicToken                          TokenType = "classic"
+	FineGrainedToken                      TokenType = "fine-grained"
+	Unrecognized                          TokenType = "unrecognized"
+	GitlabPat                             TokenType = "gitlabToken"
+	BitbucketRepoAccessToken              TokenType = "bitbucketRepoAccessToken"
+	err                                   error
+	bitbucketRepoAccessTokenRegexCompiled = regexp.MustCompile(bitbucketRepoAccessTokenRegex)
 )
 
 type TokenType string
@@ -369,7 +369,7 @@ func getTokenType(gitPatToken string) TokenType {
 	case strings.HasPrefix(gitPatToken, gitlabTokenPrefix):
 		return GitlabPat
 	// match the regex for Bitbucket App Passwords
-	case regexp.MustCompile(bitbucketRepoAccessTokenRegex).MatchString(gitPatToken):
+	case bitbucketRepoAccessTokenRegexCompiled.MatchString(gitPatToken):
 		return BitbucketRepoAccessToken
 	default:
 		return Unrecognized
