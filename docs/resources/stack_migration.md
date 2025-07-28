@@ -22,8 +22,8 @@ Defines a resource for migrating existing HCP Terraform workspaces to deployment
 
 ### Optional
 
-- `organization` (String) The organization name to which the stack belongs. This must reference an existing organization. Either this attribute or the TFE_ORGANIZATION environment variable is required; if both are set, the attribute value takes precedence.
-- `project` (String) The project name to which the stack belongs. This must reference an existing project. Either this attribute or the TFE_PROJECT environment variable is required; if both are set, the attribute value takes precedence.
+- `organization` (String) The organization name to which the stack belongs. This must reference an existing organization. Either this attribute or the `TFE_ORGANIZATION` environment variable is required; if both are set, the attribute value takes precedence.
+- `project` (String) The project name to which the stack belongs. This must reference an existing project. Either this attribute or the `TFE_PROJECT` environment variable is required; if both are set, the attribute value takes precedence.
 
 ### Read-Only
 

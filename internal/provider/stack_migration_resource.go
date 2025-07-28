@@ -58,10 +58,10 @@ const (
 	nameDescription = `The stack name. Must be unique within the organization and project, must be a non-VCS driven stack.`
 
 	// organizationDescription is the Markdown description for the `organization` attribute.
-	organizationDescription = `The organization name to which the stack belongs. This must reference an existing organization. Either this attribute or the TFE_ORGANIZATION environment variable is required; if both are set, the attribute value takes precedence.`
+	organizationDescription = "The organization name to which the stack belongs. This must reference an existing organization. Either this attribute or the `TFE_ORGANIZATION` environment variable is required; if both are set, the attribute value takes precedence."
 
 	// projectDescription is the Markdown description for the `project` attribute.
-	projectDescription = `The project name to which the stack belongs. This must reference an existing project. Either this attribute or the TFE_PROJECT environment variable is required; if both are set, the attribute value takes precedence.`
+	projectDescription = "The project name to which the stack belongs. This must reference an existing project. Either this attribute or the `TFE_PROJECT` environment variable is required; if both are set, the attribute value takes precedence."
 
 	// sourceBundleHashDescription is the Markdown description for the `source_bundle_hash` attribute.
 	sourceBundleHashDescription = `The hash of the configuration files in the directory. This is used to detect changes in the stack configuration files.`
