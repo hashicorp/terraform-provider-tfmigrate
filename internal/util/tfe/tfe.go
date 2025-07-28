@@ -220,25 +220,28 @@ func (u *tfeUtil) ReadStackByName(organizationName, projectId string, stackName 
 	stack := stacks.Items[0]
 	tflog.Debug(u.ctx, fmt.Sprintf("Successfully retrieved stack %s with ID %s in organization %s", stack.Name, stack.ID, organizationName))
 
-	latestStackConfigId := ""
-	if stack.LatestStackConfiguration == nil || stack.LatestStackConfiguration.ID == "" {
-		tflog.Warn(u.ctx, fmt.Sprintf("Stack %s does not have a latest stack configuration", stack.Name))
-		stack.LatestStackConfiguration = &tfe.StackConfiguration{}
-		return stack, nil
+	// Read the latest stack configuration for the stack
+	tflog.Debug(u.ctx, fmt.Sprintf("Reading latest stack configuration for stack %s with ID %s", stack.Name, stack.ID))
+	stackConfigurationOpts := &tfe.StackConfigurationListOptions{
+		ListOptions: tfe.ListOptions{
+			PageNumber: 1,
+			PageSize:   1,
+		},
 	}
-
-	latestStackConfigId = stack.LatestStackConfiguration.ID
-	tflog.Debug(u.ctx, fmt.Sprintf("Latest stack configuration ID for stack %s is %s", stack.Name, latestStackConfigId))
-	tflog.Debug(u.ctx, fmt.Sprintf(`Retrieved stack %s with ID %s, latest stack configuration ID %s`, stack.Name, stack.ID, latestStackConfigId))
-	latestStackConfiguration, err := client.StackConfigurations.Read(u.ctx, latestStackConfigId)
-	if err != nil || latestStackConfiguration == nil {
-		tflog.Error(u.ctx, fmt.Sprintf("Error reading latest stack configuration %s for stack %s: %v", latestStackConfigId, stack.Name, err))
+	stackConfigurations, err := client.StackConfigurations.List(u.ctx, stack.ID, stackConfigurationOpts)
+	if err != nil || stackConfigurations == nil { // We expect exactly one result in the lis and that one item should be the latest configuration, as the API returns them in descending order.
+		tflog.Error(u.ctx, fmt.Sprintf("Error listing stack configurations for stack %s: %v", stack.Name, err))
 		err = u.handleTfeClientResourceReadError(err)
-		return nil, fmt.Errorf("error reading latest stack configuration %s for stack %s, err: %v", latestStackConfigId, stack.Name, err)
+		return nil, fmt.Errorf("error listing stack configurations for stack %s, err: %v", stack.Name, err)
 	}
 
-	tflog.Debug(u.ctx, fmt.Sprintf("Successfully retrieved latest stack configuration %s for stack %s", latestStackConfiguration.ID, stack.Name))
-	stack.LatestStackConfiguration = latestStackConfiguration
+	if len(stackConfigurations.Items) > 0 {
+		mostRecentConfig := stackConfigurations.Items[0]
+		stack.LatestStackConfiguration = mostRecentConfig
+		tflog.Debug(u.ctx, fmt.Sprintf("Successfully retrieved latest stack configuration %s for stack %s", mostRecentConfig.ID, stack.Name))
+	} else {
+		tflog.Warn(u.ctx, fmt.Sprintf("No stack configurations found for stack %s with ID: %s", stack.Name, stack.ID))
+	}
 
 	return stack, nil
 }
