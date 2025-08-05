@@ -17,15 +17,15 @@ const (
 	ErrorCreatingBranch = `Error creating or checking out branch %s, err: %v.`
 	// WarnNotOnSupportedVcsProvider is the warning displayed when the user's repository is not on GitHub, Gitlab and Bitbucket.
 	WarnNotOnSupportedVcsProvider = `Your repository URL is %s. Only GitHub, Gitlab and Bitbucket is supported. Terraform Migrate will skip all Git operations.`
-	// SuggestSettingValidTokenValue is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is not set with a a classic GitHub, a Gitlab PAT token or an Bitbucket App Password.
-	SuggestSettingValidTokenValue = `Set the value of the TF_GIT_PAT_TOKEN environment variable with a proper VCS token to see all git operation related options.
+	// SuggestSettingValidTokenValue is the suggestion displayed when the %s environment variable is not set with a classic GitHub, a Gitlab PAT token or a Bitbucket App Password.
+	SuggestSettingValidTokenValue = `Set the value of the %s environment variable with a proper VCS token to see all git operation related options.
 For GitHub, use a classic token.
 For Gitlab, use a personal access token.
 For Bitbucket, use a repository access token.`
 	// SuggestUsingSupportedVcsProvider is the suggestion displayed when the repository is not hosted on GitHub, Gitlab or Bitbucket.
 	SuggestUsingSupportedVcsProvider = `Repository must be hosted on GitHub, Gitlab or Bitbucket to see all git operation related options.`
-	// SuggestSettingUnexpiredToken is the suggestion displayed when the TF_GIT_PAT_TOKEN environment variable is set with an expired token.
-	SuggestSettingUnexpiredToken = `Set the TF_GIT_PAT_TOKEN environment variable with a non-expired classic GitHub token to enable all git operation related options.`
+	// SuggestSettingUnexpiredToken is the suggestion displayed when the %s environment variable is set with an expired token.
+	SuggestSettingUnexpiredToken = `Set the %s environment variable with a non-expired classic GitHub, Gitlab token or a Bitbucket App Password to enable all git operation related options.`
 	// SuggestProvidingAccessToToken is the suggestion displayed when the token does not have access to the required organization.
 	SuggestProvidingAccessToToken = `Authorize the token to access the required organization.`
 	// SuggestProvidingRepoReadPermissionToToken is the suggestion displayed when the token does not have read permission to the required repository.

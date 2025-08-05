@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -13,6 +14,39 @@ import (
 
 	netMock "terraform-provider-tfmigrate/_mocks/net_mocks"
 )
+
+// mockHttpClientWrapper implements the HttpClient interface for testing.
+type mockHttpClientWrapper struct {
+	client *http.Client
+}
+
+func (m *mockHttpClientWrapper) DoRequest(ctx context.Context, method, url string, headers map[string]string, body io.Reader) (int, []byte, http.Header, error) {
+	// Create the request
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add headers to the request
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	// Execute the request using the mock client
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	responseBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, resp.Header, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return resp.StatusCode, responseBytes, resp.Header, nil
+}
 
 const (
 	badCredentialsBodyBitbucket = `{
@@ -110,9 +144,15 @@ func TestCheckTokenTypeAndScopes(t *testing.T) {
 			ctx := context.Background()
 			mockHttpClient := getHttpClientWithMockRoundTripper()
 			mockTransport := mockHttpClient.Transport.(*netMock.MockRoundTripper)
-			bitbucketUtil := &bitbucketUtil{
+
+			// Create a mock HttpClient that wraps the mock transport
+			mockHttpClientWrapper := &mockHttpClientWrapper{
 				client: mockHttpClient,
-				ctx:    ctx,
+			}
+
+			bitbucketUtil := &bitbucketUtil{
+				httpClient: mockHttpClientWrapper,
+				ctx:        ctx,
 			}
 			r := require.New(t)
 

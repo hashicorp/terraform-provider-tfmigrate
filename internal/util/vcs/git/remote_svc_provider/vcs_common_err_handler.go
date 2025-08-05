@@ -62,9 +62,9 @@ func gitTokenErrorHandler(err error, statusCode ...int) (string, error) {
 		errors.Is(err, cliErrs.ErrTfGitPatTokenEmpty),
 		errors.Is(err, cliErrs.ErrTfGitPatTokenFineGrained),
 		errors.Is(err, cliErrs.ErrTfGitPatTokenInvalid):
-		return constants.SuggestSettingValidTokenValue, err
+		return fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName), err
 	case errors.Is(err, cliErrs.ErrTokenExpired):
-		return constants.SuggestSettingUnexpiredToken, err
+		return fmt.Sprintf(constants.SuggestSettingUnexpiredToken, constants.GitTokenEnvName), err
 	case errors.Is(err, cliErrs.ErrTokenDoesNotHaveAccessToOrg):
 		return constants.SuggestProvidingAccessToToken, err
 	case errors.Is(err, cliErrs.ErrTokenDoesNotHaveReadPermission):
@@ -72,7 +72,7 @@ func gitTokenErrorHandler(err error, statusCode ...int) (string, error) {
 	case errors.Is(err, cliErrs.ErrTokenDoesNotHaveWritePermission):
 		return constants.SuggestProvidingRepoWritePermissionToToken, err
 	case errors.Is(err, cliErrs.ErrBitbucketTokenTypeNotSupported):
-		return constants.SuggestSettingValidTokenValue, err
+		return fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName), err
 	case errors.Is(err, cliErrs.ErrTokenDoesNotHavePrWritePermission):
 		return constants.SuggestCheckingApiDocs, err
 	case errors.Is(err, cliErrs.ErrRepositoryNotFound):

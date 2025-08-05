@@ -6,6 +6,7 @@ import (
 	"os"
 
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
+	consts "terraform-provider-tfmigrate/internal/constants"
 
 	"github.com/google/go-github/v66/github"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -32,13 +33,13 @@ func (g *githubUtil) GetRepository(owner string, repo string) (*github.Repositor
 	// Note: As of now, the token checking is redundant as the token is checked before this function is called.
 	// However, it is kept here for the completeness of the code.
 
-	token, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
+	token, isSet := os.LookupEnv(consts.GitTokenEnvName)
 	if !isSet {
-		return nil, nil, cliErrs.ErrTfGitPatTokenNotSet
+		return nil, nil, fmt.Errorf(string(cliErrs.ErrTfGitPatTokenNotSet), consts.GitTokenEnvName)
 	}
 
 	if token == "" {
-		return nil, nil, cliErrs.ErrTfGitPatTokenEmpty
+		return nil, nil, fmt.Errorf(string(cliErrs.ErrTfGitPatTokenEmpty), consts.GitTokenEnvName)
 	}
 
 	if g.client == nil {

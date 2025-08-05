@@ -122,19 +122,19 @@ func TestValidateToken(t *testing.T) {
 		},
 		"ErrGithubTokenNotSet": {
 			err:     cliErrs.ErrTfGitPatTokenNotSet,
-			suggest: constants.SuggestSettingValidTokenValue,
+			suggest: fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName),
 		},
 		"ErrGithubTokenEmpty": {
 			err:     cliErrs.ErrTfGitPatTokenEmpty,
-			suggest: constants.SuggestSettingValidTokenValue,
+			suggest: fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName),
 		},
 		"ErrGithubTokenFineGrained": {
 			err:     cliErrs.ErrTfGitPatTokenFineGrained,
-			suggest: constants.SuggestSettingValidTokenValue,
+			suggest: fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName),
 		},
 		"ErrGithubTokenUnrecognized": {
 			err:     cliErrs.ErrTfGitPatTokenInvalid,
-			suggest: constants.SuggestSettingValidTokenValue,
+			suggest: fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName),
 		},
 		"UnknownErrorOccurred": {
 			err:     cliErrs.ErrUnknownError,
@@ -150,7 +150,7 @@ func TestValidateToken(t *testing.T) {
 		},
 		"ErrTokenExpired": {
 			err:     cliErrs.ErrTokenExpired,
-			suggest: constants.SuggestSettingUnexpiredToken,
+			suggest: fmt.Sprintf(constants.SuggestSettingUnexpiredToken, constants.GitTokenEnvName),
 		},
 		"ErrTokenDoesNotHaveAccessToOrg": {
 			err:     cliErrs.ErrTokenDoesNotHaveAccessToOrg,

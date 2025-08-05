@@ -1,25 +1,27 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
-
-	"terraform-provider-tfmigrate/internal/constants"
-
-	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"strings"
+	"terraform-provider-tfmigrate/internal/util/net"
+	"time"
 )
 
 // Package level constants for Bitbucket operations.
 const (
-	BitbucketRepositoryAPIURL  = "https://api.bitbucket.org/2.0/repositories/%s/%s"
+	BitbucketRepositoryAPIURL  = "https://api.bitbucket.org/%s/repositories/%s/%s"
 	BitbucketPullRequestAPIURL = "https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests"
 	OauthScopesHeader          = "X-Oauth-Scopes"
 	CredentialTypeHeader       = "X-Credential-Type"
 	CreateRequestFailedLog     = "failed to create HTTP request"
 	MakeRequestFailedLog       = "failed to make HTTP request"
 	CreatePullRequestFailedLog = "Failed to create pull request"
+	apiVersion                 = "2.0"
 
 	// HTTP headers.
 	AuthorizationHeader = "Authorization"
@@ -35,8 +37,8 @@ const (
 )
 
 type bitbucketUtil struct {
-	client *http.Client
-	ctx    context.Context
+	httpClient net.HttpClient
+	ctx        context.Context
 }
 
 type BitbucketUtil interface {
@@ -47,7 +49,8 @@ type BitbucketUtil interface {
 // NewBitbucketUtil creates a new instance of BitbucketUtil.
 func NewBitbucketUtil(ctx context.Context) BitbucketUtil {
 	return &bitbucketUtil{
-		ctx: ctx,
+		ctx:        ctx,
+		httpClient: net.NewHttpClient(30 * time.Second),
 	}
 }
 
@@ -55,43 +58,29 @@ func NewBitbucketUtil(ctx context.Context) BitbucketUtil {
 
 func (b *bitbucketUtil) CheckTokenTypeAndScopes(workspace, repoSlug, accessToken string) (string, string, *http.Response, error) {
 	// Local constants for strings used in this function
-	const (
-		bitbucketRepositoryAPIURL = "https://api.bitbucket.org/2.0/repositories/%s/%s"
-	)
+	url := fmt.Sprintf(BitbucketRepositoryAPIURL, apiVersion, workspace, repoSlug)
 
-	url := fmt.Sprintf(bitbucketRepositoryAPIURL, workspace, repoSlug)
-	req, err := http.NewRequestWithContext(b.ctx, http.MethodGet, url, nil)
+	headers := map[string]string{
+		AuthorizationHeader: BearerPrefix + accessToken,
+		AcceptHeader:        ApplicationJSONType,
+	}
+
+	statusCode, responseBody, responseHeaders, err := b.httpClient.DoRequest(b.ctx, http.MethodGet, url, headers, nil)
 	if err != nil {
-		tflog.Error(b.ctx, CreateRequestFailedLog, map[string]any{
-			"workspace":   workspace,
-			"repoSlug":    repoSlug,
-			"error":       err,
-			"accessToken": accessToken,
-		})
-		return "", "", nil, fmt.Errorf(constants.ErrBitbucketCreateHTTPRequestUtil, err)
-	}
-	req.Header.Set(AuthorizationHeader, BearerPrefix+accessToken)
-	req.Header.Set(AcceptHeader, ApplicationJSONType)
-
-	client := b.client
-	if client == nil {
-		client = http.DefaultClient
+		return "", "", nil, fmt.Errorf("failed to make HTTP request: %w", err)
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		tflog.Error(b.ctx, MakeRequestFailedLog, map[string]any{
-			"workspace":   workspace,
-			"repoSlug":    repoSlug,
-			"error":       err,
-			"accessToken": accessToken,
-		})
-		return "", "", nil, fmt.Errorf(constants.ErrBitbucketMakeHTTPRequestUtil, err)
+	// Create a response object with the actual response body for compatibility
+	resp := &http.Response{
+		StatusCode: statusCode,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+		Header:     responseHeaders,
 	}
-	defer resp.Body.Close()
 
-	scopes := resp.Header.Get(OauthScopesHeader)
-	tokenType := resp.Header.Get(CredentialTypeHeader)
+	// Extract scopes and token type from response headers
+	scopes := responseHeaders.Get(OauthScopesHeader)
+	tokenType := responseHeaders.Get(CredentialTypeHeader)
+
 	return scopes, tokenType, resp, nil
 }
 
@@ -102,20 +91,11 @@ func (b *bitbucketUtil) ContainsScope(scopes, requiredScope string) bool {
 
 // splitByCommaOrSpace splits a string by comma or space.
 func splitByCommaOrSpace(scopes string) []string {
-	var result []string
-	current := ""
-	for _, r := range scopes {
-		if r == ',' || r == ' ' {
-			if current != "" {
-				result = append(result, current)
-				current = ""
-			}
-		} else {
-			current += string(r)
-		}
-	}
-	if current != "" {
-		result = append(result, current)
+	result := strings.FieldsFunc(scopes, func(r rune) bool {
+		return r == ',' || r == ' '
+	})
+	if len(result) == 0 {
+		return nil
 	}
 	return result
 }

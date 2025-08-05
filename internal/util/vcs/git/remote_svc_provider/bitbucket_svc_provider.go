@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	"terraform-provider-tfmigrate/internal/constants"
+	"terraform-provider-tfmigrate/internal/util/net"
 	"terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -20,6 +21,7 @@ type bitbucketSvcProvider struct {
 	ctx           context.Context
 	git           git.GitUtil
 	bitbucketUtil git.BitbucketUtil
+	httpClient    net.HttpClient
 }
 type Response struct {
 	*http.Response
@@ -28,6 +30,16 @@ type Response struct {
 // BitbucketSvcProvider extends RemoteVcsSvcProvider for Bitbucket-specific token validation.
 type BitbucketSvcProvider interface {
 	RemoteVcsSvcProvider
+}
+
+// NewBitbucketSvcProvider creates a new instance of BitbucketSvcProvider.
+func NewBitbucketSvcProvider(ctx context.Context, gitUtil git.GitUtil, bitbucketUtil git.BitbucketUtil) BitbucketSvcProvider {
+	return &bitbucketSvcProvider{
+		ctx:           ctx,
+		git:           gitUtil,
+		bitbucketUtil: bitbucketUtil,
+		httpClient:    net.NewHttpClient(30 * time.Second),
+	}
 }
 
 // ValidateToken checks if the Bitbucket token is set and valid.
@@ -111,38 +123,30 @@ func (b *bitbucketSvcProvider) CreatePullRequest(params git.PullRequestParams) (
 		return "", fmt.Errorf(constants.ErrBitbucketMarshalPayload, err)
 	}
 
-	req, err := http.NewRequestWithContext(b.ctx, http.MethodPost, url, strings.NewReader(string(jsonPayload)))
-	if err != nil {
-		return "", fmt.Errorf(constants.ErrBitbucketCreateHTTPRequest, err)
+	headers := map[string]string{
+		git.AuthorizationHeader: git.BearerPrefix + params.GitPatToken,
+		git.AcceptHeader:        git.ApplicationJSONType,
+		git.ContentTypeHeader:   git.ApplicationJSONType,
 	}
-	req.Header.Set(git.AuthorizationHeader, git.BearerPrefix+params.GitPatToken)
-	req.Header.Set(git.AcceptHeader, git.ApplicationJSONType)
-	req.Header.Set(git.ContentTypeHeader, git.ApplicationJSONType)
 
-	resp, err := http.DefaultClient.Do(req)
+	statusCode, responseBody, _, err := b.httpClient.DoRequest(b.ctx, http.MethodPost, url, headers, strings.NewReader(string(jsonPayload)))
 	if err != nil {
 		return "", fmt.Errorf(constants.ErrBitbucketSendHTTPRequest, err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf(constants.ErrBitbucketReadResponseBody, err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if statusCode < 200 || statusCode >= 300 {
 		tflog.Error(b.ctx, git.CreatePullRequestFailedLog, map[string]any{
 			"owner":      owner,
 			"repo":       repo,
 			"title":      params.Title,
-			"statusCode": resp.StatusCode,
-			"body":       string(body),
+			"statusCode": statusCode,
+			"body":       string(responseBody),
 		})
-		return "", fmt.Errorf(constants.ErrBitbucketCreatePullRequestFailed, string(body))
+		return "", fmt.Errorf(constants.ErrBitbucketCreatePullRequestFailed, string(responseBody))
 	}
 
 	var result map[string]any
-	if err := json.Unmarshal(body, &result); err != nil {
+	if err := json.Unmarshal(responseBody, &result); err != nil {
 		return "", fmt.Errorf(constants.ErrBitbucketParseResponse, err)
 	}
 

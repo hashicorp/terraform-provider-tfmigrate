@@ -247,14 +247,14 @@ func (g *gitUtil) GetGitToken(gitServiceProvider *consts.GitServiceProvider, tok
 
 	gitPatToken := tokenFromProvider
 	if gitPatToken == "" {
-		if token, exists := os.LookupEnv("TF_GIT_PAT_TOKEN"); exists {
+		if token, exists := os.LookupEnv(consts.GitTokenEnvName); exists {
 			gitPatToken = token
 		} else {
-			return "", cliErrs.ErrTfGitPatTokenNotSet
+			return "", fmt.Errorf(string(cliErrs.ErrTfGitPatTokenNotSet), consts.GitTokenEnvName)
 		}
 	}
 	if gitPatToken == "" {
-		return "", cliErrs.ErrTfGitPatTokenEmpty
+		return "", fmt.Errorf(string(cliErrs.ErrTfGitPatTokenEmpty), consts.GitTokenEnvName)
 	}
 
 	switch *gitServiceProvider {
@@ -281,10 +281,10 @@ func getGithubPatToken(gitPatToken string) (string, error) {
 	}
 
 	if tokenType == FineGrainedToken {
-		return "", cliErrs.ErrTfGitPatTokenFineGrained
+		return "", fmt.Errorf(string(cliErrs.ErrTfGitPatTokenFineGrained), consts.GitTokenEnvName)
 	}
 
-	return "", cliErrs.ErrTfGitPatTokenInvalid
+	return "", fmt.Errorf(string(cliErrs.ErrTfGitPatTokenInvalid), consts.GitTokenEnvName)
 }
 
 // getGitlabPatToken returns the GitLab PAT token.
@@ -295,7 +295,7 @@ func (g *gitUtil) getGitlabPatToken(gitPatToken string) (string, error) {
 		return gitPatToken, nil
 	}
 
-	return "", cliErrs.ErrTfGitPatTokenInvalid
+	return "", fmt.Errorf(string(cliErrs.ErrTfGitPatTokenInvalid), consts.GitTokenEnvName)
 }
 
 // getBitBucketAppPassword returns the Bitbucket App Password.
@@ -305,7 +305,7 @@ func getBitBucketAppPassword(gitPatToken string) (string, error) {
 		return gitPatToken, nil
 	}
 
-	return "", cliErrs.ErrTfGitPatTokenInvalid
+	return "", fmt.Errorf(string(cliErrs.ErrTfGitPatTokenInvalid), consts.GitTokenEnvName)
 }
 
 // GetRepoIdentifier gets the repo identifier.

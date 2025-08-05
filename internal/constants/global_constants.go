@@ -10,3 +10,8 @@ var (
 	Bitbucket                 GitServiceProvider = "bitbucket.org"
 	UnknownGitServiceProvider GitServiceProvider = "unknown"
 )
+
+const (
+	// GitTokenEnvName is the environment variable name for the Git Personal Access Token.
+	GitTokenEnvName = "TF_GIT_PAT_TOKEN"
+)

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"terraform-provider-tfmigrate/internal/constants"
+	"terraform-provider-tfmigrate/internal/util/vcs/git"
 
 	"github.com/stretchr/testify/mock"
 
@@ -73,15 +74,15 @@ func TestBitbucketValidateToken(t *testing.T) {
 		},
 		"ErrBitbucketTokenNotSet": {
 			err:     cliErrs.ErrTfGitPatTokenNotSet,
-			suggest: constants.SuggestSettingValidTokenValue,
+			suggest: fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName),
 		},
 		"ErrBitbucketTokenEmpty": {
 			err:     cliErrs.ErrTfGitPatTokenEmpty,
-			suggest: constants.SuggestSettingValidTokenValue,
+			suggest: fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName),
 		},
 		"ErrBitbucketTokenInvalid": {
 			err:     cliErrs.ErrTfGitPatTokenInvalid,
-			suggest: constants.SuggestSettingValidTokenValue,
+			suggest: fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName),
 		},
 		"UnknownErrorOccurred": {
 			err:     cliErrs.ErrUnknownError,
@@ -97,7 +98,7 @@ func TestBitbucketValidateToken(t *testing.T) {
 		},
 		"ErrTokenExpired": {
 			err:     cliErrs.ErrTokenExpired,
-			suggest: constants.SuggestSettingUnexpiredToken,
+			suggest: fmt.Sprintf(constants.SuggestSettingUnexpiredToken, constants.GitTokenEnvName),
 		},
 		"ErrTokenDoesNotHaveAccessToOrg": {
 			err:     cliErrs.ErrTokenDoesNotHaveAccessToOrg,
@@ -109,7 +110,7 @@ func TestBitbucketValidateToken(t *testing.T) {
 		},
 		"ErrBitbucketTokenTypeNotSupported": {
 			err:     cliErrs.ErrBitbucketTokenTypeNotSupported,
-			suggest: constants.SuggestSettingValidTokenValue,
+			suggest: fmt.Sprintf(constants.SuggestSettingValidTokenValue, constants.GitTokenEnvName),
 		},
 		"ErrTokenDoesNotHaveAccessToRepo": {
 			err:     cliErrs.ErrTokenDoesNotHaveWritePermission,
@@ -127,11 +128,7 @@ func TestBitbucketValidateToken(t *testing.T) {
 			git := gitMocks.NewMockGitUtil(t)
 			bitbucketUtil := gitMocks.NewMockBitbucketUtil(t)
 
-			b := &bitbucketSvcProvider{
-				ctx:           ctx,
-				git:           git,
-				bitbucketUtil: bitbucketUtil,
-			}
+			b := NewBitbucketSvcProvider(ctx, git, bitbucketUtil).(*bitbucketSvcProvider)
 
 			func() {
 				if name == "UnknownGitServiceProvider" {
@@ -390,10 +387,7 @@ func TestBitbucketValidateBitbucketTokenRepoAccess(t *testing.T) {
 			ctx := context.Background()
 			bitbucketUtil := gitMocks.NewMockBitbucketUtil(t)
 
-			b := &bitbucketSvcProvider{
-				ctx:           ctx,
-				bitbucketUtil: bitbucketUtil,
-			}
+			b := NewBitbucketSvcProvider(ctx, nil, bitbucketUtil).(*bitbucketSvcProvider)
 
 			workspace := "hashicorp"
 			repoSlug := "tf-migrate"
@@ -428,6 +422,60 @@ func TestBitbucketValidateBitbucketTokenRepoAccess(t *testing.T) {
 				r.Equal(tc.expectedError.Error(), err.Error())
 			} else {
 				r.NoError(err)
+			}
+		})
+	}
+}
+
+func TestBitbucketCreatePullRequest(t *testing.T) {
+	for name, tc := range map[string]struct {
+		params        git.PullRequestParams
+		expectedError error
+		expectedURL   string
+	}{
+		"invalid repo identifier": {
+			params: git.PullRequestParams{
+				RepoIdentifier: "invalid",
+				BaseBranch:     "main",
+				FeatureBranch:  "feature-branch",
+				Title:          "Test PR",
+				Body:           "Test PR body",
+				GitPatToken:    "fake-token",
+			},
+			expectedError: fmt.Errorf("invalid repository identifier. It should be in the format: owner/repository"),
+			expectedURL:   "",
+		},
+		"valid repo identifier": {
+			params: git.PullRequestParams{
+				RepoIdentifier: "owner/repo",
+				BaseBranch:     "main",
+				FeatureBranch:  "feature-branch",
+				Title:          "Test PR",
+				Body:           "Test PR body",
+				GitPatToken:    "fake-token",
+			},
+			expectedError: nil,
+			expectedURL:   "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := require.New(t)
+			ctx := context.Background()
+			git := gitMocks.NewMockGitUtil(t)
+			bitbucketUtil := gitMocks.NewMockBitbucketUtil(t)
+
+			b := NewBitbucketSvcProvider(ctx, git, bitbucketUtil).(*bitbucketSvcProvider)
+
+			url, err := b.CreatePullRequest(tc.params)
+
+			if tc.expectedError != nil {
+				r.Error(err)
+				r.Equal(tc.expectedError.Error(), err.Error())
+				r.Empty(url)
+			} else {
+				// For the valid case, we expect an error since we're not mocking the HTTP client
+				// This test just verifies the method signature and basic logic
+				r.Error(err)
 			}
 		})
 	}

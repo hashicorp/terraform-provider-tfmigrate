@@ -33,7 +33,6 @@ var (
 )
 
 const (
-	GitTokenEnvName        = "TF_GIT_PAT_TOKEN"
 	HcpTerraformHost       = "app.terraform.io"
 	HcpMigrateBranchPrefix = "hcp-migrate-"
 )
@@ -123,7 +122,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		resp.Diagnostics.AddAttributeError(
 			path.Root("git_pat_token"),
 			"Unknown TF_GIT_PAT_TOKEN",
-			"The provider cannot initialize the Git client as the Git PAT token is unknown. Set it as an environment variable.",
+			fmt.Sprintf("The provider cannot initialize the Git client as the Git PAT token is unknown. Set it as an environment variable or use the %s environment variable.", constants.GitTokenEnvName),
 		)
 	}
 	if config.Hostname.IsUnknown() {
@@ -154,7 +153,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 
 	// Default values to environment variables, but override
 	// with Terraform configuration values if set
-	gitPatToken := os.Getenv(GitTokenEnvName)
+	gitPatToken := os.Getenv(constants.GitTokenEnvName)
 	hostname := HcpTerraformHost
 
 	if !config.GitPatToken.IsNull() {
