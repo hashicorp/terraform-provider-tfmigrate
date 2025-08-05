@@ -100,7 +100,7 @@ func (b *bitbucketSvcProvider) CreatePullRequest(params git.PullRequestParams) (
 	owner := parts[0]
 	repo := parts[1]
 
-	url := fmt.Sprintf(git.BitbucketPullRequestAPIURL, owner, repo)
+	url := fmt.Sprintf(git.BitbucketPullRequestAPIURL, git.ApiVersion, owner, repo)
 
 	payload := map[string]any{
 		"title": params.Title,

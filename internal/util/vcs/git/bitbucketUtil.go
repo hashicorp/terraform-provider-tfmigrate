@@ -15,13 +15,13 @@ import (
 // Package level constants for Bitbucket operations.
 const (
 	BitbucketRepositoryAPIURL  = "https://api.bitbucket.org/%s/repositories/%s/%s"
-	BitbucketPullRequestAPIURL = "https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests"
+	BitbucketPullRequestAPIURL = "https://api.bitbucket.org/%s/repositories/%s/%s/pullrequests"
 	OauthScopesHeader          = "X-Oauth-Scopes"
 	CredentialTypeHeader       = "X-Credential-Type"
 	CreateRequestFailedLog     = "failed to create HTTP request"
 	MakeRequestFailedLog       = "failed to make HTTP request"
 	CreatePullRequestFailedLog = "Failed to create pull request"
-	apiVersion                 = "2.0"
+	ApiVersion                 = "2.0"
 
 	// HTTP headers.
 	AuthorizationHeader = "Authorization"
@@ -58,7 +58,7 @@ func NewBitbucketUtil(ctx context.Context) BitbucketUtil {
 
 func (b *bitbucketUtil) CheckTokenTypeAndScopes(workspace, repoSlug, accessToken string) (string, string, *http.Response, error) {
 	// Local constants for strings used in this function
-	url := fmt.Sprintf(BitbucketRepositoryAPIURL, apiVersion, workspace, repoSlug)
+	url := fmt.Sprintf(BitbucketRepositoryAPIURL, ApiVersion, workspace, repoSlug)
 
 	headers := map[string]string{
 		AuthorizationHeader: BearerPrefix + accessToken,
