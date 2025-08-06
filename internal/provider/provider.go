@@ -198,7 +198,7 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewTerraformPlanResource,
 		NewGitResetResource,
 		NewGitCommitPushResource,
-		NewGithubPrResource,
+		NewGitPrResource,
 		NewDirectoryActionResource,
 		NewStateMigrationResource,
 	}

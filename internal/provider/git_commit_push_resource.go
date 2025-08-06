@@ -148,7 +148,6 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 		err = r.gitOps.PushCommit(createPushParams)
-		// err = r.gitOps.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
 		if err != nil {
 			tflog.Error(ctx, "Error executing Git Push: "+err.Error())
 			resp.Diagnostics.AddError(fmt.Sprintf("Error executing Git Push: %s", err.Error()), err.Error())
