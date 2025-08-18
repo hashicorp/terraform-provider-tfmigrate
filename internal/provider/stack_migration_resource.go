@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"net/http"
 	"os"
 	"regexp"
@@ -38,10 +39,14 @@ const (
 	attrConfigurationDir           = `config_file_dir`              // attrConfigurationDir is the attribute for the directory containing the stack configuration files.
 	attrCurrentConfigurationId     = `current_configuration_id`     // attrCurrentConfigurationId is the attribute for the ID of the current stack configuration.
 	attrCurrentConfigurationStatus = `current_configuration_status` // attrCurrentConfigurationStatus is the attribute for the status of the stack configuration.
+	attrMigrationHash              = `migration_hash`               // attrMigrationHash is the attribute which allows the resource to track the migration state of the stack.
 	attrName                       = `name`                         // attrName is the attribute for the name of the stack.
 	attrOrganization               = `organization`                 // attrOrganization is the attribute for the HCP Terraform organization name in which the stack exists.
 	attrProject                    = `project`                      // attrProject is the attribute for the HCP Terraform project name in which the stack exists.
 	attrSourceBundleHash           = `source_bundle_hash`           // attrSourceBundleHash is the attribute for the hash of the configuration files in the directory.
+	attrTerraformConfigDir         = `terraform_config_dir`         // attrTerraformConfigDir is the attribute for the directory containing the Terraform configuration files from which stack configurations are generated.
+	attrTerraformConfigHash        = `terraform_config_hash`        // attrTerraformConfigHash is the attribute for the hash of the Terraform configuration files in the directory.
+	attrWorkspaceDeploymentMapping = `workspace_deployment_mapping` // attrWorkspaceDeploymentMapping is the attribute for the map of workspace names to stack deployment names.
 
 	/* Attribute markdown descriptions. */
 
@@ -53,6 +58,9 @@ const (
 
 	// currentConfigurationStatusDescription is the Markdown description for the `current_configuration_status` attribute.
 	currentConfigurationStatusDescription = `The status of the stack configuration. This is used to track the status of the stack configuration upload.`
+
+	// migrationHashDescription is the Markdown description for the `migration_hash` attribute.
+	migrationHashDescription = `The hash used for tracking the migration state of the stack.`
 
 	// nameDescription is the Markdown description for the `name` attribute.
 	nameDescription = `The stack name. Must be unique within the organization and project, must be a non-VCS driven stack.`
@@ -66,7 +74,19 @@ const (
 	// sourceBundleHashDescription is the Markdown description for the `source_bundle_hash` attribute.
 	sourceBundleHashDescription = `The hash of the configuration files in the directory. This is used to detect changes in the stack configuration files.`
 
+	// terraformConfigDirDescription is the Markdown description for the `terraform_config_dir` attribute.
+	terraformConfigDirDescription = `The directory path containing the Terraform configuration files from which stack configurations are generated. Must be an absolute path.`
+
+	// terraformConfigHashDescription is the Markdown description for the `terraform_config_hash` attribute.
+	terraformConfigHashDescription = `The hash of the Terraform configuration files in the directory. This is used to detect changes in the Terraform configuration files.`
+
+	// workspaceDeploymentMappingDescription is the Markdown description for the `workspace_deployment_mapping` attribute.
+	workspaceDeploymentMappingDescription = `A map of workspace names to stack deployment names. This is used to map the workspaces to the stack deployments. The keys are the workspace names, and the values are the stack deployment names.`
+
 	/* validator constants. */
+
+	// deploymentNameConstraintViolationMsg is the error message for deployment name constraint violations.
+	deploymentNameConstraintViolationMsg = `The deployment name must be between 1 and 90 characters long and may contain valid characters including ASCII letters, numbers, spaces, as well as dashes (-), and underscores (_).`
 
 	// organizationNameConstraintViolationMsg is the error message for organization name constraint violations.
 	organizationNameConstraintViolationMsg = `The organization name must be between 3 and 40 characters long and may contain valid characters including ASCII letters, numbers, spaces, as well as dashes (-), and underscores (_).`
@@ -76,6 +96,9 @@ const (
 
 	// stackNameConstraintViolationMsg is the error message for stack name constraint violations.
 	stackNameConstraintViolationMsg = `The stack name must be between 1 and 90 characters long and may contain valid characters including ASCII letters, numbers, spaces, as well as dashes (-), and underscores (_).`
+
+	// workspaceNameConstraintViolationMsg is the error message for workspace name constraint violations.
+	workspaceNameConstraintViolationMsg = `The workspace name must be between 1 and 260 characters long and may contain valid characters including ASCII letters, numbers, spaces, as well as dashes (-), and underscores (_).`
 
 	/* Configuration hash calculation error constants. */
 
@@ -132,8 +155,9 @@ var (
 	_ resource.ResourceWithConfigure  = &stackMigrationResource{}
 	_ resource.ResourceWithModifyPlan = &stackMigrationResource{}
 
-	projectAndOrgNameRegex = regexp.MustCompile(`^[a-zA-Z0-9 _-]{3,40}$`) // projectAndOrgNameRegex Regex for valid organization, and project names
-	stackNameRegex         = regexp.MustCompile(`^[a-zA-Z0-9 _-]{1,90}$`) // projectAndOrgNameRegex Regex for valid stack names
+	projectAndOrgNameRegex = regexp.MustCompile(`^[a-zA-Z0-9 _-]{3,40}$`)  // projectAndOrgNameRegex Regex for valid organization, and project names
+	stackNameRegex         = regexp.MustCompile(`^[a-zA-Z0-9 _-]{1,90}$`)  // projectAndOrgNameRegex Regex for valid stack names
+	workspaceNameRegex     = regexp.MustCompile(`^[a-zA-Z0-9 _-]{1,260}$`) // workspaceNameRegex Regex for valid workspace names
 
 )
 
@@ -143,10 +167,14 @@ type StackMigrationResourceModel struct {
 	ConfigurationDir           types.String `tfsdk:"config_file_dir"`              // ConfigurationDir is the absolute directory path containing stack configuration files.
 	CurrentConfigurationId     types.String `tfsdk:"current_configuration_id"`     // CurrentConfigurationId is the ID of the current stack configuration.
 	CurrentConfigurationStatus types.String `tfsdk:"current_configuration_status"` // CurrentConfigurationStatus  is the status of the stack configuration.
+	MigrationHash              types.String `tfsdk:"migration_hash"`               // MigrationHash is the hash is used for tracking the migration state of the stack.
 	Name                       types.String `tfsdk:"name"`                         // Name is the name of the stack Must be unique within the organization and project, must be a non-Vcs driven stack.
 	Organization               types.String `tfsdk:"organization"`                 // Organization is the HCP Terraform organization name in which the stack exists. The value can be provided by the `TFE_ORGANIZATION` environment variable.
 	Project                    types.String `tfsdk:"project"`                      // Project is the HCP Terraform project name in which the stack exists. The value can be provided by the `TFE_PROJECT` environment variable.
 	SourceBundleHash           types.String `tfsdk:"source_bundle_hash"`           // SourceBundleHash is the hash of the configuration files in the directory. This is used to detect changes in the configuration files.
+	TerraformConfigDir         types.String `tfsdk:"terraform_config_dir"`         // TerraformConfigDir is the absolute directory path containing the Terraform configuration files from which stack configurations are generated.
+	TerraformConfigHash        types.String `tfsdk:"terraform_config_hash"`        // TerraformConfigHash is the hash of the Terraform configuration files in the directory. This is used to detect changes in the Terraform configuration files.
+	WorkspaceDeploymentMapping types.Map    `tfsdk:"workspace_deployment_mapping"` // WorkspaceDeploymentMapping is a map of workspace names to stack deployment names. This is used to map the workspaces to the stack deployments.
 }
 
 // stackMigrationResource implements the resource.Resource interface for managing stack migrations in HCP Terraform.
@@ -189,6 +217,13 @@ func (r *stackMigrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 			},
 			attrCurrentConfigurationStatus: schema.StringAttribute{
 				MarkdownDescription: currentConfigurationStatusDescription,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			attrMigrationHash: schema.StringAttribute{
+				MarkdownDescription: migrationHashDescription,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -238,6 +273,37 @@ func (r *stackMigrationResource) Schema(_ context.Context, _ resource.SchemaRequ
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			attrTerraformConfigDir: schema.StringAttribute{
+				MarkdownDescription: terraformConfigDirDescription,
+				Required:            true,
+				Validators: []validator.String{
+					&absolutePathValidator{},
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			attrTerraformConfigHash: schema.StringAttribute{
+				MarkdownDescription: terraformConfigHashDescription,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			attrWorkspaceDeploymentMapping: schema.MapAttribute{
+				MarkdownDescription: workspaceDeploymentMappingDescription,
+				Required:            true,
+				ElementType:         types.StringType,
+				Validators: []validator.Map{
+					mapvalidator.NoNullValues(),
+					mapvalidator.KeysAre(
+						stringvalidator.RegexMatches(workspaceNameRegex, workspaceNameConstraintViolationMsg),
+					),
+					mapvalidator.ValueStringsAre(
+						stringvalidator.RegexMatches(stackNameRegex, deploymentNameConstraintViolationMsg),
+					),
 				},
 			},
 		},
