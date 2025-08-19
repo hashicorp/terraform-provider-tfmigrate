@@ -7,13 +7,14 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"net/http"
 	"os"
 	"regexp"
 	"terraform-provider-tfmigrate/internal/constants"
 	stackConstants "terraform-provider-tfmigrate/internal/constants/stack"
 	tfeUtil "terraform-provider-tfmigrate/internal/util/tfe"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 
 	"github.com/hashicorp/go-tfe"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
