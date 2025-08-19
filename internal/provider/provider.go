@@ -5,10 +5,12 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"terraform-provider-tfmigrate/internal/cli_errors"
 	"terraform-provider-tfmigrate/internal/constants"
 	"terraform-provider-tfmigrate/internal/gitops"
 	tfeUtil "terraform-provider-tfmigrate/internal/util/tfe"
@@ -147,7 +149,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		resp.Diagnostics.AddAttributeError(
 			path.Root("git_pat_token"),
 			"Unknown TF_GIT_PAT_TOKEN",
-			"The provider cannot initialize the Git client as the Git PAT token is unknown. Set it as an environment variable.",
+			fmt.Sprintf("The provider cannot initialize the Git client as the Git PAT token is unknown. Set it as an environment variable or use the %s environment variable.", constants.GitTokenEnvName),
 		)
 	}
 	if config.Hostname.IsUnknown() {
@@ -214,7 +216,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	}
 
 	// Retrieve environment variables
-	gitPatToken := os.Getenv(GitTokenEnvName)
+	gitPatToken := os.Getenv(constants.GitTokenEnvName)
 
 	if !config.GitPatToken.IsNull() {
 		gitPatToken = config.GitPatToken.ValueString()
@@ -230,7 +232,7 @@ func (p *tfmProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		createPr = config.CreatePr.ValueBool()
 	}
 
-	if err := p.validateGitOpsReadiness(allowCommitPush, createPr, gitPatToken); err != nil {
+	if err := p.validateGitOpsReadiness(allowCommitPush, &createPr, gitPatToken); err != nil {
 		resp.Diagnostics.AddError("Git Operations Validation Error: "+err.Error(), err.Error())
 		return
 	}
@@ -259,7 +261,7 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewTerraformPlanResource,
 		NewGitResetResource,
 		NewGitCommitPushResource,
-		NewGithubPrResource,
+		NewGitPrResource,
 		NewDirectoryActionResource,
 		NewStateMigrationResource,
 		NewStackMigrationResource,
@@ -282,7 +284,7 @@ func (p *tfmProvider) validateGitPatToken(tokenFromProvider string) diag.Diagnos
 	}
 	var repoIdentifier string
 	if repoIdentifier = p.gitOps.GetRepoIdentifier(repoUrl); repoIdentifier == "" {
-		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.WarnNotOnGithubOrGitlab, repoUrl)), "unable to determine the repository identifier")
+		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.WarnNotOnSupportedVcsProvider, repoUrl)), "unable to determine the repository identifier")
 		return diagnostics
 	}
 	remoteVcsSvcProvider, err := p.remoteVcsSvcProviderFactory.NewRemoteVcsSvcProvider(p.gitOps.GetRemoteServiceProvider(repoUrl))
@@ -291,7 +293,8 @@ func (p *tfmProvider) validateGitPatToken(tokenFromProvider string) diag.Diagnos
 		return diagnostics
 	}
 	if suggestion, err := remoteVcsSvcProvider.ValidateToken(repoUrl, repoIdentifier, tokenFromProvider); err != nil {
-		diagnostics.AddError(strings.ToLower(fmt.Sprintf(constants.ErrorValidatingGitToken, err)), err.Error())
+		tflog.Error(context.Background(), fmt.Sprintf(constants.ErrorValidatingGitToken, err))
+		diagnostics.AddError(strings.ToLower(err.Error()), fmt.Sprintf(constants.ErrorValidatingGitToken, err))
 		diagnostics.AddWarning("", suggestion)
 		return diagnostics
 	}
@@ -299,8 +302,8 @@ func (p *tfmProvider) validateGitPatToken(tokenFromProvider string) diag.Diagnos
 }
 
 // validateGitOpsReadiness checks if the Git operations are ready for commit and push or PR creation.
-func (p *tfmProvider) validateGitOpsReadiness(allowCommitPush, createPr bool, tokenFromProvider string) error {
-	if !allowCommitPush && !createPr {
+func (p *tfmProvider) validateGitOpsReadiness(allowCommitPush bool, createPr *bool, tokenFromProvider string) error {
+	if !allowCommitPush && !*createPr {
 		return nil
 	}
 	isGitRepo, err := p.gitOps.IsGitRepo()
@@ -332,15 +335,19 @@ func (p *tfmProvider) validateGitOpsReadiness(allowCommitPush, createPr bool, to
 	if allowCommitPush && !p.gitOps.IsSSHUrl(repoUrl) {
 		diagnostics := p.validateGitPatToken(tokenFromProvider)
 		if diagnostics.HasError() {
-			return fmt.Errorf("git token validation failed")
+			for _, diag := range diagnostics.Errors() {
+				return p.handleGitTokenValidatorError(createPr, diag.Summary())
+			}
 		}
 		validatedTokenAlready = true
 	}
-	if createPr {
+	if *createPr {
 		if !validatedTokenAlready {
 			diagnostics := p.validateGitPatToken(tokenFromProvider)
 			if diagnostics.HasError() {
-				return fmt.Errorf("git token validation failed")
+				for _, diag := range diagnostics.Errors() {
+					return p.handleGitTokenValidatorError(createPr, diag.Summary())
+				}
 			}
 		}
 	}
@@ -488,4 +495,12 @@ func (p *tfmProvider) getProviderSSLSkipVerifyConfig(sslSkipVerifyConfigVal type
 	}
 
 	return sslSkipVerifyBolVal, diags
+}
+
+func (p *tfmProvider) handleGitTokenValidatorError(createPr *bool, errorMessage string) error {
+	if errorMessage == cli_errors.ErrTokenDoesNotHavePrWritePermission.Error() {
+		*createPr = false
+		return nil
+	}
+	return errors.New(errorMessage)
 }
