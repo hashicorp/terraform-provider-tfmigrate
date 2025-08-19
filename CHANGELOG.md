@@ -1,3 +1,23 @@
+## 1.2.0 (19th Aug 2025)
+
+### NOTES
+
+**Bitbucket Integration Support:**
+
+This release introduces full Bitbucket support in the terraform-provider-tfmigrate, extending compatibility alongside GitHub and GitLab. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/176)
+
+- Execute Git operations on Bitbucket-hosted repositories.
+- Create pull requests with title, description, and source/destination branch configuration.  
+
+**Token Validation:**
+
+- Validates Bitbucket Repository Access Tokens.  
+- Enforces required scopes:  
+  - `repository:write` — for branch creation and pushes.  
+  - `pullrequest:write` — for pull request creation.  
+- If scope `pullrequest:write` is not enabled then the tool sets `create_pr` to false and skips pull request creation.
+- Handles Bitbucket-specific token types and error responses.
+
 ## 1.1.0 (21st May 2025)
 
 ### NOTES
