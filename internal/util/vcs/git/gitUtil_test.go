@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -27,21 +28,21 @@ func TestGetGitToken(t *testing.T) {
 		},
 		"githubTokenNotSet": {
 			gitSvcPvd: &consts.GitHub,
-			err:       cliErrs.ErrTfGitPatTokenNotSet,
+			err:       fmt.Errorf(string(cliErrs.ErrTfGitPatTokenNotSet), consts.GitTokenEnvName),
 		},
 		"githubTokenEmpty": {
 			gitSvcPvd: &consts.GitHub,
-			err:       cliErrs.ErrTfGitPatTokenEmpty,
+			err:       fmt.Errorf(string(cliErrs.ErrTfGitPatTokenEmpty), consts.GitTokenEnvName),
 			token:     "",
 		},
 		"githubTokenFineGrained": {
 			gitSvcPvd: &consts.GitHub,
-			err:       cliErrs.ErrTfGitPatTokenFineGrained,
+			err:       fmt.Errorf(string(cliErrs.ErrTfGitPatTokenFineGrained), consts.GitTokenEnvName),
 			token:     "github_pat_12B85MNZZ1X7XmmpLbDvMj_TojrCCf7yKw9bOM8Doe2t6yq0hcHGZ672zbevH0kKwD5YAFEGLBLVWo2y3",
 		},
 		"githubTokenUnrecognised": {
 			gitSvcPvd: &consts.GitHub,
-			err:       cliErrs.ErrTfGitPatTokenInvalid,
+			err:       fmt.Errorf(string(cliErrs.ErrTfGitPatTokenInvalid), consts.GitTokenEnvName),
 			token:     "unrecognised_token_1234ABCDef5", //nolint:misspell
 		},
 		"githubTokenClassic": {
@@ -50,11 +51,11 @@ func TestGetGitToken(t *testing.T) {
 		},
 		"gitlabTokenNotSet": {
 			gitSvcPvd: &consts.GitLab,
-			err:       cliErrs.ErrTfGitPatTokenNotSet,
+			err:       fmt.Errorf(string(cliErrs.ErrTfGitPatTokenNotSet), consts.GitTokenEnvName),
 		},
 		"gitlabTokenEmpty": {
 			gitSvcPvd: &consts.GitLab,
-			err:       cliErrs.ErrTfGitPatTokenEmpty,
+			err:       fmt.Errorf(string(cliErrs.ErrTfGitPatTokenEmpty), consts.GitTokenEnvName),
 			token:     "",
 		},
 		"gitlabTokenValid": {
@@ -107,8 +108,8 @@ func TestGetRepoIdentifier(t *testing.T) {
 		repoIdentifier string
 		repoUrl        string
 	}{
-		"nonSupportedRepoUrl": {
-			repoIdentifier: "",
+		"bitbucketRepoUrl": {
+			repoIdentifier: "hashicorp/terraform-provider-aws",
 			repoUrl:        "https://bitbucket.org/hashicorp/terraform-provider-aws.git",
 		},
 		"githubSshRepoUrl": {
@@ -137,7 +138,7 @@ func TestGetRepoIdentifier(t *testing.T) {
 			repoIdentifier := gitOps.GetRepoIdentifier(tc.repoUrl)
 
 			// Assert
-			r.Equal(repoIdentifier, tc.repoIdentifier)
+			r.Equal(tc.repoIdentifier, repoIdentifier)
 		})
 	}
 

@@ -30,7 +30,7 @@ func TestValidateToken_gitlab(t *testing.T) {
 	}{
 		"UnknownGitServiceProvider": {
 			err:     cliErrs.ErrGitServiceProviderNotSupported,
-			suggest: constants.SuggestUsingGithubOrGitlab,
+			suggest: constants.SuggestUsingSupportedVcsProvider,
 		},
 		"UnknownErrorOccurred": {
 			err:     cliErrs.ErrUnknownError,

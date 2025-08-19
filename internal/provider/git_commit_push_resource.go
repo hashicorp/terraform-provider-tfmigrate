@@ -87,14 +87,18 @@ func (r *gitCommitPush) Schema(_ context.Context, _ resource.SchemaRequest, resp
 }
 
 func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-
-	if !r.allowCommitPush {
-		tflog.Debug(ctx, "Git Commit Push is not allowed in the current configuration.")
-		return
-	}
 	var data GitCommitPushModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !r.allowCommitPush {
+		tflog.Debug(ctx, "Git Commit Push is not allowed in the current configuration.")
+		data.EnablePush = types.BoolValue(false)
+		data.Summary = types.StringValue("Git commit and push is disabled")
+		data.CommitHash = types.StringValue("")
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
 
@@ -144,7 +148,6 @@ func (r *gitCommitPush) Create(ctx context.Context, req resource.CreateRequest, 
 			return
 		}
 		err = r.gitOps.PushCommit(createPushParams)
-		// err = r.gitOps.PushCommitUsingGit(data.RemoteName.ValueString(), data.BranchName.ValueString())
 		if err != nil {
 			tflog.Error(ctx, "Error executing Git Push: "+err.Error())
 			resp.Diagnostics.AddError(fmt.Sprintf("Error executing Git Push: %s", err.Error()), err.Error())

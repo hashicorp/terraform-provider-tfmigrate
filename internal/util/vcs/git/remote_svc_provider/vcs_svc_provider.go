@@ -50,5 +50,9 @@ func (f *remoteSvcProviderFactory) NewRemoteVcsSvcProvider(gitServiceProvider *c
 			gitlabUtil: git.NewGitlabUtil(f.ctx),
 		}, nil
 	}
+
+	if gitServiceProvider != nil && *gitServiceProvider == consts.Bitbucket {
+		return NewBitbucketSvcProvider(f.ctx, git.NewGitUtil(f.ctx), git.NewBitbucketUtil(f.ctx)), nil
+	}
 	return nil, cliErrs.ErrGitServiceProviderNotSupported
 }

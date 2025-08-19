@@ -19,23 +19,23 @@ const (
 	MigrationFeatureBranchPrefix = `hcp-migrate-`
 )
 
-type githubPr struct {
+type gitPr struct {
 	gitPatToken string
 	gitOps      gitops.GitOperations
 	createPr    bool
 }
 
 var (
-	_ resource.Resource = &githubPr{}
+	_ resource.Resource = &gitPr{}
 )
 
-func NewGithubPrResource() resource.Resource {
-	return &githubPr{
+func NewGitPrResource() resource.Resource {
+	return &gitPr{
 		gitOps: gitops.NewGitOperations(context.Background(), gitUtil.NewGitUtil(context.Background())),
 	}
 }
 
-type GithubPrModel struct {
+type GitPrModel struct {
 	RepoIdentifier types.String `tfsdk:"repo_identifier"`
 	PrTitle        types.String `tfsdk:"pr_title"`
 	PrBody         types.String `tfsdk:"pr_body"`
@@ -45,13 +45,13 @@ type GithubPrModel struct {
 	PrUrl          types.String `tfsdk:"pull_request_url"`
 }
 
-func (r *githubPr) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_github_pr"
+func (r *gitPr) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_git_pr"
 }
 
-func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *gitPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Github Pr Resource: This resource is used to create PR on github.",
+		MarkdownDescription: "Git Pr Resource: This resource is used to create PR on VCS Service provider.",
 		Attributes: map[string]schema.Attribute{
 			"repo_identifier": schema.StringAttribute{
 				MarkdownDescription: "The identifier of the repository in the format `owner/repo`.",
@@ -85,15 +85,18 @@ func (r *githubPr) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 	}
 }
 
-func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	if !r.createPr {
-		tflog.Debug(ctx, "Create PR is not enabled")
-		return
-	}
-	var data GithubPrModel
-
+func (r *gitPr) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data GitPrModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !r.createPr {
+		tflog.Debug(ctx, "Create PR is not enabled")
+		data.Summary = types.StringValue("PR creation is disabled")
+		data.PrUrl = types.StringValue("")
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 		return
 	}
 
@@ -126,10 +129,10 @@ func (r *githubPr) Create(ctx context.Context, req resource.CreateRequest, resp 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *githubPr) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {}
+func (r *gitPr) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {}
 
-func (r *githubPr) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data GithubPrModel
+func (r *gitPr) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data GitPrModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -139,11 +142,11 @@ func (r *githubPr) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *githubPr) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *gitPr) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	tflog.Warn(ctx, DestroyActionNotSupported)
 }
 
-func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *gitPr) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -162,7 +165,7 @@ func (r *githubPr) Configure(_ context.Context, req resource.ConfigureRequest, r
 }
 
 // validateAndSetBranches validates and sets the source and destination branches if they are empty.
-func (r *githubPr) validateAndSetBranches(ctx context.Context, baseBranch, featureBranch *string) error {
+func (r *gitPr) validateAndSetBranches(ctx context.Context, baseBranch, featureBranch *string) error {
 	// Check if the destination branch is empty
 	// If empty, use the default base branch of the repo
 	if *baseBranch == "" {

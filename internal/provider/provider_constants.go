@@ -5,7 +5,7 @@ package provider
 
 const (
 	ProviderPatTokenMissing         = "Missing Git PAT Token."
-	ProviderPatTokenMissingDetailed = "The provider cannot create the VCS API client as there is a missing or empty value for the VCS API client. Set the password value in the configuration or use the TF_GIT_PAT_TOKEN environment variable. If either is already set, ensure the value is not empty."
+	ProviderPatTokenMissingDetailed = "The provider cannot create the VCS API client as there is a missing or empty value for the VCS API client. Set the password value in the configuration or use the %s environment variable. If either is already set, ensure the value is not empty."
 
 	DirPathDoesNotExist              = "Specified Directory Path does not exist."
 	DirPathDoesNotExistDetailed      = "The given directory path %s does not exist. Please provide a valid directory path."
