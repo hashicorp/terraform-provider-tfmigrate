@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"terraform-provider-tfmigrate/internal/constants"
 	stackConstants "terraform-provider-tfmigrate/internal/constants/stack"
+	httpUtil "terraform-provider-tfmigrate/internal/util/net"
 	tfeUtil "terraform-provider-tfmigrate/internal/util/tfe"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
@@ -40,7 +41,7 @@ const (
 	attrConfigurationDir           = `config_file_dir`              // attrConfigurationDir is the attribute for the directory containing the stack configuration files.
 	attrCurrentConfigurationId     = `current_configuration_id`     // attrCurrentConfigurationId is the attribute for the ID of the current stack configuration.
 	attrCurrentConfigurationStatus = `current_configuration_status` // attrCurrentConfigurationStatus is the attribute for the status of the stack configuration.
-	attrMigrationHash              = `migration_hash`               // attrMigrationHash is the attribute which allows the resource to track the migration state of the stack.
+	attrMigrationHash              = `migration_hash`               // attrMigrationHash is the attribute that allows the resource to track the migration state of the stack.
 	attrName                       = `name`                         // attrName is the attribute for the name of the stack.
 	attrOrganization               = `organization`                 // attrOrganization is the attribute for the HCP Terraform organization name in which the stack exists.
 	attrProject                    = `project`                      // attrProject is the attribute for the HCP Terraform project name in which the stack exists.
@@ -185,6 +186,8 @@ type stackMigrationResource struct {
 	existingProject      *tfe.Project      // an existingProject is the project in which the stack exists.
 	tfeClient            *tfe.Client       // tfeClient is the TFE client used to interact with the HCP Terraform API.
 	tfeUtil              tfeUtil.TfeUtil   // tfeUtil is the utility for interacting with the TFE API, used to perform operations like uploading stack configurations and calculating source bundle hashes.
+	tfeConfig            *tfe.Config       // tfeConfig is the TFE client configuration used to create the TFE client.
+	httpClient           httpUtil.Client   // httpClient is the HTTP client used to make requests to the TFE API configured with TLS settings and retry logic.
 }
 
 // NewStackMigrationResource creates a new instance of the stack migration resource.
@@ -411,11 +414,20 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 	   calculate the hash of the configuration files in the directory
 	   and set it to the source_bundle_hash attribute in the state.
 	*/
-	sourceBundleHash, err := r.tfeUtil.CalculateStackSourceBundleHash(state.ConfigurationDir.ValueString())
+	sourceBundleHash, err := r.tfeUtil.CalculateConfigFileHash(state.ConfigurationDir.ValueString())
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Error Calculating Configuration Hash",
 			fmt.Sprintf("Could not calculate the hash of the configuration files in the directory %q: %s", state.ConfigurationDir.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	terraformConfigHash, err := r.tfeUtil.CalculateConfigFileHash(state.TerraformConfigDir.ValueString())
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Error Calculating Terraform Configuration Hash",
+			fmt.Sprintf("Could not calculate the hash of the Terraform configuration files in the directory %q: %s", state.TerraformConfigDir.ValueString(), err.Error()),
 		)
 		return
 	}
@@ -429,6 +441,9 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 	updatedState.Organization = types.StringValue(r.existingOrganization.Name)
 	updatedState.Project = types.StringValue(r.existingProject.Name)
 	updatedState.SourceBundleHash = types.StringValue(sourceBundleHash)
+	updatedState.TerraformConfigDir = state.TerraformConfigDir
+	updatedState.TerraformConfigHash = types.StringValue(terraformConfigHash)
+	updatedState.MigrationHash = state.MigrationHash // TODO: implement migration hash logic
 
 	// save the updated state
 	response.Diagnostics.Append(response.State.Set(ctx, &updatedState)...)
@@ -533,6 +548,19 @@ func (r *stackMigrationResource) Configure(ctx context.Context, configureRequest
 	defaultTfeConfig.Token = providerConfigData.TfeToken
 	defaultTfeConfig.HTTPClient = httpClient
 
+	// configure the resource with tfe configuration
+	r.tfeConfig = defaultTfeConfig
+
+	// create a new HTTP client with the configured TLS settings
+	r.httpClient = httpUtil.NewClient()
+	if err := r.httpClient.SetTlsConfig(transport.TLSClientConfig); err != nil {
+		configureResponse.Diagnostics.AddError(
+			"Failed to set TLS configuration",
+			fmt.Sprintf("Could not set TLS configuration: %s", err.Error()),
+		)
+		return
+	}
+
 	hcpTerraformClient, err := r.tfeUtil.NewClient(defaultTfeConfig)
 	if err != nil {
 		configureResponse.Diagnostics.AddError(
@@ -588,7 +616,7 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 	}
 
 	// Calculate the hash of the configuration files in the directory
-	currentSourceBundleHash, err := r.tfeUtil.CalculateStackSourceBundleHash(plan.ConfigurationDir.ValueString())
+	currentSourceBundleHash, err := r.tfeUtil.CalculateConfigFileHash(plan.ConfigurationDir.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			configHasErrSummary,

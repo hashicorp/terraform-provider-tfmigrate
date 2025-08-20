@@ -424,7 +424,7 @@ func (r *stackMigrationResource) syncExistingStackConfigurationData(ctx context.
 	}
 
 	// Recalculate the source bundle hash of the configuration files in the directory.
-	currentSourceBundleHash, err := r.tfeUtil.CalculateStackSourceBundleHash(configDir)
+	currentSourceBundleHash, err := r.tfeUtil.CalculateConfigFileHash(configDir)
 	if err != nil {
 		diags.AddError(
 			configHasErrSummary,
@@ -446,7 +446,7 @@ func (r *stackMigrationResource) uploadSourceBundle(ctx context.Context, stackId
 
 	// Calculate the source bundle hash
 	if calculateSourceBundleHash {
-		sourceBundleHash, err = r.tfeUtil.CalculateStackSourceBundleHash(configDir)
+		sourceBundleHash, err = r.tfeUtil.CalculateConfigFileHash(configDir)
 		if err != nil {
 			diags.AddError(
 				configHasErrSummary,

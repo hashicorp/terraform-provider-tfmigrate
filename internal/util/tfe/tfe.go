@@ -8,13 +8,20 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
+	stackConstants "terraform-provider-tfmigrate/internal/constants/stack"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 
+	models "terraform-provider-tfmigrate/internal/models"
+	httpUtil "terraform-provider-tfmigrate/internal/util/net"
+
+	httpHeaders "github.com/go-http-utils/headers"
 	"github.com/hashicorp/go-slug"
 	"github.com/hashicorp/go-tfe"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -44,13 +51,15 @@ type PollResult struct {
 
 // TfeUtil defines the interface for TFE utility functions.
 type TfeUtil interface {
-	CalculateStackSourceBundleHash(stackConfigFileAbsPath string) (string, error)
+	CalculateConfigFileHash(stackConfigFileAbsPath string) (string, error)
 	HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string
 	NewClient(config *tfe.Config) (*tfe.Client, error)
+	ReadLatestDeploymentRun(stackId string, deploymentName string, client httpUtil.Client, config *tfe.Config) (*tfe.StackDeploymentRun, error)
 	ReadOrgByName(organizationName string, client *tfe.Client) (*tfe.Organization, error)
 	ReadProjectByName(organizationName, projectName string, client *tfe.Client) (*tfe.Project, error)
 	ReadStackByName(organizationName, projectId string, stackName string, client *tfe.Client) (*tfe.Stack, error)
 	ReadTfeToken(tfeRemoteHostName string) (string, error)
+	ReadWorkspaceByName(organizationName, workspaceName string, client *tfe.Client) (*tfe.Workspace, error)
 	StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error)
 	UpdateContext(ctx context.Context)
 	UploadStackConfigFile(stackId string, configFileDirAbsPath string, client *tfe.Client) (string, error)
@@ -70,8 +79,8 @@ func NewTfeUtil(ctx context.Context) TfeUtil {
 	}
 }
 
-// CalculateStackSourceBundleHash calculates the bundle hash for a stack source configuration file.
-func (u *tfeUtil) CalculateStackSourceBundleHash(stackConfigFileAbsPath string) (string, error) {
+// CalculateConfigFileHash calculates the bundle hash for a stack/terraform source configuration file.
+func (u *tfeUtil) CalculateConfigFileHash(stackConfigFileAbsPath string) (string, error) {
 
 	// Although some of the sanity checks below are redundant, they are included to ensure that the
 	// stack configuration file is valid and meets the expected criteria before proceeding with the upload.
@@ -156,6 +165,51 @@ func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *
 	}
 
 	return stackConfiguration.Status
+}
+
+// ReadLatestDeploymentRun retrieves the latest deployment run for a stack by its ID and deployment name.
+func (u *tfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string, client httpUtil.Client, config *tfe.Config) (*tfe.StackDeploymentRun, error) {
+	tflog.Debug(u.ctx, fmt.Sprintf("Reading latest deployment run for stack ID %s and deployment name %s", stackId, deploymentName))
+	deploymentRunUrl := fmt.Sprintf(stackConstants.StackDeploymentRunApiPathTemplate, config.Address, config.BasePath, stackId, deploymentName)
+	bearerToken := fmt.Sprintf("Bearer %s", config.Token)
+	response, err := client.Do(u.ctx, httpUtil.RequestOptions{
+		Method: http.MethodGet,
+		URL:    deploymentRunUrl,
+		Headers: map[string]string{
+			httpHeaders.Authorization: bearerToken,
+			httpHeaders.Accept:        "application/vnd.api+json",
+		}})
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading latest deployment run for stack ID %s and deployment name %s: %v", stackId, deploymentName, err))
+		return nil, fmt.Errorf("error reading latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading latest deployment run for stack ID %s and deployment name %s: received status code %d", stackId, deploymentName, response.StatusCode))
+		err = u.handleHttpClientError(response)
+		return nil, fmt.Errorf("error reading latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
+	}
+
+	var deploymentRuns models.StackDeploymentRuns
+	if err := json.NewDecoder(response.Body).Decode(&deploymentRuns); err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error decoding response for latest deployment run for stack ID %s and deployment name %s: %v", stackId, deploymentName, err))
+		return nil, fmt.Errorf("error decoding response for latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
+	}
+
+	if len(deploymentRuns.Data) == 0 {
+		tflog.Error(u.ctx, fmt.Sprintf("No deployment runs found for stack ID %s and deployment name %s", stackId, deploymentName))
+		return nil, fmt.Errorf("no deployment runs found for stack ID %s and deployment name %s", stackId, deploymentName)
+	}
+
+	// Assuming the latest deployment run is the first one in the list
+	latestDeploymentRun := deploymentRuns.Data[0]
+	stackDeploymentRun := tfe.StackDeploymentRun{
+		ID:     latestDeploymentRun.Id,
+		Status: latestDeploymentRun.Attributes.Status,
+	}
+	return &stackDeploymentRun, nil
 }
 
 // ReadOrgByName retrieves the organization by its name.
@@ -274,6 +328,19 @@ func (u *tfeUtil) ReadTfeToken(tfeRemoteHostName string) (string, error) {
 	return token, nil
 }
 
+// ReadWorkspaceByName retrieves the workspace by its name within a specific organization.
+func (u *tfeUtil) ReadWorkspaceByName(organizationName, workspaceName string, client *tfe.Client) (*tfe.Workspace, error) {
+	tflog.Debug(u.ctx, fmt.Sprintf("Listing workspaces in organization %s with workspace name %s", organizationName, workspaceName))
+	workspace, err := client.Workspaces.Read(u.ctx, organizationName, workspaceName)
+	if err != nil || workspace == nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading workspace %s in organization %s: %v", workspaceName, organizationName, err))
+		err = u.handleTfeClientResourceReadError(err)
+		return nil, fmt.Errorf("error listing workspaces in organization %s, err: %v", organizationName, err)
+	}
+	tflog.Debug(u.ctx, fmt.Sprintf("Successfully retrieved workspace %s with ID %s in organization %s", workspace.Name, workspace.ID, organizationName))
+	return workspace, nil
+}
+
 // StackConfigurationHasRunningPlan checks if the stack configuration has any running plans.
 func (u *tfeUtil) StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error) {
 	stackPlanOpts := &tfe.StackPlansListOptions{
@@ -366,6 +433,7 @@ func (u *tfeUtil) WatchStackConfigurationUntilTerminalStatus(stackConfigurationI
 	return tfe.StackConfigurationStatus(stackConfiguration.Status), diags
 }
 
+// handleCurrentConfigurationStatus handles the current status of a stack configuration and returns a string representation of the status.
 func (u *tfeUtil) handleCurrentConfigurationStatus(stackConfigurationID string, currentStatus tfe.StackConfigurationStatus) (string, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	switch currentStatus {
@@ -387,6 +455,35 @@ func (u *tfeUtil) handleCurrentConfigurationStatus(stackConfigurationID string, 
 		tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s still in progress: %s", stackConfigurationID, currentStatus))
 		return "", diags
 	}
+}
+
+// handleHttpClientError handles common HTTP client errors when interacting with the TFE API.
+func (u *tfeUtil) handleHttpClientError(resp *http.Response) error {
+	if resp == nil {
+		return cliErrs.ErrUnknownError
+	}
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		tflog.Error(u.ctx, "Unauthorized access to TFE API. Please check your TFE token and permissions.")
+		return fmt.Errorf("you are not authorized to access this resource. please make sure your TFE token has permission to read this resource")
+	}
+
+	if resp.StatusCode == http.StatusForbidden {
+		tflog.Error(u.ctx, "Forbidden access to TFE API. Please check your TFE token and permissions.")
+		return fmt.Errorf("you do not have permission to access this resource. please make sure your TFE token has permission to read this resource")
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		tflog.Error(u.ctx, "Resource not found in TFE API. Please check the resource ID or name.")
+		return fmt.Errorf("the requested resource was not found. please check the resource ID or name")
+	}
+
+	if resp.StatusCode >= http.StatusInternalServerError && resp.StatusCode < http.StatusNetworkAuthenticationRequired {
+		tflog.Error(u.ctx, fmt.Sprintf("Server error occurred during API call with status code: %d", resp.StatusCode))
+		return cliErrs.ErrServerError
+	}
+
+	return fmt.Errorf("received unexpected status code %d from TFE API. Please check the API documentation for more details", resp.StatusCode)
 }
 
 // handleTfeClientResourceReadError handles common errors when reading resources from TFE.

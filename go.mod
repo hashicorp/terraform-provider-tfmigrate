@@ -4,6 +4,7 @@ go 1.23.8
 
 require (
 	github.com/go-git/go-git/v5 v5.16.2
+	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/hashicorp/go-tfe v1.90.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/terraform-exec v0.23.0
@@ -58,7 +59,7 @@ require (
 	github.com/hashicorp/cli v1.1.7 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-checkpoint v0.5.0 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2
 	github.com/hashicorp/go-cty v1.5.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.6.3

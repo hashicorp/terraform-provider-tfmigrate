@@ -1,15 +1,12 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"slices"
 	"strings"
-	"terraform-provider-tfmigrate/internal/util/net"
-	"time"
+	netUtil "terraform-provider-tfmigrate/internal/util/net"
 )
 
 // Package level constants for Bitbucket operations.
@@ -37,7 +34,7 @@ const (
 )
 
 type bitbucketUtil struct {
-	httpClient net.HttpClient
+	httpClient netUtil.Client
 	ctx        context.Context
 }
 
@@ -50,7 +47,7 @@ type BitbucketUtil interface {
 func NewBitbucketUtil(ctx context.Context) BitbucketUtil {
 	return &bitbucketUtil{
 		ctx:        ctx,
-		httpClient: net.NewHttpClient(30 * time.Second),
+		httpClient: netUtil.NewClient(),
 	}
 }
 
@@ -65,21 +62,18 @@ func (b *bitbucketUtil) CheckTokenTypeAndScopes(workspace, repoSlug, accessToken
 		AcceptHeader:        ApplicationJSONType,
 	}
 
-	statusCode, responseBody, responseHeaders, err := b.httpClient.DoRequest(b.ctx, http.MethodGet, url, headers, nil)
+	resp, err := b.httpClient.Do(b.ctx, netUtil.RequestOptions{
+		Method:  http.MethodGet,
+		URL:     url,
+		Headers: headers,
+	})
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to make HTTP request: %w", err)
 	}
 
-	// Create a response object with the actual response body for compatibility
-	resp := &http.Response{
-		StatusCode: statusCode,
-		Body:       io.NopCloser(bytes.NewReader(responseBody)),
-		Header:     responseHeaders,
-	}
-
 	// Extract scopes and token type from response headers
-	scopes := responseHeaders.Get(OauthScopesHeader)
-	tokenType := responseHeaders.Get(CredentialTypeHeader)
+	scopes := resp.Header.Get(OauthScopesHeader)
+	tokenType := resp.Header.Get(CredentialTypeHeader)
 
 	return scopes, tokenType, resp, nil
 }
