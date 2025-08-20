@@ -8,6 +8,7 @@ packages:
     interfaces:
       GithubSvcProvider:
       GitlabSvcProvider:
+      BitbucketSvcProvider:
       RemoteVcsSvcProvider:
       RemoteVcsSvcProviderFactory:
   terraform-provider-tfmigrate/internal/util/vcs/git:
@@ -17,6 +18,7 @@ packages:
     interfaces:
       GithubUtil:
       GitlabUtil:
+      BitbucketUtil:
       GitUtil:
   terraform-provider-tfmigrate/internal/gitops:
     config:

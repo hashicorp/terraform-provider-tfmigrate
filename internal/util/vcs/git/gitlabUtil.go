@@ -6,6 +6,7 @@ import (
 	"os"
 
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
+	consts "terraform-provider-tfmigrate/internal/constants"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	gitlab "gitlab.com/gitlab-org/api/client-go"
@@ -29,12 +30,12 @@ func NewGitlabUtil(ctx context.Context) GitlabUtil {
 
 // GetProject fetches the repository details hosted on GitLab.
 func (g *gitlabUtil) GetProject(projectIdentifier string) (*gitlab.Project, *gitlab.Response, error) {
-	token, isSet := os.LookupEnv("TF_GIT_PAT_TOKEN")
+	token, isSet := os.LookupEnv(consts.GitTokenEnvName)
 	if !isSet {
-		return nil, nil, cliErrs.ErrTfGitPatTokenNotSet
+		return nil, nil, fmt.Errorf(string(cliErrs.ErrTfGitPatTokenNotSet), consts.GitTokenEnvName)
 	}
 	if token == "" {
-		return nil, nil, cliErrs.ErrTfGitPatTokenEmpty
+		return nil, nil, fmt.Errorf(string(cliErrs.ErrTfGitPatTokenEmpty), consts.GitTokenEnvName)
 	}
 
 	if g.client == nil {

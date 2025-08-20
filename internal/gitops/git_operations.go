@@ -54,25 +54,6 @@ type GitOperations interface {
 	GetDefaultBaseBranch() (string, error)
 }
 
-type GitUserConfig struct {
-	Name  string
-	Email string
-}
-
-// ProviderType represents the type of a Git service provider.
-type ProviderType string
-
-// TokenRegex stores the regex patterns for identifying tokens.
-type TokenRegex struct {
-	Pattern string
-	Type    ProviderType
-}
-
-type ProviderConfig struct {
-	ProviderUrl string
-	Type        ProviderType
-}
-
 // NewGitOperations creates a new instance of GitOperations.
 func NewGitOperations(ctx context.Context, gitUtil gitUtil.GitUtil) GitOperations {
 	return &gitOperations{
@@ -468,7 +449,7 @@ func (gitOps *gitOperations) IsSSHUrl(repoUrl string) bool {
 
 func (gitOps *gitOperations) IsSupportedVCSProvider(repoUrl string) bool {
 	// check if the repoUrl contains github or gitlab from global constants
-	if strings.Contains(repoUrl, string(consts.GitHub)) || strings.Contains(repoUrl, string(consts.GitLab)) {
+	if strings.Contains(repoUrl, string(consts.GitHub)) || strings.Contains(repoUrl, string(consts.GitLab)) || strings.Contains(repoUrl, string(consts.Bitbucket)) {
 		return true
 	}
 	return false

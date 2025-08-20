@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	netMock "terraform-provider-tfmigrate/_mocks/net_mocks"
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
+	consts "terraform-provider-tfmigrate/internal/constants"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -20,9 +22,7 @@ import (
 )
 
 const (
-	gitlabBadTokenBody = `{"message":"401 Unauthorized"}`
-	gitlabNotFoundBody = `{"message":"404 Project Not Found"}`
-	gitlabSuccessBody  = `{
+	gitlabSuccessBody = `{
 		"id": 123,
 		"name": "test-project",
 		"path_with_namespace": "test-owner/test-project",
@@ -39,10 +39,10 @@ func TestGetProject(t *testing.T) {
 		response   string
 	}{
 		"token not set": {
-			err: cliErrs.ErrTfGitPatTokenNotSet,
+			err: fmt.Errorf(string(cliErrs.ErrTfGitPatTokenNotSet), consts.GitTokenEnvName),
 		},
 		"token empty": {
-			err: cliErrs.ErrTfGitPatTokenEmpty,
+			err: fmt.Errorf(string(cliErrs.ErrTfGitPatTokenEmpty), consts.GitTokenEnvName),
 		},
 		"unknown error": {
 			err: &url.Error{
