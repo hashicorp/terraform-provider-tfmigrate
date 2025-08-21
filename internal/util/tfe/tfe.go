@@ -54,7 +54,7 @@ type TfeUtil interface {
 	CalculateConfigFileHash(stackConfigFileAbsPath string) (string, error)
 	HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string
 	NewClient(config *tfe.Config) (*tfe.Client, error)
-	ReadLatestDeploymentRun(stackId string, deploymentName string, client httpUtil.Client, config *tfe.Config) (*tfe.StackDeploymentRun, error)
+	ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error)
 	ReadOrgByName(organizationName string, client *tfe.Client) (*tfe.Organization, error)
 	ReadProjectByName(organizationName, projectName string, client *tfe.Client) (*tfe.Project, error)
 	ReadStackByName(organizationName, projectId string, stackName string, client *tfe.Client) (*tfe.Stack, error)
@@ -168,11 +168,11 @@ func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *
 }
 
 // ReadLatestDeploymentRun retrieves the latest deployment run for a stack by its ID and deployment name.
-func (u *tfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string, client httpUtil.Client, config *tfe.Config) (*tfe.StackDeploymentRun, error) {
+func (u *tfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error) {
 	tflog.Debug(u.ctx, fmt.Sprintf("Reading latest deployment run for stack ID %s and deployment name %s", stackId, deploymentName))
 	deploymentRunUrl := fmt.Sprintf(stackConstants.StackDeploymentRunApiPathTemplate, config.Address, config.BasePath, stackId, deploymentName)
 	bearerToken := fmt.Sprintf("Bearer %s", config.Token)
-	response, err := client.Do(u.ctx, httpUtil.RequestOptions{
+	response, err := httpClient.Do(u.ctx, httpUtil.RequestOptions{
 		Method: http.MethodGet,
 		URL:    deploymentRunUrl,
 		Headers: map[string]string{
@@ -199,15 +199,27 @@ func (u *tfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string,
 	}
 
 	if len(deploymentRuns.Data) == 0 {
-		tflog.Error(u.ctx, fmt.Sprintf("No deployment runs found for stack ID %s and deployment name %s", stackId, deploymentName))
-		return nil, fmt.Errorf("no deployment runs found for stack ID %s and deployment name %s", stackId, deploymentName)
+		tflog.Warn(u.ctx, fmt.Sprintf("No deployment runs found for stack ID %s and deployment name %s", stackId, deploymentName))
+		return &tfe.StackDeploymentRun{}, nil
 	}
 
 	// Assuming the latest deployment run is the first one in the list
 	latestDeploymentRun := deploymentRuns.Data[0]
+
+	deploymentGroupId := latestDeploymentRun.Relationships.StackDeploymentGroup.Data.Id
+
+	// Read the stack deployment group to get the latest deployment groupId for the stack deployment run
+	stackDeploymentGroup, err := tfeClient.StackDeploymentGroups.Read(u.ctx, deploymentGroupId)
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack deployment group for deployment group ID %s: %v", deploymentGroupId, err))
+		err = u.handleTfeClientResourceReadError(err)
+		return nil, fmt.Errorf("error reading stack deployment group for deployment group ID %s, err: %v", deploymentGroupId, err)
+	}
+
 	stackDeploymentRun := tfe.StackDeploymentRun{
-		ID:     latestDeploymentRun.Id,
-		Status: latestDeploymentRun.Attributes.Status,
+		ID:                   latestDeploymentRun.Id,
+		Status:               latestDeploymentRun.Attributes.Status,
+		StackDeploymentGroup: stackDeploymentGroup,
 	}
 	return &stackDeploymentRun, nil
 }

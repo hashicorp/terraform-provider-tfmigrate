@@ -169,7 +169,7 @@ type StackMigrationResourceModel struct {
 	ConfigurationDir           types.String `tfsdk:"config_file_dir"`              // ConfigurationDir is the absolute directory path containing stack configuration files.
 	CurrentConfigurationId     types.String `tfsdk:"current_configuration_id"`     // CurrentConfigurationId is the ID of the current stack configuration.
 	CurrentConfigurationStatus types.String `tfsdk:"current_configuration_status"` // CurrentConfigurationStatus  is the status of the stack configuration.
-	MigrationHash              types.String `tfsdk:"migration_hash"`               // MigrationHash is the hash is used for tracking the migration state of the stack.
+	MigrationHash              types.String `tfsdk:"migration_hash"`               // MigrationHash is the hash is used for tracking the state of workspace to stack migration.
 	Name                       types.String `tfsdk:"name"`                         // Name is the name of the stack Must be unique within the organization and project, must be a non-Vcs driven stack.
 	Organization               types.String `tfsdk:"organization"`                 // Organization is the HCP Terraform organization name in which the stack exists. The value can be provided by the `TFE_ORGANIZATION` environment variable.
 	Project                    types.String `tfsdk:"project"`                      // Project is the HCP Terraform project name in which the stack exists. The value can be provided by the `TFE_PROJECT` environment variable.
@@ -181,13 +181,14 @@ type StackMigrationResourceModel struct {
 
 // stackMigrationResource implements the resource.Resource interface for managing stack migrations in HCP Terraform.
 type stackMigrationResource struct {
-	existingStack        *tfe.Stack        // an existingStack is the stack to which the workspace will be migrated.
-	existingOrganization *tfe.Organization // an existingOrganization is the organization in which the stack exists.
-	existingProject      *tfe.Project      // an existingProject is the project in which the stack exists.
-	tfeClient            *tfe.Client       // tfeClient is the TFE client used to interact with the HCP Terraform API.
-	tfeUtil              tfeUtil.TfeUtil   // tfeUtil is the utility for interacting with the TFE API, used to perform operations like uploading stack configurations and calculating source bundle hashes.
-	tfeConfig            *tfe.Config       // tfeConfig is the TFE client configuration used to create the TFE client.
-	httpClient           httpUtil.Client   // httpClient is the HTTP client used to make requests to the TFE API configured with TLS settings and retry logic.
+	existingOrganization *tfe.Organization         // an existingOrganization is the organization in which the stack exists.
+	existingProject      *tfe.Project              // an existingProject is the project in which the stack exists.
+	existingStack        *tfe.Stack                // an existingStack is the stack to which the workspace will be migrated.
+	httpClient           httpUtil.Client           // httpClient is the HTTP client used to make requests to the TFE API configured with TLS settings and retry logic.
+	migrationHashService StackMigrationHashService // migrationHashService is the service used to generate and manage migration hash for stack migrations.
+	tfeClient            *tfe.Client               // tfeClient is the TFE client used to interact with the HCP Terraform API.
+	tfeConfig            *tfe.Config               // tfeConfig is the TFE client configuration used to create the TFE client.
+	tfeUtil              tfeUtil.TfeUtil           // tfeUtil is the utility for interacting with the TFE API, used to perform operations like uploading stack configurations and calculating source bundle hashes.
 }
 
 // NewStackMigrationResource creates a new instance of the stack migration resource.
@@ -551,15 +552,16 @@ func (r *stackMigrationResource) Configure(ctx context.Context, configureRequest
 	// configure the resource with tfe configuration
 	r.tfeConfig = defaultTfeConfig
 
-	// create a new HTTP client with the configured TLS settings
-	r.httpClient = httpUtil.NewClient()
-	if err := r.httpClient.SetTlsConfig(transport.TLSClientConfig); err != nil {
+	// create a new HTTPUtil client with the configured TLS settings
+	httpUtilClient := httpUtil.NewClient()
+	if err := httpUtilClient.SetTlsConfig(transport.TLSClientConfig); err != nil {
 		configureResponse.Diagnostics.AddError(
 			"Failed to set TLS configuration",
 			fmt.Sprintf("Could not set TLS configuration: %s", err.Error()),
 		)
 		return
 	}
+	r.httpClient = httpUtilClient
 
 	hcpTerraformClient, err := r.tfeUtil.NewClient(defaultTfeConfig)
 	if err != nil {
@@ -570,8 +572,13 @@ func (r *stackMigrationResource) Configure(ctx context.Context, configureRequest
 		return
 	}
 
+	// set the TFE client in the resource
 	r.tfeClient = hcpTerraformClient
-	tflog.Debug(ctx, fmt.Sprintf("resource configuration complete with TFE client: %+v", r.tfeClient))
+
+	// create a new StackMigrationHashService with the HTTP client
+	r.migrationHashService = NewStackMigrationHashService(ctx, r.tfeUtil, r.tfeConfig, r.tfeClient, r.httpClient)
+
+	tflog.Debug(ctx, fmt.Sprintf("resource configuration completd with clients: tfeclient: %+v", r.tfeClient))
 }
 
 // ModifyPlan is called to modify the plan before it is applied. It checks the current state and modifies the plan based on the existing state and the update strategy.

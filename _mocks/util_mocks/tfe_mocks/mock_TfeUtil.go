@@ -187,9 +187,9 @@ func (_c *MockTfeUtil_NewClient_Call) RunAndReturn(run func(*go_tfe.Config) (*go
 	return _c
 }
 
-// ReadLatestDeploymentRun provides a mock function with given fields: stackId, deploymentName, client, config
-func (_m *MockTfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string, client net.Client, config *go_tfe.Config) (*go_tfe.StackDeploymentRun, error) {
-	ret := _m.Called(stackId, deploymentName, client, config)
+// ReadLatestDeploymentRun provides a mock function with given fields: stackId, deploymentName, httpClient, config, tfeClient
+func (_m *MockTfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient net.Client, config *go_tfe.Config, tfeClient *go_tfe.Client) (*go_tfe.StackDeploymentRun, error) {
+	ret := _m.Called(stackId, deploymentName, httpClient, config, tfeClient)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ReadLatestDeploymentRun")
@@ -197,19 +197,19 @@ func (_m *MockTfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName st
 
 	var r0 *go_tfe.StackDeploymentRun
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string, net.Client, *go_tfe.Config) (*go_tfe.StackDeploymentRun, error)); ok {
-		return rf(stackId, deploymentName, client, config)
+	if rf, ok := ret.Get(0).(func(string, string, net.Client, *go_tfe.Config, *go_tfe.Client) (*go_tfe.StackDeploymentRun, error)); ok {
+		return rf(stackId, deploymentName, httpClient, config, tfeClient)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, net.Client, *go_tfe.Config) *go_tfe.StackDeploymentRun); ok {
-		r0 = rf(stackId, deploymentName, client, config)
+	if rf, ok := ret.Get(0).(func(string, string, net.Client, *go_tfe.Config, *go_tfe.Client) *go_tfe.StackDeploymentRun); ok {
+		r0 = rf(stackId, deploymentName, httpClient, config, tfeClient)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*go_tfe.StackDeploymentRun)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, net.Client, *go_tfe.Config) error); ok {
-		r1 = rf(stackId, deploymentName, client, config)
+	if rf, ok := ret.Get(1).(func(string, string, net.Client, *go_tfe.Config, *go_tfe.Client) error); ok {
+		r1 = rf(stackId, deploymentName, httpClient, config, tfeClient)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -225,15 +225,16 @@ type MockTfeUtil_ReadLatestDeploymentRun_Call struct {
 // ReadLatestDeploymentRun is a helper method to define mock.On call
 //   - stackId string
 //   - deploymentName string
-//   - client net.Client
+//   - httpClient net.Client
 //   - config *go_tfe.Config
-func (_e *MockTfeUtil_Expecter) ReadLatestDeploymentRun(stackId interface{}, deploymentName interface{}, client interface{}, config interface{}) *MockTfeUtil_ReadLatestDeploymentRun_Call {
-	return &MockTfeUtil_ReadLatestDeploymentRun_Call{Call: _e.mock.On("ReadLatestDeploymentRun", stackId, deploymentName, client, config)}
+//   - tfeClient *go_tfe.Client
+func (_e *MockTfeUtil_Expecter) ReadLatestDeploymentRun(stackId interface{}, deploymentName interface{}, httpClient interface{}, config interface{}, tfeClient interface{}) *MockTfeUtil_ReadLatestDeploymentRun_Call {
+	return &MockTfeUtil_ReadLatestDeploymentRun_Call{Call: _e.mock.On("ReadLatestDeploymentRun", stackId, deploymentName, httpClient, config, tfeClient)}
 }
 
-func (_c *MockTfeUtil_ReadLatestDeploymentRun_Call) Run(run func(stackId string, deploymentName string, client net.Client, config *go_tfe.Config)) *MockTfeUtil_ReadLatestDeploymentRun_Call {
+func (_c *MockTfeUtil_ReadLatestDeploymentRun_Call) Run(run func(stackId string, deploymentName string, httpClient net.Client, config *go_tfe.Config, tfeClient *go_tfe.Client)) *MockTfeUtil_ReadLatestDeploymentRun_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(net.Client), args[3].(*go_tfe.Config))
+		run(args[0].(string), args[1].(string), args[2].(net.Client), args[3].(*go_tfe.Config), args[4].(*go_tfe.Client))
 	})
 	return _c
 }
@@ -243,7 +244,7 @@ func (_c *MockTfeUtil_ReadLatestDeploymentRun_Call) Return(_a0 *go_tfe.StackDepl
 	return _c
 }
 
-func (_c *MockTfeUtil_ReadLatestDeploymentRun_Call) RunAndReturn(run func(string, string, net.Client, *go_tfe.Config) (*go_tfe.StackDeploymentRun, error)) *MockTfeUtil_ReadLatestDeploymentRun_Call {
+func (_c *MockTfeUtil_ReadLatestDeploymentRun_Call) RunAndReturn(run func(string, string, net.Client, *go_tfe.Config, *go_tfe.Client) (*go_tfe.StackDeploymentRun, error)) *MockTfeUtil_ReadLatestDeploymentRun_Call {
 	_c.Call.Return(run)
 	return _c
 }
