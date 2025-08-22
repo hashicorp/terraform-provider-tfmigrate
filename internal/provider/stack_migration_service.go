@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"slices"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -62,6 +63,7 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 			)
 			return false, state, diags
 		}
+		deploymentNamesFromMigrationMap.Add(deploymentName)
 	}
 
 	// Validate preconditions
@@ -155,6 +157,15 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 	state.Project = types.StringValue(r.existingProject.Name)
 	state.SourceBundleHash = types.StringValue(currentSourceBundleHash)
 	state.TerraformConfigHash = types.StringValue(terraformConfigHash)
+	state.ConfigurationDir = types.StringValue(r.stackSourceBundleAbsPath)
+	state.TerraformConfigDir = types.StringValue(r.terraformConfigDirAbsPath)
+
+	vals := map[string]attr.Value{}
+	for k, v := range migrationMap {
+		vals[k] = types.StringValue(v)
+	}
+
+	state.WorkspaceDeploymentMapping = types.MapValueMust(types.StringType, vals)
 
 	// handle the `tfe.StackConfigurationStatuses` and determine the next steps based on the current configuration status.
 	diags = r.continueWithStateUploadPostConfigUpload(currentConfigurationId, configurationStatus)
