@@ -31,10 +31,21 @@ func (r *stackMigrationResource) convertWorkspaceStateAndUpload(ctx context.Cont
 		return diags
 	}
 
+	tflog.Info(ctx, fmt.Sprintf("Current working directory: %s", currentWorkingDir))
+	// get the raw Terraform state data from the TFE workspace
+	tflog.Info(ctx, fmt.Sprintf("Downloading workspace state: %s", workspaceId))
+
 	rawTerraformState, rawStateDiags := r.getRawStateData(ctx, workspaceId)
 	if diags.HasError() {
 		diags.Append(rawStateDiags...)
 	}
+
+	if rawTerraformState == nil || len(rawTerraformState) == 0 {
+		diags.AddError("No state data found", fmt.Sprintf("Workspace %s has no state data to convert", workspaceId))
+		return diags
+	}
+
+	tflog.Info(ctx, fmt.Sprintf("Downloaded workspace state: %s", workspaceId))
 
 	// start the RPC client
 	client, err := rpcapi.NewTerraformRpcClient(ctx)
@@ -42,6 +53,7 @@ func (r *stackMigrationResource) convertWorkspaceStateAndUpload(ctx context.Cont
 		diags.AddError("Failed to create RPC client", fmt.Sprintf("Error creating RPC client: %v", err))
 		return diags
 	}
+	defer client.Stop()
 
 	stateOpsHandler := stateOps.NewTFStateOperations(ctx, client)
 	stateConversionRequest := stateOps.WorkspaceToStackStateConversionRequest{
@@ -91,6 +103,7 @@ func (r *stackMigrationResource) convertWorkspaceStateAndUpload(ctx context.Cont
 	if uploadDiags := r.uploadStackStateFile(ctx, tempFilePath, uploadUrl); uploadDiags.HasError() {
 		diags.Append(uploadDiags...)
 	}
+	tflog.Info(ctx, fmt.Sprintf("Uploaded stack state file for workspace %s", workspaceId))
 
 	return diags
 
@@ -99,23 +112,37 @@ func (r *stackMigrationResource) convertWorkspaceStateAndUpload(ctx context.Cont
 func (r *stackMigrationResource) getRawStateData(ctx context.Context, workspaceId string) ([]byte, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
+	defer func() {
+		// Unlock the workspace
+		if _, err := r.tfeClient.Workspaces.Unlock(ctx, workspaceId); err != nil {
+			tflog.Error(ctx, "Failed to unlock workspace")
+		}
+	}()
+
 	reason := "Preparing to convert workspace state to stack state"
 	lockOptions := tfe.WorkspaceLockOptions{Reason: &reason}
 	if _, err := r.tfeClient.Workspaces.Lock(ctx, workspaceId, lockOptions); err != nil {
 		diags.AddError("Failed to lock workspace", fmt.Sprintf("Error locking workspace %s: %v", workspaceId, err))
 		return nil, diags
 	}
+	tflog.Info(ctx, fmt.Sprintf("Locking workspace %s", workspaceId))
 
-	currentStateVersion, err := tfeClient.StateVersions.ReadCurrent(context.Background(), workspaceId)
+	currentStateVersion, err := r.tfeClient.StateVersions.ReadCurrent(ctx, workspaceId)
 	if err != nil {
 		diags.AddError("Failed to read current state version", fmt.Sprintf("Error reading current state version for workspace %s: %v", workspaceId, err))
 		return nil, diags
 	}
+	if currentStateVersion == nil {
+		diags.AddError("No current state version found", fmt.Sprintf("Workspace %s has no current state version", workspaceId))
+		return nil, diags
+	}
+	tflog.Info(ctx, fmt.Sprintf("Current state version ID for workspace %s: %s", workspaceId, currentStateVersion.ID))
 
-	rawStateData, err := tfeClient.StateVersions.Download(context.Background(), currentStateVersion.DownloadURL)
+	rawStateData, err := r.tfeClient.StateVersions.Download(ctx, currentStateVersion.DownloadURL)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Failed to download state version for workspace %s: %v", workspaceId, err))
 	}
+	tflog.Info(ctx, fmt.Sprintf("Downloaded state version for workspace %s", workspaceId))
 
 	return rawStateData, diags
 }

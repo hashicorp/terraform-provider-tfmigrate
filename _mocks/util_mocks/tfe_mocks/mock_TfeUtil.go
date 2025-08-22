@@ -588,6 +588,65 @@ func (_c *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call) RunAndReturn(run func
 	return _c
 }
 
+// ReadStepById provides a mock function with given fields: stepId, client
+func (_m *MockTfeUtil) ReadStepById(stepId string, client *tfe.Client) (*tfe.StackDeploymentStep, error) {
+	ret := _m.Called(stepId, client)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReadStepById")
+	}
+
+	var r0 *tfe.StackDeploymentStep
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, *tfe.Client) (*tfe.StackDeploymentStep, error)); ok {
+		return rf(stepId, client)
+	}
+	if rf, ok := ret.Get(0).(func(string, *tfe.Client) *tfe.StackDeploymentStep); ok {
+		r0 = rf(stepId, client)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*tfe.StackDeploymentStep)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(string, *tfe.Client) error); ok {
+		r1 = rf(stepId, client)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockTfeUtil_ReadStepById_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReadStepById'
+type MockTfeUtil_ReadStepById_Call struct {
+	*mock.Call
+}
+
+// ReadStepById is a helper method to define mock.On call
+//   - stepId string
+//   - client *tfe.Client
+func (_e *MockTfeUtil_Expecter) ReadStepById(stepId interface{}, client interface{}) *MockTfeUtil_ReadStepById_Call {
+	return &MockTfeUtil_ReadStepById_Call{Call: _e.mock.On("ReadStepById", stepId, client)}
+}
+
+func (_c *MockTfeUtil_ReadStepById_Call) Run(run func(stepId string, client *tfe.Client)) *MockTfeUtil_ReadStepById_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(*tfe.Client))
+	})
+	return _c
+}
+
+func (_c *MockTfeUtil_ReadStepById_Call) Return(_a0 *tfe.StackDeploymentStep, _a1 error) *MockTfeUtil_ReadStepById_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockTfeUtil_ReadStepById_Call) RunAndReturn(run func(string, *tfe.Client) (*tfe.StackDeploymentStep, error)) *MockTfeUtil_ReadStepById_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ReadTfeToken provides a mock function with given fields: tfeRemoteHostName
 func (_m *MockTfeUtil) ReadTfeToken(tfeRemoteHostName string) (string, error) {
 	ret := _m.Called(tfeRemoteHostName)

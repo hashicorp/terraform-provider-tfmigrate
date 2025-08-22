@@ -61,6 +61,7 @@ type TfeUtil interface {
 	ReadProjectByName(organizationName, projectName string, client *tfe.Client) (*tfe.Project, error)
 	ReadStackByName(organizationName, projectId string, stackName string, client *tfe.Client) (*tfe.Stack, error)
 	ReadStackDiagnosticsByConfigID(stackConfigId string, httpClient httpUtil.Client, config *tfe.Config) diag.Diagnostics
+	ReadStepById(stepId string, client *tfe.Client) (*tfe.StackDeploymentStep, error)
 	ReadTfeToken(tfeRemoteHostName string) (string, error)
 	ReadWorkspaceByName(organizationName, workspaceName string, client *tfe.Client) (*tfe.Workspace, error)
 	RerunDeploymentGroup(stackDeploymentGroupId string, deploymentNames []string, client *tfe.Client) error
@@ -365,6 +366,20 @@ func (u *tfeUtil) ReadStackByName(organizationName, projectId string, stackName 
 	return stack, nil
 }
 
+// ReadStepById fetches a StackDeploymentStep by its ID using the provided TFE client and context.
+// Returns the StackDeploymentStep or an error if the step cannot be retrieved.
+func (u *tfeUtil) ReadStepById(stepId string, client *tfe.Client) (*tfe.StackDeploymentStep, error) {
+	step, err := client.StackDeploymentSteps.Read(u.ctx, stepId)
+	if err != nil || step == nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading deployment run step with ID %s: %v", stepId, err))
+		err = u.handleTfeClientResourceReadError(err)
+		return nil, fmt.Errorf("error reading deployment run step with ID %s, err: %v", stepId, err)
+	}
+
+	tflog.Debug(u.ctx, fmt.Sprintf("Successfully retrieved deployment run step with ID %s", stepId))
+	return step, nil
+}
+
 // ReadStackDiagnosticsByConfigID retrieves the diagnostics for a stack configuration.
 func (u *tfeUtil) ReadStackDiagnosticsByConfigID(stackConfigId string, httpClient httpUtil.Client, config *tfe.Config) diag.Diagnostics {
 	var diags diag.Diagnostics
@@ -527,15 +542,29 @@ func (u *tfeUtil) UploadStackConfigFile(stackId string, configFileDirAbsPath str
 	})
 	if err != nil || stackSource == nil {
 		tflog.Error(u.ctx, fmt.Sprintf("Error getting stack source for stack configuration file upload for stack ID %s: %v", stackId, err))
+		err = u.handleTfeClientResourceReadError(err)
 		return "", fmt.Errorf("error getting stack source for stack configuration file upload for stack ID %s, err: %v", stackId, err)
 	}
 
 	// Read the stack to get the latest stack configuration ID after uploading the stack source.
 	stackRead, err := client.Stacks.Read(u.ctx, stackId, nil)
-	if err != nil || stackRead == nil || stackRead.LatestStackConfiguration == nil {
+	if err != nil || stackRead == nil {
 		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack %s after uploading stack configuration file: %v", stackId, err))
+		err = u.handleTfeClientResourceReadError(err)
 		return "", fmt.Errorf("error reading stack %s after uploading stack configuration file, err: %v", stackId, err)
 	}
+	configurationListOptions := tfe.StackConfigurationListOptions{
+		ListOptions: tfe.ListOptions{PageNumber: 1, PageSize: 1},
+	}
+	// List the stack configurations to get the latest one.
+	stackConfigurationList, err := client.StackConfigurations.List(u.ctx, stackId, &configurationListOptions)
+	if err != nil || stackConfigurationList == nil || len(stackConfigurationList.Items) == 0 {
+		tflog.Error(u.ctx, fmt.Sprintf("Error listing stack configurations for stack ID %s after uploading stack configuration file: %v", stackId, err))
+		err = u.handleTfeClientResourceReadError(err)
+		return "", fmt.Errorf("error listing stack configurations for stack ID %s after uploading stack configuration file, err: %v", stackId, err)
+	}
+
+	stackRead.LatestStackConfiguration = stackConfigurationList.Items[0]
 	tflog.Info(u.ctx, fmt.Sprintf("Successfully uploaded stack configuration file for stack ID %s, stack source ID %s, configuration %q", stackId, stackSource.ID, stackRead.LatestStackConfiguration.ID))
 	return stackRead.LatestStackConfiguration.ID, nil
 }

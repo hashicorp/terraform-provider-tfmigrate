@@ -1,7 +1,7 @@
 package stack
 
 const (
-	StackDeploymentRunApiPathTemplate     = "https://%s%s/stacks/%s/stack-deployments/%s/stack-deployment-runs"
-	StackConfigDiagnosticsApiPathTemplate = "https://%s%s/stack-configurations/%s/stack-diagnostics"
-	StackDeploymentStepApiPathTemplate    = "https://%s%s/stack-deployment-runs/%s/stack-deployment-steps"
+	StackDeploymentRunApiPathTemplate     = "%s%sstacks/%s/stack-deployments/%s/stack-deployment-runs"
+	StackConfigDiagnosticsApiPathTemplate = "%s%sstack-configurations/%s/stack-diagnostics"
+	StackDeploymentStepApiPathTemplate    = "%s%sstack-deployment-runs/%s/stack-deployment-steps"
 )

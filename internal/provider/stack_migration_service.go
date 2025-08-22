@@ -2,9 +2,11 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"slices"
+
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/hashicorp/go-tfe"
@@ -186,6 +188,12 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 	}
 
 	state.MigrationHash = types.StringValue(hash)
+
+	data, _ := r.migrationHashService.GetMigrationData(hash)
+	diags.AddWarning(
+		"Migration Data Retrieved",
+		prettyPrintJSON(data),
+	)
 
 	return true, state, diags
 }
@@ -399,4 +407,12 @@ func (r *stackMigrationResource) continueWithStateUploadPostConfigUpload(current
 	}
 
 	return diags
+}
+
+func prettyPrintJSON(v interface{}) string {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("error marshaling JSON: %v", err)
+	}
+	return string(b)
 }
