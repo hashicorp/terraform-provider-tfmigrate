@@ -10,6 +10,7 @@ require (
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/hashicorp/go-tfe v1.90.0
 	github.com/hashicorp/hcl/v2 v2.24.0
+	github.com/hashicorp/terraform-exec v0.23.0
 	github.com/hashicorp/terraform-migrate-utility v0.0.1
 	github.com/hashicorp/terraform-plugin-docs v0.22.0
 	github.com/hashicorp/terraform-plugin-framework v1.15.1
@@ -24,10 +25,11 @@ require (
 	golang.org/x/oauth2 v0.30.0
 )
 
+replace github.com/hashicorp/terraform-migrate-utility => ./terraform-migrate-utility
+
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
-	github.com/hashicorp/terraform-exec v0.23.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect

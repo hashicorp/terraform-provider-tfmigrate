@@ -25,11 +25,13 @@ website/node_modules
 *.test
 *.iml
 .vscode/
+.idea
 
 # Ignore the local dev requirements
 /main.tf
 terraform-provider-tfmigrate
 UnitTestWorkingDir/.terraform.lock.hcl
+terraform-migrate-utility
 
 website/vendor
 
