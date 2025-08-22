@@ -32,6 +32,7 @@ website/node_modules
 terraform-provider-tfmigrate
 UnitTestWorkingDir/.terraform.lock.hcl
 terraform-migrate-utility
+provider_tfmigrate_override.tfrc
 
 website/vendor
 
