@@ -320,7 +320,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 
 	r.isStateModular = r.tfstateUtil.IsFullyModular(resourcesFromWorkspaceState)
 
-	workspacToStackMap, err := r.tfstateUtil.WorkspaceToStackAddressMap(r.terraformConfigDirAbsPath, r.stackSourceBundleAbsPath)
+	workspaceStackAddressMap, err := r.tfstateUtil.WorkspaceToStackAddressMap(r.terraformConfigDirAbsPath, r.stackSourceBundleAbsPath)
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Error Creating Workspace to Stack Map",
@@ -328,7 +328,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 		)
 		return
 	}
-	r.workspaceToStackMap = workspacToStackMap
+	r.workspaceToStackMap = workspaceStackAddressMap
 
 	// retrieve the required values from the plan
 	// organizationName, projectName, stackName, stackConfigDirectory, and migrationMap.

@@ -51,8 +51,9 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 	var currentSourceBundleHash string
 	var diags diag.Diagnostics
 	var state StackMigrationResourceModel
+
 	deploymentNamesFromMigrationMap := mapset.NewSet[string]()
-	for deploymentName := range migrationMap {
+	for _, deploymentName := range migrationMap {
 		if deploymentNamesFromMigrationMap.Contains(deploymentName) {
 			tflog.Error(ctx, fmt.Sprintf("Duplicate deployment name found in migration map: %s", deploymentName))
 			diags.AddError(
