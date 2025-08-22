@@ -120,43 +120,43 @@ func TestCheckTokenTypeAndScopes(t *testing.T) {
 			func() {
 				if name == "unknown error" {
 					mockHttpClient.
-						On("Do", ctx, mock.AnythingOfType("net.RequestOptions")).
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(nil, errors.New("unknown error"))
 				}
 
 				if name == "expired token" {
 					mockHttpClient.
-						On("Do", ctx, mock.AnythingOfType("net.RequestOptions")).
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusUnauthorized, badCredentialsBodyBitbucket, "", ""), nil)
 				}
 
 				if name == "private repo" {
 					mockHttpClient.
-						On("Do", ctx, mock.AnythingOfType("net.RequestOptions")).
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusNotFound, repoDoesNotExistBodyBitbucket, "", ""), nil)
 				}
 
 				if name == "token not authorized to access org" {
 					mockHttpClient.
-						On("Do", ctx, mock.AnythingOfType("net.RequestOptions")).
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusForbidden, resourceProtectedBySsoBodyBitbucket, "", ""), nil)
 				}
 
 				if name == "success token has repository and pullrequest scopes" {
 					mockHttpClient.
-						On("Do", ctx, mock.AnythingOfType("net.RequestOptions")).
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusOK, repoDetailsReadOnlyBitbucket, "repository pullrequest", "repo_access_token"), nil)
 				}
 
 				if name == "success token has write scopes" {
 					mockHttpClient.
-						On("Do", ctx, mock.AnythingOfType("net.RequestOptions")).
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusOK, repoDetailsReadWriteBitbucket, "repository:write pullrequest:write", "repo_access_token"), nil)
 				}
 
 				if name == "success with missing scopes header" {
 					mockHttpClient.
-						On("Do", ctx, mock.AnythingOfType("net.RequestOptions")).
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusOK, repoDetailsReadOnlyBitbucket, "", "repo_access_token"), nil)
 				}
 			}()

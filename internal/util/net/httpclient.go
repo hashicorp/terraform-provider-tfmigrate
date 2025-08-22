@@ -32,11 +32,13 @@ const (
 var allowedMethods = []string{string(MethodGet), string(MethodPost), string(MethodPut), string(MethodDelete)}
 
 type Client interface {
-	Do(ctx context.Context, opts RequestOptions) (*http.Response, error)
+	Do(opts RequestOptions) (*http.Response, error)
 	SetTlsConfig(tlsConfig *tls.Config) error
+	UpdateContext(ctx context.Context)
 }
 
 type httpClient struct {
+	ctx    context.Context
 	client *retryablehttp.Client
 }
 
@@ -49,7 +51,7 @@ type RequestOptions struct {
 }
 
 // NewClient creates an HTTP client with safe defaults (via cleanhttp) and custom timeout.
-func NewClient() Client {
+func NewClient(ctx context.Context) Client {
 	retryClient := retryablehttp.NewClient()
 	retryClient.HTTPClient = &http.Client{
 		Timeout:   defaultTimeout,
@@ -59,11 +61,12 @@ func NewClient() Client {
 	retryClient.RetryWaitMin = defaultRetryWaitMin
 	retryClient.RetryWaitMax = defaultRetryWaitMax
 	return &httpClient{
+		ctx:    ctx,
 		client: retryClient,
 	}
 }
 
-func (hc *httpClient) Do(ctx context.Context, opts RequestOptions) (*http.Response, error) {
+func (hc *httpClient) Do(opts RequestOptions) (*http.Response, error) {
 	// Validate HTTP method
 	method := strings.ToUpper(string(opts.Method))
 	if !isValidMethod(method) {
@@ -83,7 +86,7 @@ func (hc *httpClient) Do(ctx context.Context, opts RequestOptions) (*http.Respon
 		reqURL.RawQuery = q.Encode()
 	}
 
-	req, err := retryablehttp.NewRequestWithContext(ctx, string(opts.Method), reqURL.String(), opts.Body)
+	req, err := retryablehttp.NewRequestWithContext(hc.ctx, string(opts.Method), reqURL.String(), opts.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
@@ -118,4 +121,9 @@ func isValidMethod(method string) bool {
 		}
 	}
 	return false
+}
+
+// UpdateContext updates the context for the HTTP client.
+func (hc *httpClient) UpdateContext(ctx context.Context) {
+	hc.ctx = ctx
 }

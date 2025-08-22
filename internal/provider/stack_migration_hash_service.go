@@ -42,6 +42,7 @@ type StackMigrationHashService interface {
 	GenerateMigrationData(request StackMigrationTrackRequest) (map[string]StackMigrationData, error)
 	GetMigrationData(migrationHash string) (map[string]StackMigrationData, error)
 	GetMigrationHash(migrationData map[string]StackMigrationData) (string, error)
+	UpdateContext(ctx context.Context)
 }
 
 func NewStackMigrationHashService(ctx context.Context, tfeUtil tfeUtil.TfeUtil, tfeConfig *tfe.Config, tfeClient *tfe.Client, httpClient httpUtil.Client) StackMigrationHashService {
@@ -100,6 +101,10 @@ func (s *stackMigrationHashService) GetMigrationHash(migrationData map[string]St
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+func (s *stackMigrationHashService) UpdateContext(ctx context.Context) {
+	s.ctx = ctx
 }
 
 func (s *stackMigrationHashService) getDeploymentDataFromMigrationMap(request StackMigrationTrackRequest, migrationData map[string]StackMigrationData) (map[string]StackMigrationData, error) {

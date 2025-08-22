@@ -26,9 +26,9 @@ func (_m *MockClient) EXPECT() *MockClient_Expecter {
 	return &MockClient_Expecter{mock: &_m.Mock}
 }
 
-// Do provides a mock function with given fields: ctx, opts
-func (_m *MockClient) Do(ctx context.Context, opts net.RequestOptions) (*http.Response, error) {
-	ret := _m.Called(ctx, opts)
+// Do provides a mock function with given fields: opts
+func (_m *MockClient) Do(opts net.RequestOptions) (*http.Response, error) {
+	ret := _m.Called(opts)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Do")
@@ -36,19 +36,19 @@ func (_m *MockClient) Do(ctx context.Context, opts net.RequestOptions) (*http.Re
 
 	var r0 *http.Response
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, net.RequestOptions) (*http.Response, error)); ok {
-		return rf(ctx, opts)
+	if rf, ok := ret.Get(0).(func(net.RequestOptions) (*http.Response, error)); ok {
+		return rf(opts)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, net.RequestOptions) *http.Response); ok {
-		r0 = rf(ctx, opts)
+	if rf, ok := ret.Get(0).(func(net.RequestOptions) *http.Response); ok {
+		r0 = rf(opts)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*http.Response)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, net.RequestOptions) error); ok {
-		r1 = rf(ctx, opts)
+	if rf, ok := ret.Get(1).(func(net.RequestOptions) error); ok {
+		r1 = rf(opts)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -62,15 +62,14 @@ type MockClient_Do_Call struct {
 }
 
 // Do is a helper method to define mock.On call
-//   - ctx context.Context
 //   - opts net.RequestOptions
-func (_e *MockClient_Expecter) Do(ctx interface{}, opts interface{}) *MockClient_Do_Call {
-	return &MockClient_Do_Call{Call: _e.mock.On("Do", ctx, opts)}
+func (_e *MockClient_Expecter) Do(opts interface{}) *MockClient_Do_Call {
+	return &MockClient_Do_Call{Call: _e.mock.On("Do", opts)}
 }
 
-func (_c *MockClient_Do_Call) Run(run func(ctx context.Context, opts net.RequestOptions)) *MockClient_Do_Call {
+func (_c *MockClient_Do_Call) Run(run func(opts net.RequestOptions)) *MockClient_Do_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(net.RequestOptions))
+		run(args[0].(net.RequestOptions))
 	})
 	return _c
 }
@@ -80,7 +79,7 @@ func (_c *MockClient_Do_Call) Return(_a0 *http.Response, _a1 error) *MockClient_
 	return _c
 }
 
-func (_c *MockClient_Do_Call) RunAndReturn(run func(context.Context, net.RequestOptions) (*http.Response, error)) *MockClient_Do_Call {
+func (_c *MockClient_Do_Call) RunAndReturn(run func(net.RequestOptions) (*http.Response, error)) *MockClient_Do_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -128,6 +127,39 @@ func (_c *MockClient_SetTlsConfig_Call) Return(_a0 error) *MockClient_SetTlsConf
 
 func (_c *MockClient_SetTlsConfig_Call) RunAndReturn(run func(*tls.Config) error) *MockClient_SetTlsConfig_Call {
 	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateContext provides a mock function with given fields: ctx
+func (_m *MockClient) UpdateContext(ctx context.Context) {
+	_m.Called(ctx)
+}
+
+// MockClient_UpdateContext_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateContext'
+type MockClient_UpdateContext_Call struct {
+	*mock.Call
+}
+
+// UpdateContext is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockClient_Expecter) UpdateContext(ctx interface{}) *MockClient_UpdateContext_Call {
+	return &MockClient_UpdateContext_Call{Call: _e.mock.On("UpdateContext", ctx)}
+}
+
+func (_c *MockClient_UpdateContext_Call) Run(run func(ctx context.Context)) *MockClient_UpdateContext_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context))
+	})
+	return _c
+}
+
+func (_c *MockClient_UpdateContext_Call) Return() *MockClient_UpdateContext_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockClient_UpdateContext_Call) RunAndReturn(run func(context.Context)) *MockClient_UpdateContext_Call {
+	_c.Run(run)
 	return _c
 }
 

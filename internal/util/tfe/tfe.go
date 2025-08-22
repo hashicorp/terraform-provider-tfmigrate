@@ -18,7 +18,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 
-	models "terraform-provider-tfmigrate/internal/models"
+	"terraform-provider-tfmigrate/internal/models"
 	httpUtil "terraform-provider-tfmigrate/internal/util/net"
 
 	httpHeaders "github.com/go-http-utils/headers"
@@ -51,15 +51,20 @@ type PollResult struct {
 
 // TfeUtil defines the interface for TFE utility functions.
 type TfeUtil interface {
+	AdvanceDeploymentRunStep(stepId string, client *tfe.Client) error
 	CalculateConfigFileHash(stackConfigFileAbsPath string) (string, error)
 	HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string
 	NewClient(config *tfe.Config) (*tfe.Client, error)
+	ReadDeploymentRunSteps(deploymentRunId string, httpClient httpUtil.Client, tfeConfig *tfe.Config) ([]models.StackDeploymentStep, error)
 	ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error)
 	ReadOrgByName(organizationName string, client *tfe.Client) (*tfe.Organization, error)
 	ReadProjectByName(organizationName, projectName string, client *tfe.Client) (*tfe.Project, error)
 	ReadStackByName(organizationName, projectId string, stackName string, client *tfe.Client) (*tfe.Stack, error)
+	ReadStackDiagnosticsByConfigID(stackConfigId string, httpClient httpUtil.Client, config *tfe.Config) diag.Diagnostics
 	ReadTfeToken(tfeRemoteHostName string) (string, error)
 	ReadWorkspaceByName(organizationName, workspaceName string, client *tfe.Client) (*tfe.Workspace, error)
+	RerunDeploymentGroup(stackDeploymentGroupId string, deploymentNames []string, client *tfe.Client) error
+	StackConfigurationHasRunningDeploymentGroups(stackConfigurationId string, client *tfe.Client) (bool, error)
 	StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error)
 	UpdateContext(ctx context.Context)
 	UploadStackConfigFile(stackId string, configFileDirAbsPath string, client *tfe.Client) (string, error)
@@ -77,6 +82,18 @@ func NewTfeUtil(ctx context.Context) TfeUtil {
 		convergenceTimeOut: configConvergenceTimeout,
 		ctx:                ctx,
 	}
+}
+
+func (u *tfeUtil) AdvanceDeploymentRunStep(stepId string, client *tfe.Client) error {
+	tflog.Debug(u.ctx, fmt.Sprintf("Advancing deployment run step with ID %s", stepId))
+	// Advance the deployment run step
+	err := client.StackDeploymentSteps.Advance(u.ctx, stepId)
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error advancing deployment run step with ID %s: %v", stepId, err))
+		return fmt.Errorf("error advancing deployment run step with ID %s, err: %v", stepId, err)
+	}
+	tflog.Info(u.ctx, fmt.Sprintf("Successfully advanced deployment run step with ID %s", stepId))
+	return nil
 }
 
 // CalculateConfigFileHash calculates the bundle hash for a stack/terraform source configuration file.
@@ -167,12 +184,48 @@ func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *
 	return stackConfiguration.Status
 }
 
+// ReadDeploymentRunSteps retrieves the steps of a deployment run by its ID.
+func (u *tfeUtil) ReadDeploymentRunSteps(deploymentRunId string, httpClient httpUtil.Client, config *tfe.Config) ([]models.StackDeploymentStep, error) {
+	tflog.Debug(u.ctx, fmt.Sprintf("Reading deployment run steps for deployment run ID %s", deploymentRunId))
+	deploymentRunStepsUrl := fmt.Sprintf(stackConstants.StackDeploymentStepApiPathTemplate, config.Address, config.BasePath, deploymentRunId)
+	bearerToken := fmt.Sprintf("Bearer %s", config.Token)
+	response, err := httpClient.Do(httpUtil.RequestOptions{
+		Method: http.MethodGet,
+		URL:    deploymentRunStepsUrl,
+		Headers: map[string]string{
+			httpHeaders.Authorization: bearerToken,
+			httpHeaders.Accept:        "application/vnd.api+json",
+		},
+	})
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading deployment run steps for deployment run ID %s: %v", deploymentRunId, err))
+		return nil, fmt.Errorf("error reading deployment run steps for deployment run ID %s, err: %v", deploymentRunId, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading deployment run steps for deployment run ID %s: received status code %d", deploymentRunId, response.StatusCode))
+		err = u.handleHttpClientError(response)
+		return nil, fmt.Errorf("error reading deployment run steps for deployment run ID %s, err: %v", deploymentRunId, err)
+	}
+	var deploymentRunSteps models.StackDeploymentSteps
+	if err := json.NewDecoder(response.Body).Decode(&deploymentRunSteps); err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error decoding response for deployment run steps for deployment run ID %s: %v", deploymentRunId, err))
+		return nil, fmt.Errorf("error decoding response for deployment run steps for deployment run ID %s, err: %v", deploymentRunId, err)
+	}
+	if len(deploymentRunSteps.Data) == 0 {
+		tflog.Warn(u.ctx, fmt.Sprintf("No deployment run steps found for deployment run ID %s", deploymentRunId))
+		return nil, nil // Return nil if no steps are found
+	}
+
+	return deploymentRunSteps.Data, nil
+}
+
 // ReadLatestDeploymentRun retrieves the latest deployment run for a stack by its ID and deployment name.
 func (u *tfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error) {
 	tflog.Debug(u.ctx, fmt.Sprintf("Reading latest deployment run for stack ID %s and deployment name %s", stackId, deploymentName))
 	deploymentRunUrl := fmt.Sprintf(stackConstants.StackDeploymentRunApiPathTemplate, config.Address, config.BasePath, stackId, deploymentName)
 	bearerToken := fmt.Sprintf("Bearer %s", config.Token)
-	response, err := httpClient.Do(u.ctx, httpUtil.RequestOptions{
+	response, err := httpClient.Do(httpUtil.RequestOptions{
 		Method: http.MethodGet,
 		URL:    deploymentRunUrl,
 		Headers: map[string]string{
@@ -312,6 +365,64 @@ func (u *tfeUtil) ReadStackByName(organizationName, projectId string, stackName 
 	return stack, nil
 }
 
+// ReadStackDiagnosticsByConfigID retrieves the diagnostics for a stack configuration.
+func (u *tfeUtil) ReadStackDiagnosticsByConfigID(stackConfigId string, httpClient httpUtil.Client, config *tfe.Config) diag.Diagnostics {
+	var diags diag.Diagnostics
+	tflog.Debug(u.ctx, fmt.Sprintf("Reading stack diagnostics for stack configuration ID %s", stackConfigId))
+	diagnosticsUrl := fmt.Sprintf(stackConstants.StackConfigDiagnosticsApiPathTemplate, config.Address, config.BasePath, stackConfigId)
+	bearerToken := fmt.Sprintf("Bearer %s", config.Token)
+	response, err := httpClient.Do(httpUtil.RequestOptions{
+		Method: http.MethodGet,
+		URL:    diagnosticsUrl,
+		Headers: map[string]string{
+			httpHeaders.Authorization: bearerToken,
+			httpHeaders.Accept:        "application/vnd.api+json",
+		},
+	})
+
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack diagnostics for stack configuration ID %s: %v", stackConfigId, err))
+		diags.AddError(
+			"Error reading stack diagnostics",
+			fmt.Sprintf("Error reading stack diagnostics for stack configuration ID %s, err: %v", stackConfigId, err),
+		)
+		return diags
+	}
+
+	if response.StatusCode != http.StatusOK {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack diagnostics for stack configuration ID %s: received status code %d", stackConfigId, response.StatusCode))
+		err = u.handleHttpClientError(response)
+		diags.AddError(
+			"Error reading stack diagnostics",
+			fmt.Sprintf("Error reading stack diagnostics for stack configuration ID %s, err: %v", stackConfigId, err),
+		)
+		return diags
+	}
+
+	defer response.Body.Close()
+	var diagnosticsData models.StackConfigDiagnostics
+	if err := json.NewDecoder(response.Body).Decode(&diagnosticsData); err != nil || len(diagnosticsData.Data) == 0 {
+		tflog.Error(u.ctx, fmt.Sprintf("Error decoding response for stack diagnostics for stack configuration ID %s: %v", stackConfigId, err))
+		diags.AddError(
+			"Error decoding stack diagnostics response",
+			fmt.Sprintf("Error decoding response for stack diagnostics for stack configuration ID %s, err: %v", stackConfigId, err),
+		)
+		return diags
+	}
+
+	for _, diagData := range diagnosticsData.Data {
+		diagnosticSummary := diagData.Attributes.Summary
+		diagnosticDetails := getDetailsFromDiagnosticData(diagData)
+		if diagData.Attributes.Severity == "warning" {
+			diags.AddWarning(diagnosticSummary, diagnosticDetails)
+		} else {
+			diags.AddError(diagnosticSummary, diagnosticDetails)
+		}
+	}
+
+	return diags
+}
+
 // ReadTfeToken reads the TFE token from the credential file.
 func (u *tfeUtil) ReadTfeToken(tfeRemoteHostName string) (string, error) {
 	homeDir, err := os.UserHomeDir()
@@ -351,6 +462,39 @@ func (u *tfeUtil) ReadWorkspaceByName(organizationName, workspaceName string, cl
 	}
 	tflog.Debug(u.ctx, fmt.Sprintf("Successfully retrieved workspace %s with ID %s in organization %s", workspace.Name, workspace.ID, organizationName))
 	return workspace, nil
+}
+
+// RerunDeploymentGroup triggers re-execution of deployments in a specified deployment group using the given stack ID.
+func (u *tfeUtil) RerunDeploymentGroup(stackDeploymentGroupId string, deploymentNames []string, client *tfe.Client) error {
+	err := client.StackDeploymentGroups.Rerun(u.ctx, stackDeploymentGroupId, &tfe.StackDeploymentGroupRerunOptions{Deployments: deploymentNames})
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error rerunning stack deployment group %s: %v", stackDeploymentGroupId, err))
+		err = u.handleTfeClientResourceReadError(err)
+		return fmt.Errorf("error rerunning stack deployment group %s, err: %v", stackDeploymentGroupId, err)
+	}
+
+	return nil
+}
+
+// StackConfigurationHasRunningDeploymentGroups checks if the stack configuration has any running deployment groups.
+func (u *tfeUtil) StackConfigurationHasRunningDeploymentGroups(stackConfigurationId string, client *tfe.Client) (bool, error) {
+	stackDeploymentGroups, err := client.StackDeploymentGroups.List(u.ctx, stackConfigurationId, nil)
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error listing stack deployment groups for stack configuration %s: %v", stackConfigurationId, err))
+		return false, u.handleTfeClientResourceReadError(err)
+	}
+
+	// TODO: Currently only 20 deployments are supported meaning that this will have 20 deployment groups at most.
+	//  We need to handle pagination if the number of deployment groups exceeds 20.
+	for _, group := range stackDeploymentGroups.Items {
+		deploymentGroupStatus := tfe.DeploymentGroupStatus(group.Status)
+		if deploymentGroupStatus == tfe.DeploymentGroupStatusPending ||
+			deploymentGroupStatus == tfe.DeploymentGroupStatusDeploying {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // StackConfigurationHasRunningPlan checks if the stack configuration has any running plans.
@@ -438,6 +582,7 @@ func (u *tfeUtil) WatchStackConfigurationUntilTerminalStatus(stackConfigurationI
 	stackConfiguration, err := client.StackConfigurations.Read(u.ctx, stackConfigurationID)
 	if err != nil || stackConfiguration == nil {
 		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack configuration %s: %v", stackConfigurationID, err))
+		err = u.handleTfeClientResourceReadError(err)
 		diags.AddError("Stack configuration read error", fmt.Sprintf("Error reading stack configuration %s: %v", stackConfigurationID, err))
 		return "", diags
 	}
@@ -500,6 +645,9 @@ func (u *tfeUtil) handleHttpClientError(resp *http.Response) error {
 
 // handleTfeClientResourceReadError handles common errors when reading resources from TFE.
 func (u *tfeUtil) handleTfeClientResourceReadError(err error) error {
+	if err == nil {
+		return nil // No error to handle
+	}
 	if errors.Is(err, tfe.ErrUnauthorized) {
 		tflog.Error(u.ctx, "Unauthorized access to TFE API. Please check your token and permissions.")
 		return fmt.Errorf("you are not authorized to access this resource: %w. please make sure your token has permissiont to read this resource", err)
@@ -583,4 +731,15 @@ func pollConvergingConfigurationsForRunningStackPlans(ctx context.Context, conve
 
 	return resultChan
 
+}
+
+func getDetailsFromDiagnosticData(diagnosticData models.StackDiagnostic) string {
+	var details []string
+	details = append(details, diagnosticData.Attributes.Detail)
+	for _, d := range diagnosticData.Attributes.Diags {
+		if d.Detail != "" {
+			details = append(details, d.Detail)
+		}
+	}
+	return strings.Join(details, "\n")
 }

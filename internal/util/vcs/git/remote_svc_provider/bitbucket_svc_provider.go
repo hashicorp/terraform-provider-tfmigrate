@@ -37,7 +37,7 @@ func NewBitbucketSvcProvider(ctx context.Context, gitUtil git.GitUtil, bitbucket
 		ctx:           ctx,
 		git:           gitUtil,
 		bitbucketUtil: bitbucketUtil,
-		httpClient:    net.NewClient(),
+		httpClient:    net.NewClient(ctx),
 	}
 }
 
@@ -135,7 +135,7 @@ func (b *bitbucketSvcProvider) CreatePullRequest(params git.PullRequestParams) (
 		Body:    strings.NewReader(string(jsonPayload)),
 	}
 
-	resp, err := b.httpClient.Do(b.ctx, postRequest)
+	resp, err := b.httpClient.Do(postRequest)
 	if err != nil {
 		return "", fmt.Errorf(constants.ErrBitbucketSendHTTPRequest, err)
 	}

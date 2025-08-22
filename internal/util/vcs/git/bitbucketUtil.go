@@ -47,7 +47,7 @@ type BitbucketUtil interface {
 func NewBitbucketUtil(ctx context.Context) BitbucketUtil {
 	return &bitbucketUtil{
 		ctx:        ctx,
-		httpClient: netUtil.NewClient(),
+		httpClient: netUtil.NewClient(ctx),
 	}
 }
 
@@ -62,7 +62,7 @@ func (b *bitbucketUtil) CheckTokenTypeAndScopes(workspace, repoSlug, accessToken
 		AcceptHeader:        ApplicationJSONType,
 	}
 
-	resp, err := b.httpClient.Do(b.ctx, netUtil.RequestOptions{
+	resp, err := b.httpClient.Do(netUtil.RequestOptions{
 		Method:  http.MethodGet,
 		URL:     url,
 		Headers: headers,

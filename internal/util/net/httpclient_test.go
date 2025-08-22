@@ -73,11 +73,11 @@ func TestHttpClient_Do(t *testing.T) {
 		},
 	}
 
-	client := NewClient()
+	client := NewClient(context.Background())
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := client.Do(context.Background(), tt.opts)
+			resp, err := client.Do(tt.opts)
 
 			if tt.expectError {
 				require.Error(t, err)
