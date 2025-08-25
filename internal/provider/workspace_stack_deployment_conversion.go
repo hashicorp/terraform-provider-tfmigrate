@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"sync"
 	"terraform-provider-tfmigrate/internal/models"
 	"time"
 
@@ -13,10 +14,20 @@ import (
 func (r *stackMigrationResource) uploadStackDeploymentsState(ctx context.Context, migrationMap map[string]string) map[string]StackMigrationData {
 	var migrationDataMap = make(map[string]StackMigrationData)
 
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for workspaceName, deploymentName := range migrationMap {
-		migrationData := r.uploadWorkspaceStateToStackDeployment(ctx, workspaceName, deploymentName)
-		migrationDataMap[workspaceName] = migrationData
+		wg.Add(1)
+		go func(wsName, depName string) {
+			defer wg.Done()
+			migrationData := r.uploadWorkspaceStateToStackDeployment(ctx, wsName, depName)
+			mu.Lock()
+			migrationDataMap[wsName] = migrationData
+			mu.Unlock()
+		}(workspaceName, deploymentName)
 	}
+	wg.Wait()
 	return migrationDataMap
 }
 
@@ -182,10 +193,11 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 }
 
 func (r *stackMigrationResource) syncDeploymentGroupDataAfterStateImport(ctx context.Context, migrationData *StackMigrationData, name string) {
-	const maxRetries = 3
-	const retryInterval = 10 * time.Second
+	const maxRetries = 10
 
 	for i := 0; i < maxRetries; i++ {
+		time.Sleep(10 * time.Second) // wait for 10 seconds before checking the deployment group status again
+		tflog.Debug(ctx, fmt.Sprintf("Checking deployment group status for deployment %s in stack %s, deploymet status sync attempt %d/%d", name, r.existingStack.Name, i+1, maxRetries))
 		latestDeploymentRun, err := r.tfeUtil.ReadLatestDeploymentRun(
 			r.existingStack.ID, name, r.httpClient, r.tfeConfig, r.tfeClient,
 		)
@@ -197,6 +209,8 @@ func (r *stackMigrationResource) syncDeploymentGroupDataAfterStateImport(ctx con
 			tflog.Error(ctx, migrationData.FailureReason)
 		} else {
 			status := tfe.DeploymentGroupStatus(latestDeploymentRun.StackDeploymentGroup.Status)
+			deploymentGroupId := latestDeploymentRun.StackDeploymentGroup.ID
+			tflog.Debug(ctx, fmt.Sprintf("Deployment group %s for deployment %s in stack %s is in %s status after state import advance.", deploymentGroupId, name, r.existingStack.Name, status))
 			switch status {
 			case tfe.DeploymentGroupStatusSucceeded:
 				migrationData.DeploymentGroupData.Status = status
@@ -204,17 +218,22 @@ func (r *stackMigrationResource) syncDeploymentGroupDataAfterStateImport(ctx con
 					"Deployment group %s in stack %s is in %s status after state import advance.",
 					name, r.existingStack.Name, status,
 				))
-				return
+
 			case tfe.DeploymentGroupStatusFailed, tfe.DeploymentGroupStatusAbandoned:
 				migrationData.FailureReason = fmt.Sprintf(
 					"Deployment group %s in stack %s is in %s status after state import advance. Please check your deployment config or workspace state data and retry.",
 					name, r.existingStack.Name, status,
 				)
 				tflog.Error(ctx, migrationData.FailureReason)
-				return
+
+			}
+			// If a terminal status is reached, break the loop
+			if status == tfe.DeploymentGroupStatusSucceeded ||
+				status == tfe.DeploymentGroupStatusFailed ||
+				status == tfe.DeploymentGroupStatusAbandoned {
+				break
 			}
 		}
-		time.Sleep(retryInterval)
 	}
 }
 

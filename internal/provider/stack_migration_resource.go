@@ -306,6 +306,9 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 	r.tfeUtil.UpdateContext(ctx)
 	r.httpClient.UpdateContext(ctx)
 	r.migrationHashService.UpdateContext(ctx)
+	r.tfstateUtil.UpdateContext(ctx)
+
+	// set the absolute path for the stack source bundle and Terraform configuration directories.
 	r.stackSourceBundleAbsPath = plan.ConfigurationDir.ValueString()
 	r.terraformConfigDirAbsPath = plan.TerraformConfigDir.ValueString()
 
