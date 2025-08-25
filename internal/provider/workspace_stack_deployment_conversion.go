@@ -145,7 +145,7 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 
 	fetchImportStepAgain := false
 	if triggerStateUpload {
-		tflog.Debug(ctx, fmt.Sprintf("Triggering workspace to stack convertion and state upload for deployment: %s", deploymentName))
+		tflog.Debug(ctx, fmt.Sprintf("Triggering workspace to stack conversion and state upload for deployment: %s", deploymentName))
 		diags := r.convertWorkspaceStateAndUpload(ctx, migrationData.WorkspaceId, uploadURL)
 
 		if diags.HasError() {

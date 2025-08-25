@@ -40,7 +40,7 @@ func (r *stackMigrationResource) convertWorkspaceStateAndUpload(ctx context.Cont
 		diags.Append(rawStateDiags...)
 	}
 
-	if rawTerraformState == nil || len(rawTerraformState) == 0 {
+	if len(rawTerraformState) == 0 {
 		diags.AddError("No state data found", fmt.Sprintf("Workspace %s has no state data to convert", workspaceId))
 		return diags
 	}
