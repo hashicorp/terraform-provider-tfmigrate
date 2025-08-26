@@ -5,73 +5,95 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestHttpClient_DoRequest(t *testing.T) {
-	assertions := assert.New(t)
-
-	// Start a local HTTP server
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		// Set a custom header for testing
-		rw.Header().Set("X-Test-Header", "test-value")
-
-		_, err := rw.Write([]byte(`{"status": "ok"}`))
-		if err != nil {
+func TestHttpClient_Do(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/error" {
+			http.Error(rw, "forced error", http.StatusBadRequest)
 			return
 		}
+		_, _ = rw.Write([]byte(`{"status":"ok"}`))
 	}))
-	// Close the server when the test finishes
-	defer server.Close()
+	defer testServer.Close()
 
-	type fields struct {
-		client *http.Client
-	}
-	type args struct {
-		method  string
-		url     string
-		headers map[string]string
-		body    io.Reader
-	}
 	tests := []struct {
 		name               string
-		fields             fields
-		args               args
-		expectedResponse   []byte
+		opts               RequestOptions
 		expectedStatusCode int
-		wantErr            bool
+		expectedBody       string
+		expectError        bool
 	}{
 		{
-			name: "Test 1",
-			fields: fields{
-				client: server.Client(),
+			name: "GET success",
+			opts: RequestOptions{
+				Method:  http.MethodGet,
+				URL:     testServer.URL + "/ok",
+				Headers: map[string]string{"Accept": "application/json"},
 			},
-			args: args{
-				method:  "GET",
-				url:     server.URL + "/some/path",
-				headers: map[string]string{},
-				body:    nil,
-			},
-			expectedResponse:   []byte(`{"status": "ok"}`),
 			expectedStatusCode: 200,
-			wantErr:            false,
+			expectedBody:       `{"status":"ok"}`,
+			expectError:        false,
+		},
+		{
+			name: "POST with body",
+			opts: RequestOptions{
+				Method:  http.MethodPost,
+				URL:     testServer.URL + "/ok",
+				Headers: map[string]string{"Content-Type": "application/json"},
+				Body:    strings.NewReader(`{"foo":"bar"}`),
+			},
+			expectedStatusCode: 200,
+			expectedBody:       `{"status":"ok"}`,
+			expectError:        false,
+		},
+		{
+			name: "Bad request (400)",
+			opts: RequestOptions{
+				Method: http.MethodGet,
+				URL:    testServer.URL + "/error",
+			},
+			expectedStatusCode: 400,
+			expectedBody:       "forced error\n",
+			expectError:        false,
+		},
+		{
+			name: "Invalid URL",
+			opts: RequestOptions{
+				Method: http.MethodGet,
+				URL:    "://invalid-url",
+			},
+			expectedStatusCode: 0,
+			expectError:        true,
 		},
 	}
+
+	client := NewClient(context.Background())
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hc := NewHttpClient(5 * time.Second)
-			statusCode, resp, headers, err := hc.DoRequest(context.Background(), tt.args.method, tt.args.url, tt.args.headers, tt.args.body)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DoRequest() error = %v, wantErr %v", err, tt.wantErr)
+			resp, err := client.Do(tt.opts)
+
+			if tt.expectError {
+				require.Error(t, err)
+				require.Nil(t, resp)
 				return
 			}
-			assertions.Equal(tt.expectedResponse, resp)
-			assertions.Equal(tt.expectedStatusCode, statusCode)
-			assertions.NotNil(headers)
-			assertions.Equal("test-value", headers.Get("X-Test-Header"))
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode)
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedBody, string(body))
 		})
 	}
 }

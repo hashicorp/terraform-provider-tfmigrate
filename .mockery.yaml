@@ -38,6 +38,18 @@ packages:
       outpkg: "tfe_mocks"
     interfaces:
       TfeUtil:
+  terraform-provider-tfmigrate/internal/util/net:
+    config:
+      dir: "_mocks/net_mocks"
+      outpkg: "net_mocks"
+    interfaces:
+      Client:
+  terraform-provider-tfmigrate/internal:
+    config:
+      dir: "_mocks"
+      outpkg: "mocks"
+    interfaces:
+      StackMigrationHashService:
   github.com/go-git/go-git/v5/plumbing/storer:
     config:
       dir: "_mocks/helper_mocks/iter_mocks"

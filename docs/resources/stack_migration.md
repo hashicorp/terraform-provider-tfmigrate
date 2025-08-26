@@ -19,6 +19,8 @@ Defines a resource for migrating existing HCP Terraform workspaces to deployment
 
 - `config_file_dir` (String) The directory path containing configuration files. Must be an absolute path.
 - `name` (String) The stack name. Must be unique within the organization and project, must be a non-VCS driven stack.
+- `terraform_config_dir` (String) The directory path containing the Terraform configuration files from which stack configurations are generated. Must be an absolute path.
+- `workspace_deployment_mapping` (Map of String) A map of workspace names to stack deployment names. This is used to map the workspaces to the stack deployments. The keys are the workspace names, and the values are the stack deployment names.
 
 ### Optional
 
@@ -29,4 +31,6 @@ Defines a resource for migrating existing HCP Terraform workspaces to deployment
 
 - `current_configuration_id` (String) The ID of the current stack configuration. This is used to track the current configuration of the stack.
 - `current_configuration_status` (String) The status of the stack configuration. This is used to track the status of the stack configuration upload.
+- `migration_hash` (String) The hash used for tracking the migration state of the stack.
 - `source_bundle_hash` (String) The hash of the configuration files in the directory. This is used to detect changes in the stack configuration files.
+- `terraform_config_hash` (String) The hash of the Terraform configuration files in the directory. This is used to detect changes in the Terraform configuration files.

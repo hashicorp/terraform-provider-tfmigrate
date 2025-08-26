@@ -1,13 +1,7 @@
 package stack
 
 const (
-	UnknownStackPlanUpdateStrategy    StackPlanUpdateStrategy = "unknown"
-	RetainPlanStackPlanUpdateStrategy StackPlanUpdateStrategy = "no_modification"
-	ModifyPlanStackPlanUpdateStrategy StackPlanUpdateStrategy = "modify_plan"
+	StackDeploymentRunApiPathTemplate     = "%s%sstacks/%s/stack-deployments/%s/stack-deployment-runs"
+	StackConfigDiagnosticsApiPathTemplate = "%s%sstack-configurations/%s/stack-diagnostics"
+	StackDeploymentStepApiPathTemplate    = "%s%sstack-deployment-runs/%s/stack-deployment-steps"
 )
-
-type StackPlanUpdateStrategy string // StackPlanUpdateStrategy represents the strategy for updating a stack plan.
-
-func (s StackPlanUpdateStrategy) String() string {
-	return string(s)
-}
