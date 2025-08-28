@@ -829,5 +829,9 @@ func getImportBlockData(body hcl.Body) (bool, error) {
 		return false, fmt.Errorf("failed to get import value: %s", diags.Error())
 	}
 	importValue, diags := attr.Expr.Value(nil)
+
+	if diags.HasErrors() || importValue.IsNull() {
+		return false, fmt.Errorf("failed to get import value: %v", diags.Error())
+	}
 	return importValue.True(), nil
 }
