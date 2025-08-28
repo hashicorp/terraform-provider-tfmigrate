@@ -382,9 +382,6 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 			"Error Reading organization",
 			fmt.Sprintf("The organization %q does not exist or could not be accessed: %s", state.Organization.ValueString(), err.Error()),
 		)
-	}
-
-	if response.Diagnostics.HasError() {
 		return
 	}
 
@@ -395,9 +392,6 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 			"Error Reading project",
 			fmt.Sprintf("The project %q does not exist or could not be accessed in organization %q: %s", state.Project.ValueString(), r.existingOrganization.Name, err.Error()),
 		)
-	}
-
-	if response.Diagnostics.HasError() {
 		return
 	}
 
@@ -408,9 +402,6 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 			"Error Reading stack",
 			fmt.Sprintf("The stack %q does not exist or could not be accessed in organization %q and project %q: %s", state.Name.ValueString(), r.existingOrganization.Name, r.existingProject.Name, err.Error()),
 		)
-	}
-
-	if response.Diagnostics.HasError() {
 		return
 	}
 
@@ -420,10 +411,6 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 			"Migration to VCS backed stacks is not supported",
 			fmt.Sprintf("The stack %q in organization %q and project %q is a VCS backed stacks. The `tfmigrate_stack_migration` resource supports migration to non-VCS backed stacks only ", r.existingStack.Name, r.existingOrganization.Name, r.existingProject.Name),
 		)
-		return
-	}
-
-	if response.Diagnostics.HasError() {
 		return
 	}
 
@@ -464,6 +451,7 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 		response.Diagnostics.AddError(
 			"Error Reading Workspace Deployment Mapping",
 			"The workspace_deployment_mapping attribute is empty. This attribute must contain a mapping of workspace names to stack deployment names.")
+		return
 	}
 
 	// get the latest deployment groups and status for each deployment in the workspaceDeploymentMap
@@ -829,17 +817,17 @@ func (r *stackMigrationResource) getAllDeployments(filePath string) (mapset.Set[
 
 func getImportBlockData(body hcl.Body) (bool, error) {
 	attrs, diags := body.JustAttributes()
-	if diags.HasErrors() {
-		return false, fmt.Errorf("failed to get attributes from body: %s", diags.Error())
-	}
 	attr, ok := attrs["import"]
 	if !ok {
 		return false, nil
 	}
 
-	importValue, diags := attr.Expr.Value(nil)
+	if diags.HasErrors() {
+		return false, fmt.Errorf("failed to get attributes from body: %s", diags.Error())
+	}
 	if diags.HasErrors() {
 		return false, fmt.Errorf("failed to get import value: %s", diags.Error())
 	}
+	importValue, diags := attr.Expr.Value(nil)
 	return importValue.True(), nil
 }
