@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/go-git/go-git/v5 v5.16.2
-	github.com/hashicorp/go-tfe v1.91.0
+	github.com/hashicorp/go-tfe v1.91.1
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/terraform-exec v0.23.1
 	github.com/hashicorp/terraform-plugin-docs v0.22.0
