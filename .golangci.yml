@@ -12,7 +12,7 @@ linters:
     - staticcheck
     - testifylint
     - unconvert
-    - godot
+#    - godot
   settings:
     depguard:
       rules:
