@@ -537,7 +537,7 @@ func (u *tfeUtil) UpdateContext(ctx context.Context) {
 
 // UploadStackConfigFile uploads the stack configuration file to TFE and returns the stack configuration ID.
 func (u *tfeUtil) UploadStackConfigFile(stackId string, configFileDirAbsPath string, client *tfe.Client) (string, error) {
-	stackSource, err := client.StackSources.CreateAndUpload(u.ctx, stackId, configFileDirAbsPath, &tfe.CreateStackSourceOptions{
+	stackSource, err := client.StackConfigurations.CreateAndUpload(u.ctx, stackId, configFileDirAbsPath, &tfe.CreateStackConfigurationOptions{
 		SpeculativeEnabled: tfe.Bool(false),
 	})
 	if err != nil || stackSource == nil {
