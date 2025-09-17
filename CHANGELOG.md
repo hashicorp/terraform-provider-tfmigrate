@@ -1,3 +1,14 @@
+## 1.3.0-alpha20250917 (17th May 2025)
+
+### NOTES
+This is an alpha release for testing HCP Terraform Workpsaces to HCP Terraform Stacks migration support.
+
+
+### Bugs and Security Fixes
+- update terraform-migrate-utility and fixed issues with terraform state list command [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/219)
+
+More details will come in the actual GA release.
+
 ## 1.3.0-alpha20250916 (16th May 2025)
 
 ### NOTES
