@@ -141,6 +141,8 @@ func (r *stackMigrationResource) getRawStateData(ctx context.Context, workspaceI
 	rawStateData, err := r.tfeClient.StateVersions.Download(ctx, currentStateVersion.DownloadURL)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Failed to download state version for workspace %s: %v", workspaceId, err))
+		diags.AddError("Failed to download state version", fmt.Sprintf("Error downloading state version for workspace %s: %v", workspaceId, err))
+		return nil, diags
 	}
 	tflog.Info(ctx, fmt.Sprintf("Downloaded state version for workspace %s", workspaceId))
 
