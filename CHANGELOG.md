@@ -1,4 +1,4 @@
-## 1.3.0-alpha20250917 (17th May 2025)
+## 1.3.0-alpha20250917 (17th Sep 2025)
 
 ### NOTES
 This is an alpha release for testing HCP Terraform Workpsaces to HCP Terraform Stacks migration support.
@@ -9,7 +9,7 @@ This is an alpha release for testing HCP Terraform Workpsaces to HCP Terraform S
 
 More details will come in the actual GA release.
 
-## 1.3.0-alpha20250916 (16th May 2025)
+## 1.3.0-alpha20250916 (16th Sep 2025)
 
 ### NOTES
 This is an alpha release for testing HCP Terraform Workpsaces to HCP Terraform Stacks migration support.
