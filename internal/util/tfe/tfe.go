@@ -51,10 +51,11 @@ type PollResult struct {
 
 // TfeUtil defines the interface for TFE utility functions.
 type TfeUtil interface {
+	NewClient(config *tfe.Config) (*tfe.Client, error)
 	AdvanceDeploymentRunStep(stepId string, client *tfe.Client) error
 	CalculateConfigFileHash(stackConfigFileAbsPath string) (string, error)
 	HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string
-	NewClient(config *tfe.Config) (*tfe.Client, error)
+	PullAndSaveWorkspaceStateData(organizationName string, workspaceName string, client *tfe.Client) (string, error)
 	ReadDeploymentRunSteps(deploymentRunId string, httpClient httpUtil.Client, tfeConfig *tfe.Config) ([]models.StackDeploymentStep, error)
 	ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error)
 	ReadOrgByName(organizationName string, client *tfe.Client) (*tfe.Organization, error)
@@ -183,6 +184,74 @@ func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *
 	}
 
 	return stackConfiguration.Status
+}
+
+// PullAndSaveWorkspaceStateData pulls the state data from a workspace and saves it to a local file.
+func (u *tfeUtil) PullAndSaveWorkspaceStateData(organizationName string, workspaceName string, client *tfe.Client) (string, error) {
+	tflog.Debug(u.ctx, fmt.Sprintf("Read workspace %s in organization %s", workspaceName, organizationName))
+	workspace, err := u.ReadWorkspaceByName(organizationName, workspaceName, client)
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading workspace %s in organization %s: %v", workspaceName, organizationName, err))
+		return "", err
+	}
+
+	if workspace == nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Workspace %s in organization %s not found", workspaceName, organizationName))
+		return "", fmt.Errorf("workspace %s in organization %s not found", workspaceName, organizationName)
+	}
+
+	defer func() {
+		// Unlock the workspace
+		if _, err := client.Workspaces.Unlock(u.ctx, workspace.ID); err != nil {
+			tflog.Error(u.ctx, "Failed to unlock workspace")
+		}
+	}()
+
+	tflog.Debug(u.ctx, fmt.Sprintf("Locking workspace %s in organization %s", workspaceName, organizationName))
+	reason := "Preparing to pull workspace state to be saved locally in the temp directory"
+	lockOptions := tfe.WorkspaceLockOptions{Reason: &reason}
+	if _, err := client.Workspaces.Lock(u.ctx, workspace.ID, lockOptions); err != nil {
+		return "", fmt.Errorf("error locking workspace %s in organization %s, err: %v", workspaceName, organizationName, err)
+	}
+
+	tflog.Debug(u.ctx, fmt.Sprintf("Reading current state version for workspace %s in organization %s", workspaceName, organizationName))
+	currentStateVersion, err := client.StateVersions.ReadCurrent(u.ctx, workspace.ID)
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading current state version for workspace %s in organization %s err: %v", workspaceName, organizationName, err))
+	}
+
+	if currentStateVersion == nil || currentStateVersion.DownloadURL == "" {
+		tflog.Error(u.ctx, fmt.Sprintf("No current state version found for workspace %s in organization %s", workspaceName, organizationName))
+		return "", fmt.Errorf("no current state version found for workspace %s in organization %s", workspaceName, organizationName)
+	}
+
+	tflog.Debug(u.ctx, fmt.Sprintf("Downloading state file for workspace %s in organization %s", workspaceName, organizationName))
+	rawStateData, err := client.StateVersions.Download(u.ctx, currentStateVersion.DownloadURL)
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error downloading state file for workspace %s in organization %s err: %v", workspaceName, organizationName, err))
+		return "", fmt.Errorf("error downloading state file for workspace %s in organization %s, err: %v", workspaceName, organizationName, err)
+	}
+
+	if len(rawStateData) == 0 {
+		tflog.Error(u.ctx, fmt.Sprintf("Downloaded state file is empty for workspace %s in organization %s", workspaceName, organizationName))
+		return "", fmt.Errorf("downloaded state file is empty for workspace %s in organization %s", workspaceName, organizationName)
+	}
+
+	// Save the state data to a local file in the temp directory
+	tempDir := os.TempDir()
+	tempFile, err := os.CreateTemp(tempDir, fmt.Sprintf("%s-*.tfstate", workspaceName))
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error creating temp file for workspace %s in organization %s err: %v", workspaceName, organizationName, err))
+		return "", fmt.Errorf("error creating temp file for workspace %s in organization %s, err: %v", workspaceName, organizationName, err)
+	}
+	defer tempFile.Close()
+	if _, err := tempFile.Write(rawStateData); err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error writing state data to temp file for workspace %s in organization %s err: %v", workspaceName, organizationName, err))
+		return "", fmt.Errorf("error writing state data to temp file for workspace %s in organization %s, err: %v", workspaceName, organizationName, err)
+	}
+
+	tflog.Info(u.ctx, fmt.Sprintf("Successfully pulled and saved state data for workspace %s in organization %s to file %s", workspaceName, organizationName, tempFile.Name()))
+	return tempFile.Name(), nil
 }
 
 // ReadDeploymentRunSteps retrieves the steps of a deployment run by its ID.

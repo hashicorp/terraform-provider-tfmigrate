@@ -15,6 +15,8 @@ import (
 	httpUtil "terraform-provider-tfmigrate/internal/util/net"
 	tfeUtil "terraform-provider-tfmigrate/internal/util/tfe"
 
+	"golang.org/x/exp/maps"
+
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -152,21 +154,22 @@ type StackMigrationResourceModel struct {
 
 // stackMigrationResource implements the resource.Resource interface for managing stack migrations in HCP Terraform.
 type stackMigrationResource struct {
+	deploymentStateImportMap  map[string]bool                     // deploymentStateImportMap is a map that tracks if a deployment has import attribute set to true that indicates the deployment's state could be imported from the TFE API.
 	existingOrganization      *tfe.Organization                   // an existingOrganization is the organization in which the stack exists.
 	existingProject           *tfe.Project                        // an existingProject is the project in which the stack exists.
 	existingStack             *tfe.Stack                          // an existingStack is the stack to which the workspace will be migrated.
 	hclParser                 *hclparse.Parser                    // hclParser is the HCL parser used to parse HCL files.
 	httpClient                httpUtil.Client                     // httpClient is the HTTP client used to make requests to the TFE API configured with TLS settings and retry logic.
+	isStateModular            bool                                // isStateModular indicates whether the state is modular or not. If true, the state is modular, and the stack migration resource will use the modular update strategy.
 	migrationHashService      StackMigrationHashService           // migrationHashService is the service used to generate and manage migration hash for stack migrations.
+	stackSourceBundleAbsPath  string                              // stackSourceBundleAbsPath is the absolute path to the stack source bundle directory containing the stack configuration files.
+	stateFile                 string                              // stateFile is the path to the state file used by terraform state list command.
+	terraformConfigDirAbsPath string                              // terraformConfigDirAbsPath is the absolute path to the Terraform configuration directory containing the Terraform configuration files.
 	tfeClient                 *tfe.Client                         // tfeClient is the TFE client used to interact with the HCP Terraform API.
 	tfeConfig                 *tfe.Config                         // tfeConfig is the TFE client configuration used to create the TFE client.
 	tfeUtil                   tfeUtil.TfeUtil                     // tfeUtil is the utility for interacting with the TFE API, used to perform operations like uploading stack configurations and calculating source bundle hashes.
-	deploymentStateImportMap  map[string]bool                     // deploymentStateImportMap is a map that tracks if a deployment has import attribute set to true that indicates the deployment's state could be imported from the TFE API.
-	stackSourceBundleAbsPath  string                              // stackSourceBundleAbsPath is the absolute path to the stack source bundle directory containing the stack configuration files.
-	terraformConfigDirAbsPath string                              // terraformConfigDirAbsPath is the absolute path to the Terraform configuration directory containing the Terraform configuration files.
-	workspaceToStackMap       map[string]string                   // workspaceToStackMap is a map of workspace names to stack deployment names, used to map the workspaces to the stack deployments.
-	isStateModular            bool                                // isStateModular indicates whether the state is modular or not. If true, the state is modular, and the stack migration resource will use the modular update strategy.
 	tfstateUtil               tfstateUtil.TfWorkspaceStateUtility // tfstateUtil is the utility for interacting with the Terraform state, used to perform operations like reading and writing state files.
+	workspaceToStackMap       map[string]string                   // workspaceToStackMap is a map of workspace names to stack deployment names, used to map the workspaces to the stack deployments.
 }
 
 // NewStackMigrationResource creates a new instance of the stack migration resource.
@@ -314,7 +317,31 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 	r.stackSourceBundleAbsPath = plan.ConfigurationDir.ValueString()
 	r.terraformConfigDirAbsPath = plan.TerraformConfigDir.ValueString()
 
-	resourcesFromWorkspaceState, err := r.tfstateUtil.ListAllResourcesFromWorkspaceState(r.terraformConfigDirAbsPath)
+	migrationMapAttrVal := plan.WorkspaceDeploymentMapping.Elements()
+	migrationMap := make(map[string]string, len(migrationMapAttrVal))
+	// convert the map attribute value to a map[string]string
+	for key, value := range migrationMapAttrVal {
+		migrationMap[key] = value.(types.String).ValueString()
+	}
+
+	// retrieve a state file no make `terraform state list` infallible
+	stateFilePath, err := r.tfeUtil.PullAndSaveWorkspaceStateData(plan.Organization.ValueString(), maps.Keys(migrationMap)[0], r.tfeClient)
+	if err != nil {
+		response.Diagnostics.AddError(
+			"Error Getting Workspace State Data",
+			fmt.Sprintf("Failed to pull and save the workspace state data for organization %q and workspace %q: %s", r.existingOrganization.Name, maps.Keys(migrationMap)[0], err.Error()),
+		)
+		return
+	}
+	r.stateFile = stateFilePath
+
+	defer func() {
+		if err := os.Remove(stateFilePath); err != nil {
+			tflog.Error(ctx, fmt.Sprintf("Failed to remove temporary state file %q: %s", stateFilePath, err.Error()))
+		}
+	}()
+
+	resourcesFromWorkspaceState, err := r.tfstateUtil.ListAllResourcesFromWorkspaceStateWithStateFile(r.terraformConfigDirAbsPath, stateFilePath)
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Error Listing Resources from Workspace State",
@@ -325,7 +352,14 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 
 	r.isStateModular = r.tfstateUtil.IsFullyModular(resourcesFromWorkspaceState)
 
-	workspaceStackAddressMap, err := r.tfstateUtil.WorkspaceToStackAddressMap(r.terraformConfigDirAbsPath, r.stackSourceBundleAbsPath)
+	workspaceToStackAddressMapRequest := tfstateUtil.WorkspaceToStackAddressMapRequest{
+		StackSourceBundleAbsPath:    r.stackSourceBundleAbsPath,
+		TerraformConfigFilesAbsPath: r.terraformConfigDirAbsPath,
+		StateFilePath:               stateFilePath,
+	}
+
+	workspaceStackAddressMap, err := r.tfstateUtil.WorkspaceToStackAddressMap(workspaceToStackAddressMapRequest)
+
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Error Creating Workspace to Stack Map",
@@ -341,12 +375,6 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 	projectName := plan.Project.ValueString()
 	stackName := plan.Name.ValueString()
 	stackConfigDirectory := plan.ConfigurationDir.ValueString()
-	migrationMapAttrVal := plan.WorkspaceDeploymentMapping.Elements()
-	migrationMap := make(map[string]string, len(migrationMapAttrVal))
-	// convert the map attribute value to a map[string]string
-	for key, value := range migrationMapAttrVal {
-		migrationMap[key] = value.(types.String).ValueString()
-	}
 
 	// start the stack migration process
 	tflog.Info(ctx, "Starting to apply stack migration configuration to a new stack migration resource")
