@@ -14,7 +14,7 @@ require (
 	github.com/hashicorp/terraform-plugin-testing v1.13.3
 	github.com/stretchr/testify v1.11.1
 	github.com/zclconf/go-cty v1.17.0
-	gitlab.com/gitlab-org/api/client-go v0.145.0
+	gitlab.com/gitlab-org/api/client-go v0.147.1
 	golang.org/x/oauth2 v0.31.0
 )
 
