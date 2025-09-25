@@ -329,7 +329,7 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 	if err != nil {
 		response.Diagnostics.AddError(
 			"Error Getting Workspace State Data",
-			fmt.Sprintf("Failed to pull and save the workspace state data for organization %q and workspace %q: %s", r.existingOrganization.Name, maps.Keys(migrationMap)[0], err.Error()),
+			fmt.Sprintf("Failed to pull and save the workspace state data for organization %q and workspace %q: %s", plan.Organization.ValueString(), maps.Keys(migrationMap)[0], err.Error()),
 		)
 		return
 	}
