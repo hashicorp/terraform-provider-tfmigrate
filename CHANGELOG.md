@@ -1,3 +1,14 @@
+## 1.3.0-alpha20250930 (30th Sep 2025)
+
+### NOTES
+This is an alpha release for testing HCP Terraform Workpsaces to HCP Terraform Stacks migration support.
+
+
+### Bugs and Security Fixes
+- Fixes panic bug on empty state during HCP Terraform Workspace to Stacks Migration [COMMIT](https://github.com/hashicorp/terraform-provider-tfmigrate/commit/fa921f6329f7c9055cd769d0be92bf33fb6bc3a3)
+
+More details will come in the actual GA release.
+
 ## 1.3.0-alpha20250917 (17th Sep 2025)
 
 ### NOTES
