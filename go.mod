@@ -1,8 +1,6 @@
 module terraform-provider-tfmigrate
 
-go 1.24.5
-
-toolchain go1.24.6
+go 1.24.6
 
 require (
 	github.com/deckarep/golang-set/v2 v2.8.0

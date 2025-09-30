@@ -26,7 +26,7 @@ var (
 
 // allowSourceBundleUpload checks if the stack configuration is in a state that allows uploading a new source bundle.
 func (r *stackMigrationResource) allowSourceBundleUpload(ctx context.Context, configuration *tfe.StackConfiguration) (bool, error) {
-	if configuration == nil || len(configuration.DeploymentNames) == 0 {
+	if configuration == nil {
 		tflog.Info(ctx, "Current stack configuration is either nil, has no deployments. allowing source bundle upload.")
 		return true, nil
 	}
@@ -39,7 +39,7 @@ func (r *stackMigrationResource) allowSourceBundleUpload(ctx context.Context, co
 	}
 
 	switch stackConfigurationStatus {
-	case tfe.StackConfigurationStatusConverged, tfe.StackConfigurationStatusCanceled, tfe.StackConfigurationStatusErrored:
+	case tfe.StackConfigurationStatusCanceled, tfe.StackConfigurationStatusErrored:
 		tflog.Info(ctx, fmt.Sprintf("Current stack configuration %s is in a terminal state (%s). Allowing source bundle upload.", configuration.ID, configuration.Status))
 		return true, nil
 	default:
@@ -392,11 +392,11 @@ func (r *stackMigrationResource) watchStackConfigurationUntilTerminalStatus(ctx 
 func (r *stackMigrationResource) continueWithStateUploadPostConfigUpload(currentConfigurationId string, currentConfigurationStatus tfe.StackConfigurationStatus) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	if currentConfigurationStatus == tfe.StackConfigurationStatusConverging || currentConfigurationStatus == tfe.StackConfigurationStatusConverged {
-		diags.AddError(
-			"Converged Stack Configuration Is Not Supported",
-			fmt.Sprintf("The current stack configuration %s has converged. The `tfmigrate_stack_migration` resource does not support state upload for converged stack configurations.", currentConfigurationId))
-	}
+	//if currentConfigurationStatus == tfe.StackConfigurationStatusConverging || currentConfigurationStatus == tfe.StackConfigurationStatusConverged {
+	//	diags.AddError(
+	//		"Converged Stack Configuration Is Not Supported",
+	//		fmt.Sprintf("The current stack configuration %s has converged. The `tfmigrate_stack_migration` resource does not support state upload for converged stack configurations.", currentConfigurationId))
+	//}
 
 	if slices.Contains(noStateConversionOpStatuses, currentConfigurationStatus) {
 		diags.AddWarning(

@@ -316,9 +316,14 @@ func (r *stackMigrationResource) uploadStackStateFile(ctx context.Context, fileP
 		diags.AddError("Failed to open stack state file", fmt.Sprintf("Error opening stack state file %s: %v", filePath, err))
 		return diags
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			tflog.Error(ctx, fmt.Sprintf("Failed to close stack state file %s: %v", filePath, err))
+		}
+	}(file)
 
-	if err := r.tfeClient.StackSources.UploadTarGzip(ctx, uploadUrl, file); err != nil {
+	if err := r.tfeClient.StackConfigurations.UploadTarGzip(ctx, uploadUrl, file); err != nil {
 		diags.AddError("Failed to upload stack state file", fmt.Sprintf("Error uploading stack state file to %s: %v", uploadUrl, err))
 		return diags
 	}

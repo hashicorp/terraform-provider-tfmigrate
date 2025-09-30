@@ -54,7 +54,7 @@ type TfeUtil interface {
 	NewClient(config *tfe.Config) (*tfe.Client, error)
 	AdvanceDeploymentRunStep(stepId string, client *tfe.Client) error
 	CalculateConfigFileHash(stackConfigFileAbsPath string) (string, error)
-	HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string
+	// HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string
 	PullAndSaveWorkspaceStateData(organizationName string, workspaceName string, client *tfe.Client) (string, error)
 	ReadDeploymentRunSteps(deploymentRunId string, httpClient httpUtil.Client, tfeConfig *tfe.Config) ([]models.StackDeploymentStep, error)
 	ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error)
@@ -67,7 +67,7 @@ type TfeUtil interface {
 	ReadWorkspaceByName(organizationName, workspaceName string, client *tfe.Client) (*tfe.Workspace, error)
 	RerunDeploymentGroup(stackDeploymentGroupId string, deploymentNames []string, client *tfe.Client) error
 	StackConfigurationHasRunningDeploymentGroups(stackConfigurationId string, client *tfe.Client) (bool, error)
-	StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error)
+	//StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error)
 	UpdateContext(ctx context.Context)
 	UploadStackConfigFile(stackId string, configFileDirAbsPath string, client *tfe.Client) (string, error)
 	WatchStackConfigurationUntilTerminalStatus(stackConfigurationId string, client *tfe.Client) (tfe.StackConfigurationStatus, diag.Diagnostics)
@@ -153,38 +153,38 @@ func (u *tfeUtil) NewClient(config *tfe.Config) (*tfe.Client, error) {
 }
 
 // HandleConvergingStatus handles the converging status of a stack configuration.
-func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string {
-	tflog.Debug(u.ctx, fmt.Sprintf("Handling converging status for stack configuration ID: %s", currentConfigurationId))
-	ctx, cancel := context.WithTimeout(u.ctx, configConvergenceTimeout)
-	defer cancel()
-	resultChan := pollConvergingConfigurationsForRunningStackPlans(ctx, currentConfigurationId, client)
-	for result := range resultChan {
-		if ctx.Err() != nil {
-			tflog.Warn(u.ctx, fmt.Sprintf("Polling cancelled or timed out for stack configuration %s: %v", currentConfigurationId, ctx.Err()))
-			break
-		}
-
-		if result.Err != nil {
-			tflog.Error(u.ctx, fmt.Sprintf("Error polling stack plans for stack configuration %s: %v", currentConfigurationId, result.Err))
-			break
-		}
-
-		if result.Status == StatusStackPlanInProgress || result.Status == StatusAwaiting {
-			tflog.Info(u.ctx, fmt.Sprintf("The current stack configuration %s is still in progress or awaiting approval, check ui", currentConfigurationId))
-			tflog.Debug(u.ctx, fmt.Sprintf("Continuing to poll stack plans for stack configuration %s", currentConfigurationId))
-			continue
-		}
-	}
-
-	// get the current stack configuration
-	stackConfiguration, err := client.StackConfigurations.Read(u.ctx, currentConfigurationId)
-	if err != nil || stackConfiguration == nil {
-		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack configuration %s, err: %v", currentConfigurationId, err))
-		return ""
-	}
-
-	return stackConfiguration.Status
-}
+//func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string {
+//	tflog.Debug(u.ctx, fmt.Sprintf("Handling converging status for stack configuration ID: %s", currentConfigurationId))
+//	ctx, cancel := context.WithTimeout(u.ctx, configConvergenceTimeout)
+//	defer cancel()
+//	resultChan := pollConvergingConfigurationsForRunningStackPlans(ctx, currentConfigurationId, client)
+//	for result := range resultChan {
+//		if ctx.Err() != nil {
+//			tflog.Warn(u.ctx, fmt.Sprintf("Polling cancelled or timed out for stack configuration %s: %v", currentConfigurationId, ctx.Err()))
+//			break
+//		}
+//
+//		if result.Err != nil {
+//			tflog.Error(u.ctx, fmt.Sprintf("Error polling stack plans for stack configuration %s: %v", currentConfigurationId, result.Err))
+//			break
+//		}
+//
+//		if result.Status == StatusStackPlanInProgress || result.Status == StatusAwaiting {
+//			tflog.Info(u.ctx, fmt.Sprintf("The current stack configuration %s is still in progress or awaiting approval, check ui", currentConfigurationId))
+//			tflog.Debug(u.ctx, fmt.Sprintf("Continuing to poll stack plans for stack configuration %s", currentConfigurationId))
+//			continue
+//		}
+//	}
+//
+//	// get the current stack configuration
+//	stackConfiguration, err := client.StackConfigurations.Read(u.ctx, currentConfigurationId)
+//	if err != nil || stackConfiguration == nil {
+//		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack configuration %s, err: %v", currentConfigurationId, err))
+//		return ""
+//	}
+//
+//	return stackConfiguration.Status
+//}
 
 // PullAndSaveWorkspaceStateData pulls the state data from a workspace and saves it to a local file.
 func (u *tfeUtil) PullAndSaveWorkspaceStateData(organizationName string, workspaceName string, client *tfe.Client) (string, error) {
@@ -582,18 +582,18 @@ func (u *tfeUtil) StackConfigurationHasRunningDeploymentGroups(stackConfiguratio
 }
 
 // StackConfigurationHasRunningPlan checks if the stack configuration has any running plans.
-func (u *tfeUtil) StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error) {
-	stackPlanOpts := &tfe.StackPlansListOptions{
-		Status: tfe.StackPlansStatusFilterRunning,
-	}
-	stackPlans, err := client.StackPlans.ListByConfiguration(u.ctx, stackConfigurationId, stackPlanOpts)
-	if err != nil {
-		tflog.Error(u.ctx, fmt.Sprintf("Error listing stack plans for stack configuration %s: %v", stackConfigurationId, err))
-		return false, fmt.Errorf("error listing stack plans for stack configuration %s, err: %v", stackConfigurationId, err)
-	}
-
-	return len(stackPlans.Items) > 0, nil
-}
+//func (u *tfeUtil) StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error) {
+//	stackPlanOpts := &tfe.StackPlansListOptions{
+//		Status: tfe.StackPlansStatusFilterRunning,
+//	}
+//	stackPlans, err := client.StackPlans.ListByConfiguration(u.ctx, stackConfigurationId, stackPlanOpts)
+//	if err != nil {
+//		tflog.Error(u.ctx, fmt.Sprintf("Error listing stack plans for stack configuration %s: %v", stackConfigurationId, err))
+//		return false, fmt.Errorf("error listing stack plans for stack configuration %s, err: %v", stackConfigurationId, err)
+//	}
+//
+//	return len(stackPlans.Items) > 0, nil
+//}
 
 // UpdateContext updates the context for the TFE utility.
 func (u *tfeUtil) UpdateContext(ctx context.Context) {
@@ -616,7 +616,7 @@ func (u *tfeUtil) UploadStackConfigFile(stackId string, configFileDirAbsPath str
 	}
 
 	// Read the stack to get the latest stack configuration ID after uploading the stack source.
-	stackRead, err := client.Stacks.Read(u.ctx, stackId, nil)
+	stackRead, err := client.Stacks.Read(u.ctx, stackId)
 	if err != nil || stackRead == nil {
 		tflog.Error(u.ctx, fmt.Sprintf("Error reading stack %s after uploading stack configuration file: %v", stackId, err))
 		err = u.handleTfeClientResourceReadError(err)
@@ -692,12 +692,12 @@ func (u *tfeUtil) WatchStackConfigurationUntilTerminalStatus(stackConfigurationI
 func (u *tfeUtil) handleCurrentConfigurationStatus(stackConfigurationID string, currentStatus tfe.StackConfigurationStatus) (string, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	switch currentStatus {
-	case tfe.StackConfigurationStatusConverged:
-		tflog.Info(u.ctx, fmt.Sprintf("Stack configuration %s has converged", stackConfigurationID))
-		return currentStatus.String(), diags
-	case tfe.StackConfigurationStatusConverging:
-		tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s is converging", stackConfigurationID))
-		return currentStatus.String(), diags
+	//case tfe.StackConfigurationStatusConverged:
+	//	tflog.Info(u.ctx, fmt.Sprintf("Stack configuration %s has converged", stackConfigurationID))
+	//	return currentStatus.String(), diags
+	//case tfe.StackConfigurationStatusConverging:
+	//	tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s is converging", stackConfigurationID))
+	//	return currentStatus.String(), diags
 	case tfe.StackConfigurationStatusErrored:
 		tflog.Error(u.ctx, fmt.Sprintf("Stack configuration %s errored", stackConfigurationID))
 		diags.AddError("Stack configuration errored", fmt.Sprintf("Stack configuration %s entered error state", stackConfigurationID))
@@ -761,75 +761,75 @@ func (u *tfeUtil) handleTfeClientResourceReadError(err error) error {
 }
 
 // pollConvergingConfigurationsForRunningStackPlans polls the TFE API to fetch running stack plans associated with a converging stack configuration.
-func pollConvergingConfigurationsForRunningStackPlans(ctx context.Context, convergingStackConfigurationId string, tfeClient *tfe.Client) <-chan PollResult { // nosonar
-	resultChan := make(chan PollResult)
-	stackPlanOpts := &tfe.StackPlansListOptions{
-		Status: tfe.StackPlansStatusFilterRunning,
-	}
-
-	go func() {
-		defer close(resultChan)
-
-		ticker := time.NewTicker(stackPlanPollInterval)
-		defer ticker.Stop()
-
-		consecutiveEmpty := 0
-
-		for {
-			select {
-			case <-ctx.Done():
-				resultChan <- PollResult{
-					Status: StatusTimeout,
-					Err:    fmt.Errorf("polling timed out or cancelled: %w", ctx.Err()),
-				}
-				return
-
-			case <-ticker.C:
-
-				stackPlans, err := tfeClient.StackPlans.ListByConfiguration(ctx, convergingStackConfigurationId, stackPlanOpts)
-				if err != nil {
-					// If there is an error while listing stack plans, we return an API error status.
-					resultChan <- PollResult{
-						Status: StatusAPIError,
-						Err:    fmt.Errorf("API error during polling: %w", err),
-					}
-					return
-				}
-
-				if len(stackPlans.Items) == 0 {
-					consecutiveEmpty++
-				} else {
-					consecutiveEmpty = 0
-				}
-
-				// If we have consecutive empty results for 3 attempts, we consider it a terminal state.
-				if consecutiveEmpty >= emptyPollCountThreshold {
-					resultChan <- PollResult{
-						Status: StatusStackPlanIsTerminal,
-						Err:    nil,
-					}
-					return
-				}
-
-				if len(stackPlans.Items) > 0 {
-					resultChan <- PollResult{
-						Status: StatusStackPlanInProgress,
-						Err:    nil,
-					}
-				} else {
-					// If there are no stack plans, we emmit an awaiting status 3 times before considering it a terminal state.
-					resultChan <- PollResult{
-						Status: StatusAwaiting,
-						Err:    nil,
-					}
-				}
-			}
-		}
-	}()
-
-	return resultChan
-
-}
+//func pollConvergingConfigurationsForRunningStackPlans(ctx context.Context, convergingStackConfigurationId string, tfeClient *tfe.Client) <-chan PollResult { // nosonar
+//	resultChan := make(chan PollResult)
+//	stackPlanOpts := &tfe.StackPlansListOptions{
+//		Status: tfe.StackPlansStatusFilterRunning,
+//	}
+//
+//	go func() {
+//		defer close(resultChan)
+//
+//		ticker := time.NewTicker(stackPlanPollInterval)
+//		defer ticker.Stop()
+//
+//		consecutiveEmpty := 0
+//
+//		for {
+//			select {
+//			case <-ctx.Done():
+//				resultChan <- PollResult{
+//					Status: StatusTimeout,
+//					Err:    fmt.Errorf("polling timed out or cancelled: %w", ctx.Err()),
+//				}
+//				return
+//
+//			case <-ticker.C:
+//
+//				stackPlans, err := tfeClient.StackPlans.ListByConfiguration(ctx, convergingStackConfigurationId, stackPlanOpts)
+//				if err != nil {
+//					// If there is an error while listing stack plans, we return an API error status.
+//					resultChan <- PollResult{
+//						Status: StatusAPIError,
+//						Err:    fmt.Errorf("API error during polling: %w", err),
+//					}
+//					return
+//				}
+//
+//				if len(stackPlans.Items) == 0 {
+//					consecutiveEmpty++
+//				} else {
+//					consecutiveEmpty = 0
+//				}
+//
+//				// If we have consecutive empty results for 3 attempts, we consider it a terminal state.
+//				if consecutiveEmpty >= emptyPollCountThreshold {
+//					resultChan <- PollResult{
+//						Status: StatusStackPlanIsTerminal,
+//						Err:    nil,
+//					}
+//					return
+//				}
+//
+//				if len(stackPlans.Items) > 0 {
+//					resultChan <- PollResult{
+//						Status: StatusStackPlanInProgress,
+//						Err:    nil,
+//					}
+//				} else {
+//					// If there are no stack plans, we emmit an awaiting status 3 times before considering it a terminal state.
+//					resultChan <- PollResult{
+//						Status: StatusAwaiting,
+//						Err:    nil,
+//					}
+//				}
+//			}
+//		}
+//	}()
+//
+//	return resultChan
+//
+//}
 
 func getDetailsFromDiagnosticData(diagnosticData models.StackDiagnostic) string {
 	var details []string
