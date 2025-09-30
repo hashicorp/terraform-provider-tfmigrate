@@ -30,8 +30,8 @@ import (
 
 var (
 	configConvergenceTimeout = 5 * time.Minute // configConvergenceTimeout defines the maximum time to wait for a stack configuration to converge.
-	stackPlanPollInterval    = 5 * time.Second // stackPlanPollInterval defines the interval at which to poll for stack plans.
-	emptyPollCountThreshold  = 6               // emptyPollCountThreshold defines the number of consecutive empty results before considering the stack plan polling as terminal.
+	// stackPlanPollInterval    = 5 * time.Second // stackPlanPollInterval defines the interval at which to poll for stack plans.
+	// emptyPollCountThreshold = 6 // emptyPollCountThreshold defines the number of consecutive empty results before considering the stack plan polling as terminal.
 )
 
 const (
@@ -67,7 +67,7 @@ type TfeUtil interface {
 	ReadWorkspaceByName(organizationName, workspaceName string, client *tfe.Client) (*tfe.Workspace, error)
 	RerunDeploymentGroup(stackDeploymentGroupId string, deploymentNames []string, client *tfe.Client) error
 	StackConfigurationHasRunningDeploymentGroups(stackConfigurationId string, client *tfe.Client) (bool, error)
-	//StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error)
+	// StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error)
 	UpdateContext(ctx context.Context)
 	UploadStackConfigFile(stackId string, configFileDirAbsPath string, client *tfe.Client) (string, error)
 	WatchStackConfigurationUntilTerminalStatus(stackConfigurationId string, client *tfe.Client) (tfe.StackConfigurationStatus, diag.Diagnostics)
@@ -153,7 +153,7 @@ func (u *tfeUtil) NewClient(config *tfe.Config) (*tfe.Client, error) {
 }
 
 // HandleConvergingStatus handles the converging status of a stack configuration.
-//func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string {
+// func (u *tfeUtil) HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string {
 //	tflog.Debug(u.ctx, fmt.Sprintf("Handling converging status for stack configuration ID: %s", currentConfigurationId))
 //	ctx, cancel := context.WithTimeout(u.ctx, configConvergenceTimeout)
 //	defer cancel()
@@ -582,7 +582,7 @@ func (u *tfeUtil) StackConfigurationHasRunningDeploymentGroups(stackConfiguratio
 }
 
 // StackConfigurationHasRunningPlan checks if the stack configuration has any running plans.
-//func (u *tfeUtil) StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error) {
+// func (u *tfeUtil) StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error) {
 //	stackPlanOpts := &tfe.StackPlansListOptions{
 //		Status: tfe.StackPlansStatusFilterRunning,
 //	}
@@ -692,10 +692,10 @@ func (u *tfeUtil) WatchStackConfigurationUntilTerminalStatus(stackConfigurationI
 func (u *tfeUtil) handleCurrentConfigurationStatus(stackConfigurationID string, currentStatus tfe.StackConfigurationStatus) (string, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	switch currentStatus {
-	//case tfe.StackConfigurationStatusConverged:
+	// case tfe.StackConfigurationStatusConverged:
 	//	tflog.Info(u.ctx, fmt.Sprintf("Stack configuration %s has converged", stackConfigurationID))
 	//	return currentStatus.String(), diags
-	//case tfe.StackConfigurationStatusConverging:
+	// case tfe.StackConfigurationStatusConverging:
 	//	tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s is converging", stackConfigurationID))
 	//	return currentStatus.String(), diags
 	case tfe.StackConfigurationStatusErrored:
@@ -761,7 +761,7 @@ func (u *tfeUtil) handleTfeClientResourceReadError(err error) error {
 }
 
 // pollConvergingConfigurationsForRunningStackPlans polls the TFE API to fetch running stack plans associated with a converging stack configuration.
-//func pollConvergingConfigurationsForRunningStackPlans(ctx context.Context, convergingStackConfigurationId string, tfeClient *tfe.Client) <-chan PollResult { // nosonar
+// func pollConvergingConfigurationsForRunningStackPlans(ctx context.Context, convergingStackConfigurationId string, tfeClient *tfe.Client) <-chan PollResult { // nosonar
 //	resultChan := make(chan PollResult)
 //	stackPlanOpts := &tfe.StackPlansListOptions{
 //		Status: tfe.StackPlansStatusFilterRunning,
