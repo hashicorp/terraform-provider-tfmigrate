@@ -392,7 +392,7 @@ func (r *stackMigrationResource) watchStackConfigurationUntilTerminalStatus(ctx 
 func (r *stackMigrationResource) continueWithStateUploadPostConfigUpload(currentConfigurationId string, currentConfigurationStatus tfe.StackConfigurationStatus) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	//if currentConfigurationStatus == tfe.StackConfigurationStatusConverging || currentConfigurationStatus == tfe.StackConfigurationStatusConverged {
+	// if currentConfigurationStatus == tfe.StackConfigurationStatusConverging || currentConfigurationStatus == tfe.StackConfigurationStatusConverged {
 	//	diags.AddError(
 	//		"Converged Stack Configuration Is Not Supported",
 	//		fmt.Sprintf("The current stack configuration %s has converged. The `tfmigrate_stack_migration` resource does not support state upload for converged stack configurations.", currentConfigurationId))
