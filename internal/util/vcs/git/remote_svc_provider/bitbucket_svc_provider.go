@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
-	"time"
-
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	"terraform-provider-tfmigrate/internal/constants"
 	"terraform-provider-tfmigrate/internal/util/net"
@@ -21,7 +20,7 @@ type bitbucketSvcProvider struct {
 	ctx           context.Context
 	git           git.GitUtil
 	bitbucketUtil git.BitbucketUtil
-	httpClient    net.HttpClient
+	httpClient    net.Client
 }
 type Response struct {
 	*http.Response
@@ -38,7 +37,7 @@ func NewBitbucketSvcProvider(ctx context.Context, gitUtil git.GitUtil, bitbucket
 		ctx:           ctx,
 		git:           gitUtil,
 		bitbucketUtil: bitbucketUtil,
-		httpClient:    net.NewHttpClient(30 * time.Second),
+		httpClient:    net.NewClient(ctx),
 	}
 }
 
@@ -129,24 +128,40 @@ func (b *bitbucketSvcProvider) CreatePullRequest(params git.PullRequestParams) (
 		git.ContentTypeHeader:   git.ApplicationJSONType,
 	}
 
-	statusCode, responseBody, _, err := b.httpClient.DoRequest(b.ctx, http.MethodPost, url, headers, strings.NewReader(string(jsonPayload)))
+	postRequest := net.RequestOptions{
+		Method:  http.MethodPost,
+		URL:     url,
+		Headers: headers,
+		Body:    strings.NewReader(string(jsonPayload)),
+	}
+
+	resp, err := b.httpClient.Do(postRequest)
 	if err != nil {
 		return "", fmt.Errorf(constants.ErrBitbucketSendHTTPRequest, err)
 	}
 
-	if statusCode < 200 || statusCode >= 300 {
+	defer resp.Body.Close()
+
+	responseBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	responseBody := string(responseBytes)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		tflog.Error(b.ctx, git.CreatePullRequestFailedLog, map[string]any{
 			"owner":      owner,
 			"repo":       repo,
 			"title":      params.Title,
-			"statusCode": statusCode,
-			"body":       string(responseBody),
+			"statusCode": resp.StatusCode,
+			"body":       responseBody,
 		})
-		return "", fmt.Errorf(constants.ErrBitbucketCreatePullRequestFailed, string(responseBody))
+		return "", fmt.Errorf(constants.ErrBitbucketCreatePullRequestFailed, responseBody)
 	}
 
 	var result map[string]any
-	if err := json.Unmarshal(responseBody, &result); err != nil {
+	if err := json.Unmarshal(responseBytes, &result); err != nil {
 		return "", fmt.Errorf(constants.ErrBitbucketParseResponse, err)
 	}
 

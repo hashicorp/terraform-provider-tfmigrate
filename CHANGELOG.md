@@ -1,3 +1,35 @@
+## 1.3.0-alpha20250930 (30th Sep 2025)
+
+### NOTES
+This is an alpha release for testing HCP Terraform Workpsaces to HCP Terraform Stacks migration support.
+
+
+### Bugs and Security Fixes
+- Fixes panic bug on empty state during HCP Terraform Workspace to Stacks Migration [COMMIT](https://github.com/hashicorp/terraform-provider-tfmigrate/commit/fa921f6329f7c9055cd769d0be92bf33fb6bc3a3)
+
+More details will come in the actual GA release.
+
+## 1.3.0-alpha20250917 (17th Sep 2025)
+
+### NOTES
+This is an alpha release for testing HCP Terraform Workpsaces to HCP Terraform Stacks migration support.
+
+
+### Bugs and Security Fixes
+- update terraform-migrate-utility and fixed issues with terraform state list command [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/219)
+
+More details will come in the actual GA release.
+
+## 1.3.0-alpha20250916 (16th Sep 2025)
+
+### NOTES
+This is an alpha release for testing HCP Terraform Workpsaces to HCP Terraform Stacks migration support.
+- Added support for migrating HCP Terraform Workspaces to HCP Terraform Stacks. [PR](https://github.com/hashicorp/terraform-provider-tfmigrate/pull/193)
+- Updated Go version to 1.24.6 [COMMIT](https://github.com/hashicorp/terraform-provider-tfmigrate/commit/3e0b328977e7ccc12ad5d3b4719b4c69d91b9fe0)
+- Fixed security vulnerabilities and bumped dependencies.
+
+More details will come in the actual GA release.
+
 ## 1.2.0 (19th Aug 2025)
 
 ### NOTES

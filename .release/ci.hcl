@@ -8,7 +8,7 @@ project "terraform-provider-tfmigrate" {
   team = "team-tf-migration"
 
   slack {
-    notification_channel = "C09LDJ2BBMF" // #team-tf-migration-release-announcements
+    notification_channel = "C07FHJ51DQV" // #team-tf-migration-release-announcements
   }
 
   github {

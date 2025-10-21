@@ -9,6 +9,8 @@ var (
 	GitLab                    GitServiceProvider = "gitlab.com"
 	Bitbucket                 GitServiceProvider = "bitbucket.org"
 	UnknownGitServiceProvider GitServiceProvider = "unknown"
+
+	TfRemoteScheme = `https`
 )
 
 const (

@@ -2,60 +2,128 @@ package net
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
+	cleanhttp "github.com/hashicorp/go-cleanhttp"
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
+type MethodType string
+
+const (
+	defaultTimeout      = 15 * time.Second
+	defaultRetryMax     = 3
+	defaultRetryWaitMin = 100 * time.Millisecond
+	defaultRetryWaitMax = 2 * time.Second
+
+	// HTTP methods.
+	MethodGet    MethodType = "GET"
+	MethodPost   MethodType = "POST"
+	MethodPut    MethodType = "PUT"
+	MethodDelete MethodType = "DELETE"
+)
+
+var allowedMethods = []string{string(MethodGet), string(MethodPost), string(MethodPut), string(MethodDelete)}
+
+type Client interface {
+	Do(opts RequestOptions) (*http.Response, error)
+	SetTlsConfig(tlsConfig *tls.Config) error
+	UpdateContext(ctx context.Context)
+}
+
 type httpClient struct {
+	ctx    context.Context
 	client *retryablehttp.Client
 }
 
-type HttpClient interface {
-	DoRequest(ctx context.Context, method, url string, headers map[string]string, body io.Reader) (int, []byte, http.Header, error)
+type RequestOptions struct {
+	Method      MethodType
+	URL         string
+	Headers     map[string]string
+	QueryParams map[string]string
+	Body        io.Reader
 }
 
-func NewHttpClient(timeout time.Duration) HttpClient {
+// NewClient creates an HTTP client with safe defaults (via cleanhttp) and custom timeout.
+func NewClient(ctx context.Context) Client {
 	retryClient := retryablehttp.NewClient()
-	retryClient.HTTPClient.Timeout = timeout
-	retryClient.RetryMax = 3
-	retryClient.RetryWaitMin = 1 * time.Second
-	retryClient.RetryWaitMax = 5 * time.Second
-	retryClient.Logger = nil // Disable retryablehttp logging
-
+	retryClient.HTTPClient = &http.Client{
+		Timeout:   defaultTimeout,
+		Transport: cleanhttp.DefaultPooledTransport(),
+	}
+	retryClient.RetryMax = defaultRetryMax
+	retryClient.RetryWaitMin = defaultRetryWaitMin
+	retryClient.RetryWaitMax = defaultRetryWaitMax
 	return &httpClient{
+		ctx:    ctx,
 		client: retryClient,
 	}
 }
 
-// DoRequest executes an HTTP request with context, method, URL, headers, and body.
-func (hc *httpClient) DoRequest(ctx context.Context, method, url string, headers map[string]string, body io.Reader) (int, []byte, http.Header, error) {
-	// Create the request
-	req, err := retryablehttp.NewRequestWithContext(ctx, method, url, body)
+func (hc *httpClient) Do(opts RequestOptions) (*http.Response, error) {
+	// Validate HTTP method
+	method := strings.ToUpper(string(opts.Method))
+	if !isValidMethod(method) {
+		return nil, fmt.Errorf("unsupported HTTP method: %s. Allowed methods: %v", opts.Method, allowedMethods)
+	}
+
+	reqURL, err := url.Parse(opts.URL)
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
-	// Add headers to the request
-	for key, value := range headers {
-		req.Header.Set(key, value)
+	if len(opts.QueryParams) > 0 {
+		q := reqURL.Query()
+		for k, v := range opts.QueryParams {
+			q.Set(k, v)
+		}
+		reqURL.RawQuery = q.Encode()
 	}
 
-	// Execute the request
+	req, err := retryablehttp.NewRequestWithContext(hc.ctx, string(opts.Method), reqURL.String(), opts.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	for k, v := range opts.Headers {
+		req.Header.Set(k, v)
+	}
+
 	resp, err := hc.client.Do(req)
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read the response body
-	responseBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return resp.StatusCode, nil, resp.Header, fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("error making HTTP request: %w", err)
 	}
 
-	return resp.StatusCode, responseBytes, resp.Header, nil
+	return resp, nil
+}
+
+// SetTlsConfig sets the TLS configuration for the HTTP client.
+func (hc *httpClient) SetTlsConfig(tlsConfig *tls.Config) error {
+	if tlsConfig == nil {
+		return fmt.Errorf("TLS configuration cannot be nil")
+	}
+
+	transport := hc.client.HTTPClient.Transport.(*http.Transport)
+	transport.TLSClientConfig = tlsConfig
+	return nil
+}
+
+func isValidMethod(method string) bool {
+	for _, allowed := range allowedMethods {
+		if method == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+// UpdateContext updates the context for the HTTP client.
+func (hc *httpClient) UpdateContext(ctx context.Context) {
+	hc.ctx = ctx
 }

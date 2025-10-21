@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -15,71 +14,38 @@ import (
 	netMock "terraform-provider-tfmigrate/_mocks/net_mocks"
 )
 
-// mockHttpClientWrapper implements the HttpClient interface for testing.
-type mockHttpClientWrapper struct {
-	client *http.Client
-}
-
-func (m *mockHttpClientWrapper) DoRequest(ctx context.Context, method, url string, headers map[string]string, body io.Reader) (int, []byte, http.Header, error) {
-	// Create the request
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
-	if err != nil {
-		return 0, nil, nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add headers to the request
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	// Execute the request using the mock client
-	resp, err := m.client.Do(req)
-	if err != nil {
-		return 0, nil, nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read the response body
-	responseBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return resp.StatusCode, nil, resp.Header, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return resp.StatusCode, responseBytes, resp.Header, nil
-}
-
 const (
 	badCredentialsBodyBitbucket = `{
-  "type": "error",
-  "error": {
-    "message": "Access token expired. Use your refresh token to obtain a new access token."
-  }
+ "type": "error",
+ "error": {
+   "message": "Access token expired. Use your refresh token to obtain a new access token."
+ }
 }`
 
 	repoDoesNotExistBodyBitbucket = `{
-  "type": "error",
-  "error": {
-    "message": "Repository test-workspace/test-repo not found"
-  }
+ "type": "error",
+ "error": {
+   "message": "Repository test-workspace/test-repo not found"
+ }
 }`
 
 	resourceProtectedBySsoBodyBitbucket = `{
-  "type": "error",
-  "error": {
-    "message": "Access denied. You must have write access to this repository."
-  }
+ "type": "error",
+ "error": {
+   "message": "Access denied. You must have write access to this repository."
+ }
 }`
 
 	repoDetailsReadOnlyBitbucket = `{
-    "name": "test-repo",
-    "full_name": "test-workspace/test-repo",
-    "private": true
+   "name": "test-repo",
+   "full_name": "test-workspace/test-repo",
+   "private": true
 }`
 
 	repoDetailsReadWriteBitbucket = `{
-    "name": "test-repo",
-    "full_name": "test-workspace/test-repo",
-    "private": true
+   "name": "test-repo",
+   "full_name": "test-workspace/test-repo",
+   "private": true
 }`
 )
 
@@ -142,16 +108,10 @@ func TestCheckTokenTypeAndScopes(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
-			mockHttpClient := getHttpClientWithMockRoundTripper()
-			mockTransport := mockHttpClient.Transport.(*netMock.MockRoundTripper)
-
-			// Create a mock HttpClient that wraps the mock transport
-			mockHttpClientWrapper := &mockHttpClientWrapper{
-				client: mockHttpClient,
-			}
+			mockHttpClient := netMock.NewMockClient(t)
 
 			bitbucketUtil := &bitbucketUtil{
-				httpClient: mockHttpClientWrapper,
+				httpClient: mockHttpClient,
 				ctx:        ctx,
 			}
 			r := require.New(t)
@@ -159,44 +119,44 @@ func TestCheckTokenTypeAndScopes(t *testing.T) {
 			// setting up the behavior of the mocks
 			func() {
 				if name == "unknown error" {
-					mockTransport.
-						On("RoundTrip", mock.AnythingOfType("*http.Request")).
+					mockHttpClient.
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(nil, errors.New("unknown error"))
 				}
 
 				if name == "expired token" {
-					mockTransport.
-						On("RoundTrip", mock.AnythingOfType("*http.Request")).
+					mockHttpClient.
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusUnauthorized, badCredentialsBodyBitbucket, "", ""), nil)
 				}
 
 				if name == "private repo" {
-					mockTransport.
-						On("RoundTrip", mock.AnythingOfType("*http.Request")).
+					mockHttpClient.
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusNotFound, repoDoesNotExistBodyBitbucket, "", ""), nil)
 				}
 
 				if name == "token not authorized to access org" {
-					mockTransport.
-						On("RoundTrip", mock.AnythingOfType("*http.Request")).
+					mockHttpClient.
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusForbidden, resourceProtectedBySsoBodyBitbucket, "", ""), nil)
 				}
 
 				if name == "success token has repository and pullrequest scopes" {
-					mockTransport.
-						On("RoundTrip", mock.AnythingOfType("*http.Request")).
+					mockHttpClient.
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusOK, repoDetailsReadOnlyBitbucket, "repository pullrequest", "repo_access_token"), nil)
 				}
 
 				if name == "success token has write scopes" {
-					mockTransport.
-						On("RoundTrip", mock.AnythingOfType("*http.Request")).
+					mockHttpClient.
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusOK, repoDetailsReadWriteBitbucket, "repository:write pullrequest:write", "repo_access_token"), nil)
 				}
 
 				if name == "success with missing scopes header" {
-					mockTransport.
-						On("RoundTrip", mock.AnythingOfType("*http.Request")).
+					mockHttpClient.
+						On("Do", mock.AnythingOfType("net.RequestOptions")).
 						Return(getBitbucketMockResponse(http.StatusOK, repoDetailsReadOnlyBitbucket, "", "repo_access_token"), nil)
 				}
 			}()
