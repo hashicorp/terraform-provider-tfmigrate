@@ -1,3 +1,27 @@
+## 2.0.0-beta1 (6th Nov 2025)
+
+### NOTES
+
+**Beta Release for HCP Terraform Stacks Migration:**
+
+This release marks the beta phase for HCP Terraform Workspaces to HCP Terraform Stacks migration support. Users are encouraged to test and provide feedback.
+We have added a new resource called `tfmigrate_stack_migration` to facilitate the migration of related HCP Terraform Workspaces to HCP Terraform Stacks.
+You can find more details about this resource in the documentation [here](https://registry.terraform.io/providers/hashicorp/tfmigrate/latest/docs/resources/stack_migration).
+
+### Bugs and Security Fixes
+Fixed the following issues:
+
+- [GO-2025-4006](https://osv.dev/vulnerability/GO-2025-4006)
+- [GO-2025-4007](https://osv.dev/vulnerability/GO-2025-4007)
+- [GO-2025-4008](https://osv.dev/vulnerability/GO-2025-4008)
+- [GO-2025-4009](https://osv.dev/vulnerability/GO-2025-4009)
+- [GO-2025-4010](https://osv.dev/vulnerability/GO-2025-4010)
+- [GO-2025-4011](https://osv.dev/vulnerability/GO-2025-4011)
+- [GO-2025-4012](https://osv.dev/vulnerability/GO-2025-4012)
+- [GO-2025-4013](https://osv.dev/vulnerability/GO-2025-4013)
+- [GO-2025-4014](https://osv.dev/vulnerability/GO-2025-4014)
+- [GO-2025-4015](https://osv.dev/vulnerability/GO-2025-4015)
+
 ## 1.3.0-alpha20250930 (30th Sep 2025)
 
 ### NOTES
