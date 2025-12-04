@@ -11,6 +11,7 @@ testacc:
 MAIN_PACKAGE_PATH := ./
 BINARY_NAME := terraform-provider-tfmigrate
 VERSION := 1.1.0
+HOME_TFRC := $(HOME)/.terraform.d/credentials.tfrc.json
 
 # ==================================================================================== #
 # HELPERS
@@ -57,14 +58,28 @@ TFRC_PATH := $(CURDIR)/$(TFRC_FILE)
 # Target to generate the override tfrc file
 .PHONY: dev-override
 dev-override:
+	@echo "Creating $(TFRC_FILE)..."
 	@echo 'provider_installation {' > $(TFRC_FILE)
 	@echo '  dev_overrides {' >> $(TFRC_FILE)
 	@echo '    "hashicorp/tfmigrate" = "$(CURDIR)"' >> $(TFRC_FILE)
 	@echo '  }' >> $(TFRC_FILE)
 	@echo '  direct {}' >> $(TFRC_FILE)
 	@echo '}' >> $(TFRC_FILE)
-	@echo "Generated $(TFRC_FILE) with dev override for provider tfmigrate."
-	@echo "Use this file to override the provider installation during development by setting the TF_CLI_CONFIG_FILE environment variable using:"
+	@echo "" >> $(TFRC_FILE)
+
+	@echo "Adding consolidated credentials block..."
+	@echo "credentials {" >> $(TFRC_FILE)
+
+	@jq -r '.credentials | to_entries[] | .key' $(HOME_TFRC) | while read host; do \
+		echo "  \"$$host\" {" >> $(TFRC_FILE); \
+		jq -r ".credentials[\"$$host\"] | to_entries[] | \"    \(.key) = \\\"\(.value)\\\"\"" $(HOME_TFRC) >> $(TFRC_FILE); \
+		echo "  }" >> $(TFRC_FILE); \
+		echo "" >> $(TFRC_FILE); \
+	done
+
+	@echo "}" >> $(TFRC_FILE)
+	@echo ""
+	@echo "Generated $(TFRC_FILE) with dev override + ALL credentials under one block."
 	@echo "export TF_CLI_CONFIG_FILE=$(TFRC_PATH)"
 
 .PHONY: help
