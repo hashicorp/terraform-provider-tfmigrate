@@ -6,7 +6,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/go-git/go-git/v5 v5.16.4
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
-	github.com/hashicorp/go-tfe v1.95.0
+	github.com/hashicorp/go-tfe v1.97.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/terraform-exec v0.24.0
 	github.com/hashicorp/terraform-migrate-utility v0.0.3
@@ -69,7 +69,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/hashicorp/go-slug v0.16.8
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
-	github.com/hashicorp/go-version v1.7.0 // indirect
+	github.com/hashicorp/go-version v1.8.0 // indirect
 	github.com/hashicorp/hc-install v0.9.2 // indirect
 	github.com/hashicorp/jsonapi v1.5.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
