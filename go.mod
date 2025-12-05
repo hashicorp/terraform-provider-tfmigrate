@@ -4,7 +4,7 @@ go 1.24.9
 
 require (
 	github.com/deckarep/golang-set/v2 v2.8.0
-	github.com/go-git/go-git/v5 v5.16.3
+	github.com/go-git/go-git/v5 v5.16.4
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
 	github.com/hashicorp/go-tfe v1.95.0
 	github.com/hashicorp/hcl/v2 v2.24.0
