@@ -54,6 +54,9 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 	}
 
 	// 3. check if a rerun is needed
+	// the handleDeploymentGroupTerminalState function
+	// returns false if the deployment group is already succeeded or abandoned
+	// and true if the deployment group is failed and a rerun is triggered
 	deploymentGroupStatus := tfe.DeploymentGroupStatus(mostRecentDeploymentRun.StackDeploymentGroup.Status)
 	continueOnImport := r.handleDeploymentGroupTerminalState(ctx, deploymentGroupStatus, &migrationData, mostRecentDeploymentRun.StackDeploymentGroup.ID, deploymentName)
 	if !continueOnImport {
@@ -61,9 +64,8 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 	}
 
 	// In case of a failed deployment group,
-	// we need to trigger a rerun
-	// which creates new deployment runIds that is why we need to fetch the latest deployment run again
-
+	// we trigger a rerun from inside the handleDeploymentGroupTerminalState function
+	// which creates a new deployment runId that is why we need to fetch the latest deployment run again
 	if deploymentGroupStatus == tfe.DeploymentGroupStatusFailed {
 		continueToFetchDeploymentRunSteps, mostRecentDeploymentRun = r.getLatestDeploymentRun(ctx, deploymentName, &migrationData)
 
@@ -78,10 +80,15 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 	// 4. get the steps of the deployment run
 	deploymentRunSteps := r.fetchDeploymentRunStep(ctx, &migrationData, mostRecentDeploymentRun.ID, deploymentName)
 	if deploymentRunSteps == nil {
+		migrationData.DeploymentGroupData.Status = deploymentGroupStatus
+		migrationData.DeploymentGroupData.Id = mostRecentDeploymentRun.StackDeploymentGroup.ID
+		migrationData.FailureReason = "Failed to fetch deployment run steps, This could be due to deployment run not being created properly, If the issue persists please check your deployment config or workspace state data and retry or reach out to support."
 		return migrationData
 	}
 
 	// 5. Validate an allow-import step
+	// validate if an allow-import step is present, in its steps
+	// also checks if we need to call advance on the allow-import step
 	allowImportStep, allowImport, callAdvanceOnAllowImport := r.handleDeploymentRunStepsAllowImport(ctx, deploymentRunSteps, deploymentName, &migrationData)
 	if !allowImport {
 		return migrationData
@@ -211,9 +218,9 @@ func (r *stackMigrationResource) syncDeploymentGroupDataAfterStateImport(ctx con
 			status := tfe.DeploymentGroupStatus(latestDeploymentRun.StackDeploymentGroup.Status)
 			deploymentGroupId := latestDeploymentRun.StackDeploymentGroup.ID
 			tflog.Debug(ctx, fmt.Sprintf("Deployment group %s for deployment %s in stack %s is in %s status after state import advance.", deploymentGroupId, name, r.existingStack.Name, status))
+			migrationData.DeploymentGroupData.Status = status
 			switch status {
 			case tfe.DeploymentGroupStatusSucceeded:
-				migrationData.DeploymentGroupData.Status = status
 				tflog.Info(ctx, fmt.Sprintf(
 					"Deployment group %s in stack %s is in %s status after state import advance.",
 					name, r.existingStack.Name, status,
@@ -343,10 +350,20 @@ func (r *stackMigrationResource) handleDeploymentGroupTerminalState(ctx context.
 	}
 
 	if deploymentGroupStatus == tfe.DeploymentGroupStatusAbandoned {
-		errorMessage := fmt.Sprintf("Deployment group %s for deployment %s is in abandoned state, please fix the dployment config in the stack configuration files and reupload to trigger the process", deploymentGroupId, deploymentName)
-		tflog.Error(ctx, errorMessage)
-		migrationData.FailureReason = errorMessage
-		return false
+		if !r.retryAbandonedDeployments {
+			errorMessage := fmt.Sprintf("Deployment group %s for deployment %s is in abandoned state, please fix the dployment config in the stack configuration files and reupload to trigger the process, retry=%t", deploymentGroupId, deploymentName, r.retryAbandonedDeployments)
+			tflog.Error(ctx, errorMessage)
+			migrationData.FailureReason = errorMessage
+			return false
+		} else {
+			tflog.Warn(ctx, fmt.Sprintf("Deployment group %s for deployment %s is in abandoned state, rerunning the deployment-group, retry=%t", deploymentGroupId, deploymentName, r.retryAbandonedDeployments))
+			if err := r.tfeUtil.RerunDeploymentGroup(migrationData.DeploymentGroupData.Id, []string{deploymentName}, r.tfeClient); err != nil {
+				errorMessage := fmt.Sprintf("Error rerunning deployment group %s for deployment %s, error: %v", migrationData.DeploymentGroupData.Id, deploymentName, err)
+				tflog.Error(ctx, errorMessage)
+				migrationData.FailureReason = errorMessage
+				return false
+			}
+		}
 	}
 
 	if deploymentGroupStatus == tfe.DeploymentGroupStatusFailed {

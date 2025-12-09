@@ -1,7 +1,33 @@
 package stack
 
+import "github.com/hashicorp/go-tfe"
+
 const (
-	StackDeploymentRunApiPathTemplate     = "%s%sstacks/%s/stack-deployments/%s/stack-deployment-runs"
-	StackConfigDiagnosticsApiPathTemplate = "%s%sstack-configurations/%s/stack-diagnostics"
-	StackDeploymentStepApiPathTemplate    = "%s%sstack-deployment-runs/%s/stack-deployment-steps"
+	CurrentStackConfigIsNotValid             = "The stack %q in organization %q and project %q has an invalid latest stack configuration state. The configuration ID or status is empty."
+	StackConfigDiagnosticsApiPathTemplate    = "%s%sstack-configurations/%s/stack-diagnostics"
+	StackDeploymentRunApiPathTemplate        = "%s%sstacks/%s/stack-deployments/%s/stack-deployment-runs"
+	StackDeploymentStepApiPathTemplate       = "%s%sstack-deployment-runs/%s/stack-deployment-steps"
+	StackDploymentsByConfigIdApiPathTemplate = "%s%sstacks/%s/stack-deployments?filter[stack_configuration][id]=%s"
+)
+
+var (
+	RunningDeploymentGroupStatuses = []tfe.DeploymentGroupStatus{
+		tfe.DeploymentGroupStatusPreDeploying,
+		tfe.DeploymentGroupStatusPending,
+		tfe.DeploymentGroupStatusPreDeployingPendingOperator,
+		tfe.DeploymentGroupStatusAcquiringLock,
+		tfe.DeploymentGroupStatusDeploying,
+	}
+
+	RunningStackConfigurationStatuses = []tfe.StackConfigurationStatus{
+		tfe.StackConfigurationStatusPending,
+		tfe.StackConfigurationStatusQueued,
+		tfe.StackConfigurationStatusPreparing,
+		tfe.StackConfigurationStatusEnqueueing,
+	}
+
+	ErroredOrCancelledStackConfigurationStatuses = []tfe.StackConfigurationStatus{
+		tfe.StackConfigurationStatusErrored,
+		tfe.StackConfigurationStatusCanceled,
+	}
 )

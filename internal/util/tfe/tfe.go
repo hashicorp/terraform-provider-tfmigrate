@@ -7,11 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	cliErrs "terraform-provider-tfmigrate/internal/cli_errors"
 	stackConstants "terraform-provider-tfmigrate/internal/constants/stack"
 	"time"
@@ -21,6 +24,7 @@ import (
 	"terraform-provider-tfmigrate/internal/models"
 	httpUtil "terraform-provider-tfmigrate/internal/util/net"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	httpHeaders "github.com/go-http-utils/headers"
 	"github.com/hashicorp/go-slug"
 	"github.com/hashicorp/go-tfe"
@@ -55,6 +59,8 @@ type TfeUtil interface {
 	AdvanceDeploymentRunStep(stepId string, client *tfe.Client) error
 	CalculateConfigFileHash(stackConfigFileAbsPath string) (string, error)
 	// HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string
+	GetAllDeploymentNamesForAConfigId(stackId string, stackConfigurationId string, httpClient httpUtil.Client, config *tfe.Config) (mapset.Set[string], error)
+	GetDeploymentGroupSummaryByConfigID(stackConfigurationId string, client *tfe.Client) (*tfe.StackDeploymentGroupSummaryList, error)
 	PullAndSaveWorkspaceStateData(organizationName string, workspaceName string, client *tfe.Client) (string, error)
 	ReadDeploymentRunSteps(deploymentRunId string, httpClient httpUtil.Client, tfeConfig *tfe.Config) ([]models.StackDeploymentStep, error)
 	ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error)
@@ -78,12 +84,28 @@ type tfeUtil struct {
 	ctx                context.Context // ctx is the context for TFE operations, allowing for cancellation and timeouts.
 }
 
+type stackPageResult struct {
+	page int
+	data []models.StackDeploymentData
+	err  error
+}
+
 // NewTfeUtil creates a new instance of TfeUtil.
 func NewTfeUtil(ctx context.Context) TfeUtil {
 	return &tfeUtil{
 		convergenceTimeOut: configConvergenceTimeout,
 		ctx:                ctx,
 	}
+}
+
+// NewClient creates a new TFE client with the provided configuration.
+func (u *tfeUtil) NewClient(config *tfe.Config) (*tfe.Client, error) {
+	client, err := tfe.NewClient(config)
+	if err != nil {
+		tflog.Error(context.Background(), fmt.Sprintf("Error creating TFE client: %v", err))
+		return nil, fmt.Errorf("error creating TFE client: %v", err)
+	}
+	return client, nil
 }
 
 func (u *tfeUtil) AdvanceDeploymentRunStep(stepId string, client *tfe.Client) error {
@@ -142,14 +164,93 @@ func (u *tfeUtil) CalculateConfigFileHash(stackConfigFileAbsPath string) (string
 	return fmt.Sprintf("%x", hash[:]), nil
 }
 
-// NewClient creates a new TFE client with the provided configuration.
-func (u *tfeUtil) NewClient(config *tfe.Config) (*tfe.Client, error) {
-	client, err := tfe.NewClient(config)
-	if err != nil {
-		tflog.Error(context.Background(), fmt.Sprintf("Error creating TFE client: %v", err))
-		return nil, fmt.Errorf("error creating TFE client: %v", err)
+// GetAllDeploymentNamesForAConfigId retrieves all deployment names associated with a specific stack configuration ID.
+// It fetches data using pagination and supports concurrent retrieval of page results for improved performance.
+// The method returns a set of unique deployment names or an error if fetching the data fails.
+func (u *tfeUtil) GetAllDeploymentNamesForAConfigId(stackId string, stackConfigurationId string, httpClient httpUtil.Client, config *tfe.Config) (mapset.Set[string], error) {
+	tflog.Debug(u.ctx, fmt.Sprintf("Getting all deployment names for stack configuration ID %s", stackConfigurationId))
+
+	deploymentNames := mapset.NewSet[string]()
+	deploymentsByConfigUrl := fmt.Sprintf(stackConstants.StackDploymentsByConfigIdApiPathTemplate, config.Address, config.BasePath, stackId, stackConfigurationId)
+
+	// 1) Fetch the first page to get pagination info default page size = 20
+	firstPage, err := u.fetchStackDeploymentsPage(deploymentsByConfigUrl, config.Token, 1, 20, httpClient)
+	if err != nil || firstPage == nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error fetching first page of stack deployments for configuration ID %s: %v", stackConfigurationId, err))
+		return nil, fmt.Errorf("error fetching first page: %w", err)
 	}
-	return client, nil
+
+	if len(firstPage.Data) == 0 {
+		return deploymentNames, nil // Return empty set if no deployments found
+	}
+
+	totalPages := firstPage.Meta.TotalPages
+	pageSize := firstPage.Meta.PageSize
+
+	// Prepare an aggregator with data from the first page
+	var allDeployments []models.StackDeploymentData
+	allDeployments = append(allDeployments, firstPage.Data...)
+
+	// If only one page, we're done
+	if totalPages <= 1 {
+		for _, deployment := range allDeployments {
+			deploymentNames.Add(deployment.Attributes.Name)
+		}
+		return deploymentNames, nil
+	}
+
+	// 2) Concurrently fetch the remaining pages [2..totalPages]
+	results := make(chan stackPageResult, totalPages-1)
+
+	var wg sync.WaitGroup
+	for p := 2; p <= totalPages; p++ {
+		wg.Add(1)
+		p := p // capture loop variable
+		go func(page int) {
+			defer wg.Done()
+			pageData, err := u.fetchStackDeploymentsPage(deploymentsByConfigUrl, config.Token, page, pageSize, httpClient)
+			if err != nil {
+				results <- stackPageResult{page: page, err: err}
+				return
+			}
+			results <- stackPageResult{page: page, data: pageData.Data}
+		}(p)
+	}
+
+	// Close the result channel when workers finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// 3) Collect results from all pages
+	moreDeployments, err := u.collectStackDeploymentResults(results, totalPages)
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error fetching stack deployments for configuration ID %s: %v", stackConfigurationId, err))
+		return nil, err
+	}
+	allDeployments = append(allDeployments, moreDeployments...)
+
+	// Extract deployment names
+	for _, deployment := range allDeployments {
+		deploymentNames.Add(deployment.Attributes.Name)
+	}
+
+	return deploymentNames, nil
+}
+
+func (u *tfeUtil) GetDeploymentGroupSummaryByConfigID(stackConfigurationId string,
+	client *tfe.Client) (*tfe.StackDeploymentGroupSummaryList, error) {
+	tflog.Debug(u.ctx, fmt.Sprintf("Getting deployment group summary for stack configuration ID %s", stackConfigurationId))
+	// TODO: Currently only 20 deployments are supported meaning that this will have 20 deployment groups at most.
+	//  We need to handle pagination if the number of deployment groups exceeds 20.
+	deploymentGroupSummaryList, err := client.StackDeploymentGroupSummaries.List(u.ctx, stackConfigurationId, nil)
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error getting deployment group summary for stack configuration ID %s: %v", stackConfigurationId, err))
+		return nil, fmt.Errorf("error getting deployment group summary for stack configuration ID %s: %v", stackConfigurationId, err)
+	}
+
+	return deploymentGroupSummaryList, nil
 }
 
 // HandleConvergingStatus handles the converging status of a stack configuration.
@@ -572,8 +673,8 @@ func (u *tfeUtil) StackConfigurationHasRunningDeploymentGroups(stackConfiguratio
 	//  We need to handle pagination if the number of deployment groups exceeds 20.
 	for _, group := range stackDeploymentGroups.Items {
 		deploymentGroupStatus := tfe.DeploymentGroupStatus(group.Status)
-		if deploymentGroupStatus == tfe.DeploymentGroupStatusPending ||
-			deploymentGroupStatus == tfe.DeploymentGroupStatusDeploying {
+		if slices.Contains(stackConstants.RunningDeploymentGroupStatuses, deploymentGroupStatus) {
+			tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s has running deployment group %s with status %s", stackConfigurationId, group.ID, deploymentGroupStatus))
 			return true, nil
 		}
 	}
@@ -840,4 +941,76 @@ func getDetailsFromDiagnosticData(diagnosticData models.StackDiagnostic) string 
 		}
 	}
 	return strings.Join(details, "\n")
+}
+
+// fetchStackDeploymentsPage is a small helper to perform the HTTP GET for a given
+// stack deployments page and decode the JSON into models.StackDeployments.
+// If pageSize is 0, it will not be sent allowing server default.
+
+func (u *tfeUtil) collectStackDeploymentResults(results <-chan stackPageResult, totalPages int) ([]models.StackDeploymentData, error) {
+	// Collect and buffer page data as they arrive; preserve the first error
+	pageBuffer := make(map[int][]models.StackDeploymentData, totalPages-1)
+	var firstErr error
+	for r := range results {
+		if r.err != nil && firstErr == nil {
+			firstErr = r.err
+		}
+		if r.data != nil {
+			pageBuffer[r.page] = r.data
+		}
+	}
+
+	if firstErr != nil {
+		return nil, firstErr
+	}
+
+	// Aggregate in page order for stability
+	var combined []models.StackDeploymentData
+	for p := 2; p <= totalPages; p++ {
+		if data, ok := pageBuffer[p]; ok {
+			combined = append(combined, data...)
+		}
+	}
+	return combined, nil
+}
+
+func (u *tfeUtil) fetchStackDeploymentsPage(url string, token string, pageNumber int, pageSize int, httpClient httpUtil.Client) (*models.StackDeployments, error) {
+
+	// Prepare query parameters
+	query := map[string]string{
+		"page[number]": fmt.Sprintf("%d", pageNumber),
+	}
+	if pageSize > 0 {
+		query["page[size]"] = fmt.Sprintf("%d", pageSize)
+	}
+
+	// Prepare headers
+	headers := map[string]string{
+		httpHeaders.Authorization: fmt.Sprintf("Bearer %s", token),
+		httpHeaders.Accept:        "application/vnd.api+json",
+	}
+
+	// Perform the HTTP GET request
+	resp, err := httpClient.Do(httpUtil.RequestOptions{
+		Method:      http.MethodGet,
+		URL:         url,
+		Headers:     headers,
+		QueryParams: query,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("request error: %w", err)
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+
+	var deployments models.StackDeployments
+	if err := json.NewDecoder(resp.Body).Decode(&deployments); err != nil {
+		return nil, fmt.Errorf("decode error: %w", err)
+	}
+	return &deployments, nil
 }
