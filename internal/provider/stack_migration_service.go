@@ -58,7 +58,7 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 	}
 
 	// Calculate the hash of the Terraform configuration files in the directory
-	terraformConfigHash, err := r.tfeUtil.CalculateConfigFileHash(configDirAbsPath)
+	terraformConfigHash, err := r.tfeUtil.CalculateConfigFileHash(r.terraformConfigDirAbsPath)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf(configHashErrDetails, configDirAbsPath, err.Error()))
 		diags.AddError(
@@ -413,9 +413,9 @@ func (r *stackMigrationResource) getCurrentMigrationDataFromExistingState(ctx co
 	return stackMigrationData, diags
 }
 
-// getWorkspacesWithDeploymentFailures identifies workspaces with failed or abandoned deployments from migration data.
+// getWorkspacesForDeploymentRetry identifies workspaces with failed or abandoned deployments from migration data.
 // It returns a set of workspace names along with diagnostics in case of mismatched workspace data.
-func (r *stackMigrationResource) getWorkspacesWithDeploymentFailures(currentData,
+func (r *stackMigrationResource) getWorkspacesForDeploymentRetry(ctx context.Context, currentData,
 	previousData map[string]StackMigrationData) (mapset.Set[string], diag.Diagnostics) {
 	var diags diag.Diagnostics
 	previousWorkspaceNames := mapset.NewSet(maps.Keys(previousData)...)
@@ -429,16 +429,103 @@ func (r *stackMigrationResource) getWorkspacesWithDeploymentFailures(currentData
 		)
 		return nil, diags
 	}
-	var failedWorkspaces = mapset.NewSet[string]()
+	var retryWorkspaceList = mapset.NewSet[string]()
 	for workspaceName := range currentData {
-		currentStatus := currentData[workspaceName].DeploymentGroupData.Status
+		migrationData := currentData[workspaceName]
+		currentStatus := migrationData.DeploymentGroupData.Status
 
 		if currentStatus == tfe.DeploymentGroupStatusFailed || currentStatus == tfe.DeploymentGroupStatusAbandoned {
-			failedWorkspaces.Add(workspaceName)
+			retryWorkspaceList.Add(workspaceName)
+		} else if slices.Contains(stackConstants.RunningDeploymentGroupStatuses, currentStatus) {
+			isAwaitingProviderAction, diagsStep := r.isCurrentStepAwaitingProviderAction(ctx, migrationData.DeploymentName)
+			if diagsStep.HasError() {
+				diags.Append(diagsStep...)
+				return nil, diags
+			}
+			if isAwaitingProviderAction {
+				retryWorkspaceList.Add(workspaceName)
+			}
 		}
 	}
 
-	return failedWorkspaces, diags
+	return retryWorkspaceList, diags
+}
+
+func (r *stackMigrationResource) isCurrentStepAwaitingProviderAction(ctx context.Context, deploymentName string) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	// read the latest deployment run for the deployment
+	latestRun, err := r.tfeUtil.ReadLatestDeploymentRunWithRelations(r.existingStack.ID, deploymentName, r.httpClient, r.tfeConfig, r.tfeClient)
+	if err != nil {
+		diags.AddError(
+			"Error Reading Latest Deployment Run",
+			fmt.Sprintf("Could not read latest deployment run for deployment %q in stack %q: %s",
+				deploymentName,
+				r.existingStack.Name,
+				err.Error()),
+		)
+		return false, diags
+	}
+
+	// validate latestRun and its relationships
+	if latestRun == nil || &latestRun.Relationships == nil {
+		diags.AddError(
+			"Error Reading Deployment Group from Latest Deployment Run",
+			fmt.Sprintf("Could not read deployment group from latest deployment run for deployment %q in stack %q",
+				deploymentName,
+				r.existingStack.Name),
+		)
+		return false, diags
+	}
+
+	var currentStepId string
+
+	// validate the current step relationship
+	if &latestRun.Relationships.CurrentStep == nil ||
+		&latestRun.Relationships.CurrentStep.Data == nil ||
+		latestRun.Relationships.CurrentStep.Data.Id == "" {
+		return false, diags
+	}
+
+	// read the current step details
+	currentStep, err := r.tfeClient.StackDeploymentSteps.Read(ctx, currentStepId)
+	if err != nil {
+		diags.AddError(
+			"Error Reading Deployment Run Steps",
+			fmt.Sprintf("Could not read deployment run steps for step ID %q in deployment %q in stack %q: %s",
+				currentStepId,
+				deploymentName,
+				r.existingStack.Name,
+				err.Error()),
+		)
+		return false, diags
+	}
+
+	// validate current step details
+	if currentStep == nil || currentStep.ID == "" ||
+		//currentStep.OperationType== "" ||
+		currentStep.Status == "" {
+		diags.AddError(
+			"Error Reading Current Deployment Step Details",
+			fmt.Sprintf("Could not read current deployment step details for step ID %q in deployment %q in stack %q",
+				currentStepId,
+				deploymentName,
+				r.existingStack.Name),
+		)
+		return false, diags
+	}
+
+	//currentStepOperationType := currentStep.OperationType
+	currentStepOperationType := ""
+	currentStepStatus := currentStep.Status
+
+	// check if the current step is awaiting provider action
+	if (currentStepOperationType == "allow-import" && currentStepStatus == "pending_operator") ||
+		(currentStepOperationType == "import-state" && (currentStepStatus == "pending_operator" || currentStepStatus == "running")) {
+		return true, diags
+	}
+
+	return false, diags
 }
 
 func (r *stackMigrationResource) isIdempotentConfig(plan, state StackMigrationResourceModel, currentSourceBundleHash, currentTerraformConfigHash string) (bool, diag.Diagnostics) {
@@ -511,6 +598,7 @@ func (r *stackMigrationResource) getConfigIdAndSourceBundleHash(ctx context.Cont
 	var diags diag.Diagnostics
 
 	if uploadNewConfig {
+		tflog.Info(ctx, fmt.Sprintf("Uploading new configuration files for stack %s", r.existingStack.Name))
 		return r.uploadNewConfigAndGetSourceBundleHash(ctx, configDirAbsPath)
 	}
 

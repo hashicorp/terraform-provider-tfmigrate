@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"io/fs"
 	"net/http"
@@ -33,7 +34,7 @@ import (
 )
 
 var (
-	configConvergenceTimeout = 5 * time.Minute // configConvergenceTimeout defines the maximum time to wait for a stack configuration to converge.
+	configConvergenceTimeout = 15 * time.Minute // configConvergenceTimeout defines the maximum time to wait for a stack configuration to converge.
 	// stackPlanPollInterval    = 5 * time.Second // stackPlanPollInterval defines the interval at which to poll for stack plans.
 	// emptyPollCountThreshold = 6 // emptyPollCountThreshold defines the number of consecutive empty results before considering the stack plan polling as terminal.
 )
@@ -64,6 +65,7 @@ type TfeUtil interface {
 	PullAndSaveWorkspaceStateData(organizationName string, workspaceName string, client *tfe.Client) (string, error)
 	ReadDeploymentRunSteps(deploymentRunId string, httpClient httpUtil.Client, tfeConfig *tfe.Config) ([]models.StackDeploymentStep, error)
 	ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error)
+	ReadLatestDeploymentRunWithRelations(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*models.StackDeploymentRun, error)
 	ReadOrgByName(organizationName string, client *tfe.Client) (*tfe.Organization, error)
 	ReadProjectByName(organizationName, projectName string, client *tfe.Client) (*tfe.Project, error)
 	ReadStackByName(organizationName, projectId string, stackName string, client *tfe.Client) (*tfe.Stack, error)
@@ -393,42 +395,10 @@ func (u *tfeUtil) ReadDeploymentRunSteps(deploymentRunId string, httpClient http
 
 // ReadLatestDeploymentRun retrieves the latest deployment run for a stack by its ID and deployment name.
 func (u *tfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error) {
-	tflog.Debug(u.ctx, fmt.Sprintf("Reading latest deployment run for stack ID %s and deployment name %s", stackId, deploymentName))
-	deploymentRunUrl := fmt.Sprintf(stackConstants.StackDeploymentRunApiPathTemplate, config.Address, config.BasePath, stackId, deploymentName)
-	bearerToken := fmt.Sprintf("Bearer %s", config.Token)
-	response, err := httpClient.Do(httpUtil.RequestOptions{
-		Method: http.MethodGet,
-		URL:    deploymentRunUrl,
-		Headers: map[string]string{
-			httpHeaders.Authorization: bearerToken,
-			httpHeaders.Accept:        "application/vnd.api+json",
-		}})
+	latestDeploymentRun, err := u.getLatestDeploymentRunByDeploymentName(stackId, deploymentName, httpClient, config, tfeClient)
 	if err != nil {
-		tflog.Error(u.ctx, fmt.Sprintf("Error reading latest deployment run for stack ID %s and deployment name %s: %v", stackId, deploymentName, err))
-		return nil, fmt.Errorf("error reading latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
+		return nil, err
 	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		tflog.Error(u.ctx, fmt.Sprintf("Error reading latest deployment run for stack ID %s and deployment name %s: received status code %d", stackId, deploymentName, response.StatusCode))
-		err = u.handleHttpClientError(response)
-		return nil, fmt.Errorf("error reading latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
-	}
-
-	var deploymentRuns models.StackDeploymentRuns
-	if err := json.NewDecoder(response.Body).Decode(&deploymentRuns); err != nil {
-		tflog.Error(u.ctx, fmt.Sprintf("Error decoding response for latest deployment run for stack ID %s and deployment name %s: %v", stackId, deploymentName, err))
-		return nil, fmt.Errorf("error decoding response for latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
-	}
-
-	if len(deploymentRuns.Data) == 0 {
-		tflog.Warn(u.ctx, fmt.Sprintf("No deployment runs found for stack ID %s and deployment name %s", stackId, deploymentName))
-		return &tfe.StackDeploymentRun{}, nil
-	}
-
-	// Assuming the latest deployment run is the first one in the list
-	latestDeploymentRun := deploymentRuns.Data[0]
 
 	deploymentGroupId := latestDeploymentRun.Relationships.StackDeploymentGroup.Data.Id
 
@@ -440,12 +410,20 @@ func (u *tfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string,
 		return nil, fmt.Errorf("error reading stack deployment group for deployment group ID %s, err: %v", deploymentGroupId, err)
 	}
 
-	stackDeploymentRun := tfe.StackDeploymentRun{
+	return &tfe.StackDeploymentRun{
 		ID:                   latestDeploymentRun.Id,
 		Status:               latestDeploymentRun.Attributes.Status,
 		StackDeploymentGroup: stackDeploymentGroup,
-	}
-	return &stackDeploymentRun, nil
+	}, nil
+}
+
+// ReadLatestDeploymentRunWithRelations retrieves the latest deployment run for a stack by its ID and deployment name,
+// including relationships specified bellow.
+// - stack-deployment-group
+// - stack-configuration
+// - current-step
+func (u *tfeUtil) ReadLatestDeploymentRunWithRelations(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*models.StackDeploymentRun, error) {
+	return u.getLatestDeploymentRunByDeploymentName(stackId, deploymentName, httpClient, config, tfeClient)
 }
 
 // ReadOrgByName retrieves the organization by its name.
@@ -1013,4 +991,48 @@ func (u *tfeUtil) fetchStackDeploymentsPage(url string, token string, pageNumber
 		return nil, fmt.Errorf("decode error: %w", err)
 	}
 	return &deployments, nil
+}
+
+func (u *tfeUtil) getLatestDeploymentRunByDeploymentName(stackId string, deploymentName string, httpClient httpUtil.Client, config *tfe.Config, tfeClient *tfe.Client) (*models.StackDeploymentRun, error) {
+	tflog.Debug(u.ctx, fmt.Sprintf("Reading latest deployment run for stack ID %s and deployment name %s", stackId, deploymentName))
+	deploymentRunUrl := fmt.Sprintf(stackConstants.StackDeploymentRunApiPathTemplate, config.Address, config.BasePath, stackId, deploymentName)
+	bearerToken := fmt.Sprintf("Bearer %s", config.Token)
+	response, err := httpClient.Do(httpUtil.RequestOptions{
+		Method: http.MethodGet,
+		URL:    deploymentRunUrl,
+		Headers: map[string]string{
+			httpHeaders.Authorization: bearerToken,
+			httpHeaders.Accept:        "application/vnd.api+json",
+		}})
+	if err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading latest deployment run for stack ID %s and deployment name %s: %v", stackId, deploymentName, err))
+		return nil, fmt.Errorf("error reading latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
+	}
+
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			tflog.Error(u.ctx, fmt.Sprintf("Error closing response body for latest deployment run for stack ID %s and deployment name %s: %v", stackId, deploymentName, err))
+		}
+	}(response.Body)
+
+	if response.StatusCode != http.StatusOK {
+		tflog.Error(u.ctx, fmt.Sprintf("Error reading latest deployment run for stack ID %s and deployment name %s: received status code %d", stackId, deploymentName, response.StatusCode))
+		err = u.handleHttpClientError(response)
+		return nil, fmt.Errorf("error reading latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
+	}
+
+	var deploymentRuns models.StackDeploymentRuns
+	if err := json.NewDecoder(response.Body).Decode(&deploymentRuns); err != nil {
+		tflog.Error(u.ctx, fmt.Sprintf("Error decoding response for latest deployment run for stack ID %s and deployment name %s: %v", stackId, deploymentName, err))
+		return nil, fmt.Errorf("error decoding response for latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
+	}
+
+	if len(deploymentRuns.Data) == 0 {
+		tflog.Warn(u.ctx, fmt.Sprintf("No deployment runs found for stack ID %s and deployment name %s", stackId, deploymentName))
+		return &models.StackDeploymentRun{}, nil
+	}
+
+	// Assuming the latest deployment run is the first one in the list
+	return &deploymentRuns.Data[0], nil
 }

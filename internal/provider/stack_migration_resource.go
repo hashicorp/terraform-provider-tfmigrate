@@ -507,6 +507,13 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 	updatedState.TerraformConfigHash = types.StringValue(terraformConfigHash)
 	updatedState.WorkspaceDeploymentMapping = state.WorkspaceDeploymentMapping
 
+	data, _ := r.migrationHashService.GetMigrationData(migrationHash)
+	diags.AddWarning(
+		"Migration Data Retrieved",
+		prettyPrintJSON(data),
+	)
+	response.Diagnostics.Append(diags...)
+
 	// save the updated state
 	response.Diagnostics.Append(response.State.Set(ctx, &updatedState)...)
 
@@ -517,6 +524,10 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 func (r *stackMigrationResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var plan, state, newState StackMigrationResourceModel
 	r.tfeUtil.UpdateContext(ctx)
+	r.httpClient.UpdateContext(ctx)
+	r.migrationHashService.UpdateContext(ctx)
+	r.stackSourceBundleAbsPath = plan.ConfigurationDir.ValueString()
+	r.terraformConfigDirAbsPath = plan.TerraformConfigDir.ValueString()
 
 	// Retrieve values from the plan
 	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
@@ -699,7 +710,7 @@ func (r *stackMigrationResource) Configure(ctx context.Context, configureRequest
 
 // ModifyPlan is called to modify the plan before it is applied. It checks the current state and modifies the plan based on the existing state and the update strategy.
 func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-
+	tflog.Debug(ctx, "Starting ModifyPlan operation for stack migration resource")
 	var plan StackMigrationResourceModel
 	var state StackMigrationResourceModel
 	var err error
@@ -718,6 +729,8 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 	r.tfeUtil.UpdateContext(ctx)
 	r.httpClient.UpdateContext(ctx)
 	r.migrationHashService.UpdateContext(ctx)
+	r.stackSourceBundleAbsPath = plan.ConfigurationDir.ValueString()
+	r.terraformConfigDirAbsPath = plan.TerraformConfigDir.ValueString()
 
 	// Retrieve values from the plan
 	if resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...); resp.Diagnostics.HasError() {
@@ -1011,13 +1024,15 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 		return
 	}
 
-	deploymentStatusDiff, diags := r.getWorkspacesWithDeploymentFailures(currentMigrationData, migrationDataFromState)
+	workspacesToBeRetried, diags := r.getWorkspacesForDeploymentRetry(ctx, currentMigrationData, migrationDataFromState)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}
 
-	if deploymentStatusDiff.Cardinality() > 0 {
+	tflog.Debug(ctx, fmt.Sprintf("=====Deployment Status Diff: %+v======", workspacesToBeRetried))
+
+	if workspacesToBeRetried.Cardinality() > 0 {
 		// If there is a partial failure, no changes are allowed
 		tflog.Debug(ctx, "Partial deployment group failures detected with running deployment groups and no configuration changes, no configuration upload needed, failed deployment groups will be retried")
 		plan.CurrentConfigurationId = types.StringValue(r.existingStack.LatestStackConfiguration.ID)
@@ -1028,6 +1043,8 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
 	}
+
+	tflog.Debug(ctx, "Completed ModifyPlan operation for stack migration resource")
 }
 
 // Metadata returns the metadata for the stack migration resource.

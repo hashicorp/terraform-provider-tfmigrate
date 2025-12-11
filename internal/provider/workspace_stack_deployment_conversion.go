@@ -66,7 +66,8 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 	// In case of a failed deployment group,
 	// we trigger a rerun from inside the handleDeploymentGroupTerminalState function
 	// which creates a new deployment runId that is why we need to fetch the latest deployment run again
-	if deploymentGroupStatus == tfe.DeploymentGroupStatusFailed {
+	if deploymentGroupStatus == tfe.DeploymentGroupStatusFailed ||
+		(r.retryAbandonedDeployments && deploymentGroupStatus == tfe.DeploymentGroupStatusAbandoned) {
 		continueToFetchDeploymentRunSteps, mostRecentDeploymentRun = r.getLatestDeploymentRun(ctx, deploymentName, &migrationData)
 
 		if !continueToFetchDeploymentRunSteps {
