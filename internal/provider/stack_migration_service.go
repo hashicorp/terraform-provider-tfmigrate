@@ -5,23 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	stackConstants "terraform-provider-tfmigrate/internal/constants/stack"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+
+	"golang.org/x/exp/maps"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/hashicorp/go-tfe"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-)
-
-var (
-	noStateConversionOpStatuses = []tfe.StackConfigurationStatus{
-		tfe.StackConfigurationStatusPending,
-		tfe.StackConfigurationStatusQueued,
-		tfe.StackConfigurationStatusPreparing,
-		tfe.StackConfigurationStatusEnqueueing,
-	}
 )
 
 // allowSourceBundleUpload checks if the stack configuration is in a state that allows uploading a new source bundle.
@@ -37,42 +31,30 @@ func (r *stackMigrationResource) allowSourceBundleUpload(ctx context.Context, co
 	if stackConfigurationStatus == tfe.StackConfigurationStatusCompleted {
 		return r.handleCompletedStatusForAllowUpload(ctx, configuration)
 	}
-
-	switch stackConfigurationStatus {
-	case tfe.StackConfigurationStatusCanceled, tfe.StackConfigurationStatusErrored:
-		tflog.Info(ctx, fmt.Sprintf("Current stack configuration %s is in a terminal state (%s). Allowing source bundle upload.", configuration.ID, configuration.Status))
+	if slices.Contains(stackConstants.ErroredOrCancelledStackConfigurationStatuses, stackConfigurationStatus) {
+		tflog.Info(ctx, fmt.Sprintf("Current stack configuration %s is in %s status. allowing source bundle upload.", configuration.ID, configuration.Status))
 		return true, nil
-	default:
-		return false, nil
 	}
+
+	// for all other statuses, do not allow source bundle upload
+	tflog.Info(ctx, fmt.Sprintf("Current stack configuration %s is in %s status. not allowing source bundle upload.", configuration.ID, configuration.Status))
+	return false, nil
 }
 
 // applyStackConfiguration uploads the stack configuration files to the stack and waits for the stack configuration to converge, cancel, or error out.
-func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, orgName string, projectName string, stackName string, configDirAbsPath string, migrationMap map[string]string) (bool, StackMigrationResourceModel, diag.Diagnostics) {
+func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, orgName string, projectName string, stackName string, configDirAbsPath string, migrationMap map[string]string, uploadNewConfig bool, validatePreCondition bool) (bool, StackMigrationResourceModel, diag.Diagnostics) {
 	var currentConfigurationId string
 	var currentConfigurationStatus string
 	var currentSourceBundleHash string
 	var diags diag.Diagnostics
 	var state StackMigrationResourceModel
 
-	deploymentNamesFromMigrationMap := mapset.NewSet[string]()
-	for _, deploymentName := range migrationMap {
-		if deploymentNamesFromMigrationMap.Contains(deploymentName) {
-			tflog.Error(ctx, fmt.Sprintf("Duplicate deployment name found in migration map: %s", deploymentName))
-			diags.AddError(
-				"Duplicate Deployment Name",
-				fmt.Sprintf("The deployment name %q is duplicated in the migration map. Each deployment name must be unique.", deploymentName),
-			)
+	// Validate preconditions
+	if validatePreCondition {
+		if diags := r.createActionPreconditions(ctx, orgName, projectName, stackName, configDirAbsPath, migrationMap); diags.HasError() {
+			tflog.Error(ctx, "Preconditions for resource creation failed")
 			return false, state, diags
 		}
-		deploymentNamesFromMigrationMap.Add(deploymentName)
-	}
-
-	// Validate preconditions
-	diags.Append(r.createActionPreconditions(orgName, projectName, stackName, configDirAbsPath, deploymentNamesFromMigrationMap)...)
-	if diags.HasError() {
-		tflog.Error(ctx, "Preconditions for resource creation failed")
-		return false, state, diags
 	}
 
 	// Calculate the hash of the Terraform configuration files in the directory
@@ -86,37 +68,15 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 		return false, state, diags
 	}
 
-	// Check if a new source bundle config is allowed to be uploaded
-	uploadNewConfig, err := r.allowSourceBundleUpload(ctx, r.existingStack.LatestStackConfiguration)
-	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf(errDiagDetailsSourceBundleUploadChk, r.existingStack.Name, err.Error()))
-		diags.AddError(
-			errDiagDetailsSourceBundleUploadChk,
-			fmt.Sprintf(errDiagDetailsSourceBundleUploadChk, r.existingStack.Name, err.Error()),
-		)
-		return false, state, diags
-	}
-
-	// Attempt to upload a source bundle if allowed else sync existing stack configuration data
-	if uploadNewConfig {
-		tflog.Info(ctx, fmt.Sprintf("Uploading source bundle for stack %s from directory %s", r.existingStack.Name, configDirAbsPath))
-		currentConfigurationId, currentSourceBundleHash, diags = r.uploadSourceBundle(ctx, r.existingStack.ID, configDirAbsPath, true)
-	} else {
-		//Fixme: Revisit this
-		tflog.Info(ctx, fmt.Sprintf("Syncing existing stack configuration data for stack %s from directory %s", r.existingStack.Name, configDirAbsPath))
-		currentConfigurationId, currentSourceBundleHash, diags = r.syncExistingStackConfigurationData(ctx, r.existingStack, configDirAbsPath)
-	}
-
-	diags.Append(diags...)
+	// Get the current configuration ID and source bundle hash
+	currentConfigurationIdPtr, currentSourceBundleHashPtr, diags := r.getConfigIdAndSourceBundleHash(ctx, configDirAbsPath, uploadNewConfig)
 	if diags.HasError() {
 		tflog.Error(ctx, fmt.Sprintf("Failed to get currentConfigurationId and sourceBundleHash for stack %s", r.existingStack.Name))
 		return false, state, diags
 	}
 
-	// Attempt to poll for the current configuration status and await for it to complete, cancel, or error out.
-	tflog.Info(ctx, fmt.Sprintf("Starting to poll for current configuration ID: %s", currentConfigurationId))
-	currentConfigurationStatus = r.watchStackConfigurationUntilTerminalStatus(ctx, currentConfigurationId).String()
-	tflog.Info(ctx, fmt.Sprintf("Received status: %s for configuration ID: %s after polling ", currentConfigurationStatus, currentConfigurationId))
+	currentConfigurationId = *currentConfigurationIdPtr
+	currentSourceBundleHash = *currentSourceBundleHashPtr
 
 	// Ensure the currentConfigurationId is not empty before proceeding
 	if currentConfigurationId == "" {
@@ -126,6 +86,11 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 		)
 		return false, state, diags
 	}
+
+	// Attempt to poll for the current configuration status and await for it to complete, cancel, or error out.
+	tflog.Info(ctx, fmt.Sprintf("Starting to poll for current configuration ID: %s", currentConfigurationId))
+	currentConfigurationStatus = r.watchStackConfigurationUntilTerminalStatus(ctx, currentConfigurationId).String()
+	tflog.Info(ctx, fmt.Sprintf("Received status: %s for configuration ID: %s after polling ", currentConfigurationStatus, currentConfigurationId))
 
 	// Ensure the currentConfigurationStatus is not empty before proceeding
 	if currentConfigurationStatus == "" {
@@ -138,6 +103,21 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 
 	// if the configuration has not errored or not been canceled, we save the current configuration ID and status in the state.
 	configurationStatus := tfe.StackConfigurationStatus(currentConfigurationStatus)
+	migrationMapAsStateAttribute := map[string]attr.Value{}
+	for k, v := range migrationMap {
+		migrationMapAsStateAttribute[k] = types.StringValue(v)
+	}
+
+	state.CurrentConfigurationId = types.StringValue(currentConfigurationId)
+	state.CurrentConfigurationStatus = types.StringValue(currentConfigurationStatus)
+	state.Name = types.StringValue(r.existingStack.Name)
+	state.Organization = types.StringValue(r.existingOrganization.Name)
+	state.Project = types.StringValue(r.existingProject.Name)
+	state.SourceBundleHash = types.StringValue(currentSourceBundleHash)
+	state.TerraformConfigHash = types.StringValue(terraformConfigHash)
+	state.ConfigurationDir = types.StringValue(r.stackSourceBundleAbsPath)
+	state.TerraformConfigDir = types.StringValue(r.terraformConfigDirAbsPath)
+	state.WorkspaceDeploymentMapping = types.MapValueMust(types.StringType, migrationMapAsStateAttribute)
 
 	if configurationStatus == tfe.StackConfigurationStatusCanceled {
 		diags.AddWarning(
@@ -151,23 +131,6 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 		diags.Append(r.tfeUtil.ReadStackDiagnosticsByConfigID(currentConfigurationId, r.httpClient, r.tfeConfig)...)
 		return false, state, diags
 	}
-
-	state.CurrentConfigurationId = types.StringValue(currentConfigurationId)
-	state.CurrentConfigurationStatus = types.StringValue(currentConfigurationStatus)
-	state.Name = types.StringValue(r.existingStack.Name)
-	state.Organization = types.StringValue(r.existingOrganization.Name)
-	state.Project = types.StringValue(r.existingProject.Name)
-	state.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-	state.TerraformConfigHash = types.StringValue(terraformConfigHash)
-	state.ConfigurationDir = types.StringValue(r.stackSourceBundleAbsPath)
-	state.TerraformConfigDir = types.StringValue(r.terraformConfigDirAbsPath)
-
-	vals := map[string]attr.Value{}
-	for k, v := range migrationMap {
-		vals[k] = types.StringValue(v)
-	}
-
-	state.WorkspaceDeploymentMapping = types.MapValueMust(types.StringType, vals)
 
 	// handle the `tfe.StackConfigurationStatuses` and determine the next steps based on the current configuration status.
 	diags = r.continueWithStateUploadPostConfigUpload(currentConfigurationId, configurationStatus)
@@ -198,10 +161,24 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 	return true, state, diags
 }
 
-// createActionPreconditions checks if the resource passes the preconditions for the create action. //TODO start with map set.
-func (r *stackMigrationResource) createActionPreconditions(orgName string, projectName string, stackName string, stackConfigDir string, deploymentNamesFromMigrationMap mapset.Set[string]) diag.Diagnostics {
+// createActionPreconditions checks if the resource passes the preconditions for the create action.
+func (r *stackMigrationResource) createActionPreconditions(ctx context.Context, orgName string, projectName string, stackName string, stackConfigDir string, migrationMap map[string]string) diag.Diagnostics {
+
 	var diags diag.Diagnostics
 	var err error
+
+	deploymentNamesFromMigrationMap := mapset.NewSet[string]()
+	for _, deploymentName := range migrationMap {
+		if deploymentNamesFromMigrationMap.Contains(deploymentName) {
+			tflog.Error(ctx, fmt.Sprintf("Duplicate deployment name found in migration map: %s", deploymentName))
+			diags.AddError(
+				"Duplicate Deployment Name",
+				fmt.Sprintf("The deployment name %q is duplicated in the migration map. Each deployment name must be unique.", deploymentName),
+			)
+			return diags
+		}
+		deploymentNamesFromMigrationMap.Add(deploymentName)
+	}
 
 	// check if the organization exists
 	if r.existingOrganization, err = r.tfeUtil.ReadOrgByName(orgName, r.tfeClient); err != nil {
@@ -262,7 +239,7 @@ func (r *stackMigrationResource) createActionPreconditions(orgName string, proje
 	return nil
 }
 
-// handleConvergingStatusForAllowUpload checks if a converging stack configuration has any running plans, return true if no running plans are found false otherwise.
+// handleCompletedStatusForAllowUpload checks if a converging stack configuration has any running plans, return true if no running plans are found false otherwise.
 func (r *stackMigrationResource) handleCompletedStatusForAllowUpload(ctx context.Context, configuration *tfe.StackConfiguration) (bool, error) {
 	// check if there are any applying plans if so return false
 	tflog.Info(ctx, fmt.Sprintf("Current stack configuration %s is %s. Checking if there are any applying plans.", configuration.ID, configuration.Status))
@@ -392,13 +369,7 @@ func (r *stackMigrationResource) watchStackConfigurationUntilTerminalStatus(ctx 
 func (r *stackMigrationResource) continueWithStateUploadPostConfigUpload(currentConfigurationId string, currentConfigurationStatus tfe.StackConfigurationStatus) diag.Diagnostics {
 	var diags diag.Diagnostics
 
-	// if currentConfigurationStatus == tfe.StackConfigurationStatusConverging || currentConfigurationStatus == tfe.StackConfigurationStatusConverged {
-	//	diags.AddError(
-	//		"Converged Stack Configuration Is Not Supported",
-	//		fmt.Sprintf("The current stack configuration %s has converged. The `tfmigrate_stack_migration` resource does not support state upload for converged stack configurations.", currentConfigurationId))
-	//}
-
-	if slices.Contains(noStateConversionOpStatuses, currentConfigurationStatus) {
+	if slices.Contains(stackConstants.RunningStackConfigurationStatuses, currentConfigurationStatus) {
 		diags.AddWarning(
 			"Stack Configuration Status Not Ready for State Upload",
 			fmt.Sprintf("The currentstack configuration %s is in a status (%s) that does not allow state upload. Please wait for the stack configuration to be in completed state before running again", currentConfigurationId, currentConfigurationStatus),
@@ -409,6 +380,179 @@ func (r *stackMigrationResource) continueWithStateUploadPostConfigUpload(current
 	return diags
 }
 
+// getCurrentMigrationDataFromExistingState retrieves the current migration data based on the existing state of the resource.
+func (r *stackMigrationResource) getCurrentMigrationDataFromExistingState(ctx context.Context, workspaceDeploymentMapFromState types.Map) (map[string]StackMigrationData, diag.Diagnostics) {
+	workspaceDeploymentMap := map[string]string{}
+	var diags diag.Diagnostics
+	if diags = workspaceDeploymentMapFromState.ElementsAs(ctx, &workspaceDeploymentMap, false); diags.HasError() {
+		return nil, diags
+	}
+
+	if len(workspaceDeploymentMap) == 0 {
+		diags.AddError(
+			"Error Reading Workspace Deployment Mapping",
+			"The workspace_deployment_mapping attribute is empty. This attribute must contain a mapping of workspace names to stack deployment names.")
+		return nil, diags
+	}
+
+	// get the latest deployment groups and status for each deployment in the workspaceDeploymentMap
+	stackMigrationData, err := r.migrationHashService.GenerateMigrationData(StackMigrationTrackRequest{
+		OrgName:      r.existingOrganization.Name,
+		StackId:      r.existingStack.ID,
+		MigrationMap: workspaceDeploymentMap,
+	})
+
+	if err != nil {
+		diags.AddError(
+			"Error Generating Migration Data",
+			fmt.Sprintf("Could not generate migration data for stack %q in organization %q: %s", r.existingStack.Name, r.existingOrganization.Name, err.Error()),
+		)
+		return nil, diags
+	}
+
+	return stackMigrationData, diags
+}
+
+// getWorkspacesWithDeploymentFailures identifies workspaces with failed or abandoned deployments from migration data.
+// It returns a set of workspace names along with diagnostics in case of mismatched workspace data.
+func (r *stackMigrationResource) getWorkspacesWithDeploymentFailures(currentData,
+	previousData map[string]StackMigrationData) (mapset.Set[string], diag.Diagnostics) {
+	var diags diag.Diagnostics
+	previousWorkspaceNames := mapset.NewSet(maps.Keys(previousData)...)
+	currentWorkspaceNames := mapset.NewSet(maps.Keys(currentData)...)
+	if !previousWorkspaceNames.Equal(currentWorkspaceNames) {
+		diags.AddError(
+			"Workspace Names Mismatch",
+			fmt.Sprintf("The workspace names in the current migration data do not match those in the previous"+
+				" migration data. Cannot determine deployment status differences For Completed ConfigurationId %q",
+				r.existingStack.LatestStackConfiguration.ID),
+		)
+		return nil, diags
+	}
+	var failedWorkspaces = mapset.NewSet[string]()
+	for workspaceName := range currentData {
+		currentStatus := currentData[workspaceName].DeploymentGroupData.Status
+
+		if currentStatus == tfe.DeploymentGroupStatusFailed || currentStatus == tfe.DeploymentGroupStatusAbandoned {
+			failedWorkspaces.Add(workspaceName)
+		}
+	}
+
+	return failedWorkspaces, diags
+}
+
+func (r *stackMigrationResource) isIdempotentConfig(plan, state StackMigrationResourceModel, currentSourceBundleHash, currentTerraformConfigHash string) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	planWorkspaceDeploymentMappingElements := plan.WorkspaceDeploymentMapping.Elements()
+	stateWorkspaceDeploymentMappingElements := state.WorkspaceDeploymentMapping.Elements()
+
+	planDeploymentMapping := make(map[string]string, len(planWorkspaceDeploymentMappingElements))
+	for key, value := range planWorkspaceDeploymentMappingElements {
+		planDeploymentMapping[key] = value.(types.String).ValueString()
+	}
+
+	stateDeploymentMapping := make(map[string]string, len(stateWorkspaceDeploymentMappingElements))
+	for key, value := range stateWorkspaceDeploymentMappingElements {
+		stateDeploymentMapping[key] = value.(types.String).ValueString()
+	}
+
+	// check if a deployment mapping change has occurred
+	if !maps.Equal(planDeploymentMapping, stateDeploymentMapping) {
+		// if there is a difference, then throw an error
+		diags.AddError(
+			"Deployment Mapping Change Not Allowed During Running Deployments",
+			fmt.Sprintf("Changes to the workspace_deployment_mapping are not allowed while there are running deployment groups for stack %q in organization %q and project %q. Please wait for the running deployments to complete before making changes to the deployment mapping.",
+				r.existingStack.Name,
+				r.existingOrganization.Name,
+				r.existingProject.Name,
+			),
+		)
+		return false, diags
+	}
+
+	// check for source bundle hash changes
+	if state.SourceBundleHash.ValueString() != currentSourceBundleHash {
+		// if there is a difference, then throw an error
+		diags.AddError(
+			"Source Bundle Hash Change Not Allowed During Running Deployments",
+			fmt.Sprintf("Changes to the files in dir %q are not allowed while there are running deployment groups for"+
+				" stack %q in organization %q and project %q. Please wait for the running deployments to complete before making changes to the source bundle.",
+				plan.ConfigurationDir.ValueString(),
+				r.existingStack.Name,
+				r.existingOrganization.Name,
+				r.existingProject.Name,
+			),
+		)
+		return false, diags
+	}
+
+	// check for terraform config hash changes
+	if state.TerraformConfigHash.ValueString() != currentTerraformConfigHash {
+		// if there is a difference, then throw an error
+		diags.AddError(
+			"Terraform Configuration Hash Change Not Allowed During Running Deployments",
+			fmt.Sprintf("Changes to the files in dir %q are not allowed while there are running deployment groups for"+
+				" stack %q in organization %q and project %q. Please wait for the running deployments to complete before making changes to the terraform configuration.",
+				plan.TerraformConfigDir.ValueString(),
+				r.existingStack.Name,
+				r.existingOrganization.Name,
+				r.existingProject.Name,
+			),
+		)
+		return false, diags
+	}
+	return true, diags
+}
+
+func (r *stackMigrationResource) getConfigIdAndSourceBundleHash(ctx context.Context, configDirAbsPath string, uploadNewConfig bool) (*string, *string, diag.Diagnostics) {
+	var currentConfigurationId string
+	var currentSourceBundleHash string
+	var diags diag.Diagnostics
+
+	if uploadNewConfig {
+		return r.uploadNewConfigAndGetSourceBundleHash(ctx, configDirAbsPath)
+	}
+
+	tflog.Info(ctx, fmt.Sprintf("Syncing the latest stack configuration data for stack %s", r.existingStack.Name))
+	if currentConfigurationId, currentSourceBundleHash, diags = r.syncExistingStackConfigurationData(ctx, r.existingStack, configDirAbsPath); diags.HasError() {
+		tflog.Error(ctx, fmt.Sprintf("Failed to get currentConfigurationId and sourceBundleHash for stack %s", r.existingStack.Name))
+		return nil, nil, diags
+	}
+
+	return &currentConfigurationId, &currentSourceBundleHash, diags
+}
+
+func (r *stackMigrationResource) uploadNewConfigAndGetSourceBundleHash(ctx context.Context, configDirAbsPath string) (*string, *string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	var currentConfigurationId string
+	var currentSourceBundleHash string
+
+	allowed, err := r.allowSourceBundleUpload(ctx, r.existingStack.LatestStackConfiguration)
+	if err != nil {
+		tflog.Error(ctx, fmt.Sprintf(errDiagDetailsSourceBundleUploadChk, r.existingStack.Name, err.Error()))
+		diags.AddError(
+			errDiagDetailsSourceBundleUploadChk,
+			fmt.Sprintf(errDiagDetailsSourceBundleUploadChk, r.existingStack.Name, err.Error()),
+		)
+		return nil, nil, diags
+	}
+	if !allowed {
+		diags.AddError(
+			"Source Bundle Upload Is Requested But Is Not Allowed",
+			fmt.Sprintf("The current stack configuration for stack %s is in a state that does not allow uploading a new source bundle. Please wait for any running deployments to complete before attempting to upload a new source bundle.", r.existingStack.Name),
+		)
+		return nil, nil, diags
+	}
+
+	tflog.Info(ctx, fmt.Sprintf("Uploading source bundle for stack %s from directory %s", r.existingStack.Name, configDirAbsPath))
+	if currentConfigurationId, currentSourceBundleHash, diags = r.uploadSourceBundle(ctx, r.existingStack.ID, configDirAbsPath, true); diags.HasError() {
+		return nil, nil, diags
+	}
+	return &currentConfigurationId, &currentSourceBundleHash, diags
+}
+
+// prettyPrintJSON pretty prints a given interface as a JSON string.
 func prettyPrintJSON(v interface{}) string {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {

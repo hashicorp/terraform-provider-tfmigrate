@@ -5,7 +5,9 @@ package tfe_mocks
 import (
 	context "context"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	diag "github.com/hashicorp/terraform-plugin-framework/diag"
+
 	mock "github.com/stretchr/testify/mock"
 
 	models "terraform-provider-tfmigrate/internal/models"
@@ -131,49 +133,122 @@ func (_c *MockTfeUtil_CalculateConfigFileHash_Call) RunAndReturn(run func(string
 	return _c
 }
 
-// HandleConvergingStatus provides a mock function with given fields: currentConfigurationId, client
-func (_m *MockTfeUtil) HandleConvergingStatus(currentConfigurationId string, client *tfe.Client) string {
-	ret := _m.Called(currentConfigurationId, client)
+// GetAllDeploymentNamesForAConfigId provides a mock function with given fields: stackId, stackConfigurationId, httpClient, config
+func (_m *MockTfeUtil) GetAllDeploymentNamesForAConfigId(stackId string, stackConfigurationId string, httpClient net.Client, config *tfe.Config) (mapset.Set[string], error) {
+	ret := _m.Called(stackId, stackConfigurationId, httpClient, config)
 
 	if len(ret) == 0 {
-		panic("no return value specified for HandleConvergingStatus")
+		panic("no return value specified for GetAllDeploymentNamesForAConfigId")
 	}
 
-	var r0 string
-	if rf, ok := ret.Get(0).(func(string, *tfe.Client) string); ok {
-		r0 = rf(currentConfigurationId, client)
+	var r0 mapset.Set[string]
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string, net.Client, *tfe.Config) (mapset.Set[string], error)); ok {
+		return rf(stackId, stackConfigurationId, httpClient, config)
+	}
+	if rf, ok := ret.Get(0).(func(string, string, net.Client, *tfe.Config) mapset.Set[string]); ok {
+		r0 = rf(stackId, stackConfigurationId, httpClient, config)
 	} else {
-		r0 = ret.Get(0).(string)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(mapset.Set[string])
+		}
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(string, string, net.Client, *tfe.Config) error); ok {
+		r1 = rf(stackId, stackConfigurationId, httpClient, config)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
-// MockTfeUtil_HandleConvergingStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'HandleConvergingStatus'
-type MockTfeUtil_HandleConvergingStatus_Call struct {
+// MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAllDeploymentNamesForAConfigId'
+type MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call struct {
 	*mock.Call
 }
 
-// HandleConvergingStatus is a helper method to define mock.On call
-//   - currentConfigurationId string
-//   - client *tfe.Client
-func (_e *MockTfeUtil_Expecter) HandleConvergingStatus(currentConfigurationId interface{}, client interface{}) *MockTfeUtil_HandleConvergingStatus_Call {
-	return &MockTfeUtil_HandleConvergingStatus_Call{Call: _e.mock.On("HandleConvergingStatus", currentConfigurationId, client)}
+// GetAllDeploymentNamesForAConfigId is a helper method to define mock.On call
+//   - stackId string
+//   - stackConfigurationId string
+//   - httpClient net.Client
+//   - config *tfe.Config
+func (_e *MockTfeUtil_Expecter) GetAllDeploymentNamesForAConfigId(stackId interface{}, stackConfigurationId interface{}, httpClient interface{}, config interface{}) *MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call {
+	return &MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call{Call: _e.mock.On("GetAllDeploymentNamesForAConfigId", stackId, stackConfigurationId, httpClient, config)}
 }
 
-func (_c *MockTfeUtil_HandleConvergingStatus_Call) Run(run func(currentConfigurationId string, client *tfe.Client)) *MockTfeUtil_HandleConvergingStatus_Call {
+func (_c *MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call) Run(run func(stackId string, stackConfigurationId string, httpClient net.Client, config *tfe.Config)) *MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string), args[2].(net.Client), args[3].(*tfe.Config))
+	})
+	return _c
+}
+
+func (_c *MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call) Return(_a0 mapset.Set[string], _a1 error) *MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call) RunAndReturn(run func(string, string, net.Client, *tfe.Config) (mapset.Set[string], error)) *MockTfeUtil_GetAllDeploymentNamesForAConfigId_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDeploymentGroupSummaryByConfigID provides a mock function with given fields: stackConfigurationId, client
+func (_m *MockTfeUtil) GetDeploymentGroupSummaryByConfigID(stackConfigurationId string, client *tfe.Client) (*tfe.StackDeploymentGroupSummaryList, error) {
+	ret := _m.Called(stackConfigurationId, client)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDeploymentGroupSummaryByConfigID")
+	}
+
+	var r0 *tfe.StackDeploymentGroupSummaryList
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, *tfe.Client) (*tfe.StackDeploymentGroupSummaryList, error)); ok {
+		return rf(stackConfigurationId, client)
+	}
+	if rf, ok := ret.Get(0).(func(string, *tfe.Client) *tfe.StackDeploymentGroupSummaryList); ok {
+		r0 = rf(stackConfigurationId, client)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*tfe.StackDeploymentGroupSummaryList)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(string, *tfe.Client) error); ok {
+		r1 = rf(stackConfigurationId, client)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDeploymentGroupSummaryByConfigID'
+type MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call struct {
+	*mock.Call
+}
+
+// GetDeploymentGroupSummaryByConfigID is a helper method to define mock.On call
+//   - stackConfigurationId string
+//   - client *tfe.Client
+func (_e *MockTfeUtil_Expecter) GetDeploymentGroupSummaryByConfigID(stackConfigurationId interface{}, client interface{}) *MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call {
+	return &MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call{Call: _e.mock.On("GetDeploymentGroupSummaryByConfigID", stackConfigurationId, client)}
+}
+
+func (_c *MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call) Run(run func(stackConfigurationId string, client *tfe.Client)) *MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(string), args[1].(*tfe.Client))
 	})
 	return _c
 }
 
-func (_c *MockTfeUtil_HandleConvergingStatus_Call) Return(_a0 string) *MockTfeUtil_HandleConvergingStatus_Call {
-	_c.Call.Return(_a0)
+func (_c *MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call) Return(_a0 *tfe.StackDeploymentGroupSummaryList, _a1 error) *MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockTfeUtil_HandleConvergingStatus_Call) RunAndReturn(run func(string, *tfe.Client) string) *MockTfeUtil_HandleConvergingStatus_Call {
+func (_c *MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call) RunAndReturn(run func(string, *tfe.Client) (*tfe.StackDeploymentGroupSummaryList, error)) *MockTfeUtil_GetDeploymentGroupSummaryByConfigID_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -232,6 +307,64 @@ func (_c *MockTfeUtil_NewClient_Call) Return(_a0 *tfe.Client, _a1 error) *MockTf
 }
 
 func (_c *MockTfeUtil_NewClient_Call) RunAndReturn(run func(*tfe.Config) (*tfe.Client, error)) *MockTfeUtil_NewClient_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PullAndSaveWorkspaceStateData provides a mock function with given fields: organizationName, workspaceName, client
+func (_m *MockTfeUtil) PullAndSaveWorkspaceStateData(organizationName string, workspaceName string, client *tfe.Client) (string, error) {
+	ret := _m.Called(organizationName, workspaceName, client)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PullAndSaveWorkspaceStateData")
+	}
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, string, *tfe.Client) (string, error)); ok {
+		return rf(organizationName, workspaceName, client)
+	}
+	if rf, ok := ret.Get(0).(func(string, string, *tfe.Client) string); ok {
+		r0 = rf(organizationName, workspaceName, client)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(string, string, *tfe.Client) error); ok {
+		r1 = rf(organizationName, workspaceName, client)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockTfeUtil_PullAndSaveWorkspaceStateData_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PullAndSaveWorkspaceStateData'
+type MockTfeUtil_PullAndSaveWorkspaceStateData_Call struct {
+	*mock.Call
+}
+
+// PullAndSaveWorkspaceStateData is a helper method to define mock.On call
+//   - organizationName string
+//   - workspaceName string
+//   - client *tfe.Client
+func (_e *MockTfeUtil_Expecter) PullAndSaveWorkspaceStateData(organizationName interface{}, workspaceName interface{}, client interface{}) *MockTfeUtil_PullAndSaveWorkspaceStateData_Call {
+	return &MockTfeUtil_PullAndSaveWorkspaceStateData_Call{Call: _e.mock.On("PullAndSaveWorkspaceStateData", organizationName, workspaceName, client)}
+}
+
+func (_c *MockTfeUtil_PullAndSaveWorkspaceStateData_Call) Run(run func(organizationName string, workspaceName string, client *tfe.Client)) *MockTfeUtil_PullAndSaveWorkspaceStateData_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string), args[2].(*tfe.Client))
+	})
+	return _c
+}
+
+func (_c *MockTfeUtil_PullAndSaveWorkspaceStateData_Call) Return(_a0 string, _a1 error) *MockTfeUtil_PullAndSaveWorkspaceStateData_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockTfeUtil_PullAndSaveWorkspaceStateData_Call) RunAndReturn(run func(string, string, *tfe.Client) (string, error)) *MockTfeUtil_PullAndSaveWorkspaceStateData_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -864,63 +997,6 @@ func (_c *MockTfeUtil_StackConfigurationHasRunningDeploymentGroups_Call) Return(
 }
 
 func (_c *MockTfeUtil_StackConfigurationHasRunningDeploymentGroups_Call) RunAndReturn(run func(string, *tfe.Client) (bool, error)) *MockTfeUtil_StackConfigurationHasRunningDeploymentGroups_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// StackConfigurationHasRunningPlan provides a mock function with given fields: stackConfigurationId, client
-func (_m *MockTfeUtil) StackConfigurationHasRunningPlan(stackConfigurationId string, client *tfe.Client) (bool, error) {
-	ret := _m.Called(stackConfigurationId, client)
-
-	if len(ret) == 0 {
-		panic("no return value specified for StackConfigurationHasRunningPlan")
-	}
-
-	var r0 bool
-	var r1 error
-	if rf, ok := ret.Get(0).(func(string, *tfe.Client) (bool, error)); ok {
-		return rf(stackConfigurationId, client)
-	}
-	if rf, ok := ret.Get(0).(func(string, *tfe.Client) bool); ok {
-		r0 = rf(stackConfigurationId, client)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	if rf, ok := ret.Get(1).(func(string, *tfe.Client) error); ok {
-		r1 = rf(stackConfigurationId, client)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// MockTfeUtil_StackConfigurationHasRunningPlan_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StackConfigurationHasRunningPlan'
-type MockTfeUtil_StackConfigurationHasRunningPlan_Call struct {
-	*mock.Call
-}
-
-// StackConfigurationHasRunningPlan is a helper method to define mock.On call
-//   - stackConfigurationId string
-//   - client *tfe.Client
-func (_e *MockTfeUtil_Expecter) StackConfigurationHasRunningPlan(stackConfigurationId interface{}, client interface{}) *MockTfeUtil_StackConfigurationHasRunningPlan_Call {
-	return &MockTfeUtil_StackConfigurationHasRunningPlan_Call{Call: _e.mock.On("StackConfigurationHasRunningPlan", stackConfigurationId, client)}
-}
-
-func (_c *MockTfeUtil_StackConfigurationHasRunningPlan_Call) Run(run func(stackConfigurationId string, client *tfe.Client)) *MockTfeUtil_StackConfigurationHasRunningPlan_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(*tfe.Client))
-	})
-	return _c
-}
-
-func (_c *MockTfeUtil_StackConfigurationHasRunningPlan_Call) Return(_a0 bool, _a1 error) *MockTfeUtil_StackConfigurationHasRunningPlan_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *MockTfeUtil_StackConfigurationHasRunningPlan_Call) RunAndReturn(run func(string, *tfe.Client) (bool, error)) *MockTfeUtil_StackConfigurationHasRunningPlan_Call {
 	_c.Call.Return(run)
 	return _c
 }
