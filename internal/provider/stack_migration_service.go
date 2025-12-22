@@ -533,7 +533,6 @@ func (r *stackMigrationResource) isCurrentStepAwaitingProviderAction(ctx context
 	// check if the current step is awaiting provider action
 	if (currentStepOperationType == "allow-import" && currentStepStatus == "pending_operator") ||
 		(currentStepOperationType == "import-state" && (currentStepStatus == "pending_operator" || currentStepStatus == "running")) {
-		tflog.Info(ctx, "================HELLO, SUJAY=======================================")
 		return true, diags
 	}
 

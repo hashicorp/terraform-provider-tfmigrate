@@ -493,8 +493,6 @@ func (r *stackMigrationResource) Update(ctx context.Context, request resource.Up
 	r.tfeUtil.UpdateContext(ctx)
 	r.httpClient.UpdateContext(ctx)
 	r.migrationHashService.UpdateContext(ctx)
-	r.stackSourceBundleAbsPath = plan.ConfigurationDir.ValueString()
-	r.terraformConfigDirAbsPath = plan.TerraformConfigDir.ValueString()
 
 	// Retrieve values from the plan
 	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
@@ -515,6 +513,9 @@ func (r *stackMigrationResource) Update(ctx context.Context, request resource.Up
 	for key, value := range plan.WorkspaceDeploymentMapping.Elements() {
 		migrationMapFromPlan[key] = value.(types.String).ValueString()
 	}
+
+	r.stackSourceBundleAbsPath = plan.ConfigurationDir.ValueString()
+	r.terraformConfigDirAbsPath = plan.TerraformConfigDir.ValueString()
 
 	// Fetch workspace to stack state conversion metadata
 	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Retrieving workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
