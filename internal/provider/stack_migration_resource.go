@@ -170,7 +170,6 @@ type stackMigrationResource struct {
 	migrationHashService      StackMigrationHashService           // migrationHashService is the service used to generate and manage migration hash for stack migrations.
 	retryAbandonedDeployments bool                                // retryAbandonedDeployments indicates whether to retry deployments by generating a new deployment run set to true during update action only
 	stackSourceBundleAbsPath  string                              // stackSourceBundleAbsPath is the absolute path to the stack source bundle directory containing the stack configuration files.
-	stateFile                 string                              // stateFile is the path to the state file used by terraform state list command.
 	terraformConfigDirAbsPath string                              // terraformConfigDirAbsPath is the absolute path to the Terraform configuration directory containing the Terraform configuration files.
 	tfeClient                 *tfe.Client                         // tfeClient is the TFE client used to interact with the HCP Terraform API.
 	tfeConfig                 *tfe.Config                         // tfeConfig is the TFE client configuration used to create the TFE client.
@@ -331,50 +330,18 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 		migrationMap[key] = value.(types.String).ValueString()
 	}
 
-	// retrieve a state file no make `terraform state list` infallible
-	stateFilePath, err := r.tfeUtil.PullAndSaveWorkspaceStateData(plan.Organization.ValueString(), maps.Keys(migrationMap)[0], r.tfeClient)
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error Getting Workspace State Data",
-			fmt.Sprintf("Failed to pull and save the workspace state data for organization %q and workspace %q: %s", plan.Organization.ValueString(), maps.Keys(migrationMap)[0], err.Error()),
-		)
+	tflog.Debug(ctx, fmt.Sprintf("Retrieving workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+		plan.Organization.ValueString(), maps.Keys(migrationMap)[0], migrationMap))
+	response.Diagnostics.Append(r.getWorkspaceToStackStateConversionMetaData(ctx, maps.Keys(migrationMap)[0], plan.Organization.ValueString())...)
+	if response.Diagnostics.HasError() {
+		tflog.Error(ctx, fmt.Sprintf("Failed to retrieve workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+			plan.Organization.ValueString(), maps.Keys(migrationMap)[0], migrationMap))
 		return
 	}
-	r.stateFile = stateFilePath
-
-	defer func() {
-		if err := os.Remove(stateFilePath); err != nil {
-			tflog.Error(ctx, fmt.Sprintf("Failed to remove temporary state file %q: %s", stateFilePath, err.Error()))
-		}
-	}()
-
-	resourcesFromWorkspaceState, err := r.tfstateUtil.ListAllResourcesFromWorkspaceStateWithStateFile(r.terraformConfigDirAbsPath, stateFilePath)
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error Listing Resources from Workspace State",
-			fmt.Sprintf("Failed to list resources from the workspace state in the directory %q: %s", r.terraformConfigDirAbsPath, err.Error()),
-		)
-		return
-	}
-
-	r.isStateModular = r.tfstateUtil.IsFullyModular(resourcesFromWorkspaceState)
-
-	workspaceToStackAddressMapRequest := tfstateUtil.WorkspaceToStackAddressMapRequest{
-		StackSourceBundleAbsPath:    r.stackSourceBundleAbsPath,
-		TerraformConfigFilesAbsPath: r.terraformConfigDirAbsPath,
-		StateFilePath:               stateFilePath,
-	}
-
-	workspaceStackAddressMap, err := r.tfstateUtil.WorkspaceToStackAddressMap(workspaceToStackAddressMapRequest)
-
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error Creating Workspace to Stack Map",
-			fmt.Sprintf("Failed to create workspace to stack map from the Terraform configuration directory %q and stack source bundle directory %q: %s", r.terraformConfigDirAbsPath, r.stackSourceBundleAbsPath, err.Error()),
-		)
-		return
-	}
-	r.workspaceToStackMap = workspaceStackAddressMap
+	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+		plan.Organization.ValueString(), maps.Keys(migrationMap)[0], migrationMap))
+	tflog.Debug(ctx, fmt.Sprintf("Is workspace state fully modular: %v", r.isStateModular))
+	tflog.Debug(ctx, fmt.Sprintf("Workspace to Stacks State resource mapping: %v", r.workspaceToStackMap))
 
 	// retrieve the required values from the plan
 	// organizationName, projectName, stackName, stackConfigDirectory, and migrationMap.
@@ -543,13 +510,27 @@ func (r *stackMigrationResource) Update(ctx context.Context, request resource.Up
 		return
 	}
 
+	// Retrieve the migration map from the plan
 	migrationMapFromPlan := make(map[string]string)
 	for key, value := range plan.WorkspaceDeploymentMapping.Elements() {
 		migrationMapFromPlan[key] = value.(types.String).ValueString()
 	}
 
-	// update the state of the existing stack migration resource by uploading the configuration files
-	tflog.Info(ctx, "Starting to apply stack migration configuration to an existing stack migration resource")
+	// Fetch workspace to stack state conversion metadata
+	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Retrieving workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+		plan.Organization.ValueString(), maps.Keys(migrationMapFromPlan)[0], migrationMapFromPlan))
+	if response.Diagnostics.Append(r.getWorkspaceToStackStateConversionMetaData(ctx, maps.Keys(migrationMapFromPlan)[0], plan.Organization.ValueString())...); response.Diagnostics.HasError() {
+		tflog.Error(ctx, fmt.Sprintf("[Update-Action] Failed to retrieve workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+			plan.Organization.ValueString(), maps.Keys(migrationMapFromPlan)[0], migrationMapFromPlan))
+		return
+	}
+	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Successfully retrieved workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+		plan.Organization.ValueString(), maps.Keys(migrationMapFromPlan)[0], migrationMapFromPlan))
+	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Is workspace state fully modular: %v", r.isStateModular))
+	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Workspace to Stacks State resource mapping: %v", r.workspaceToStackMap))
+
+	// Starting to update the state of the existing stack migration resource by uploading the configuration files
+	tflog.Info(ctx, "[Update-Action] Starting to apply stack migration configuration to an existing stack migration resource")
 
 	isNewState := false
 	isNewHash := false
@@ -594,7 +575,7 @@ func (r *stackMigrationResource) Update(ctx context.Context, request resource.Up
 		tflog.Info(ctx, "Starting to re-attempt state upload for retryable/failed deployments for stack migration resource")
 		newMigrationData := r.uploadStackDeploymentsState(ctx, migrationMapFromPlan)
 		tflog.Info(ctx, "Successfully re-attempted state upload for retryable/failed deployments for stack migration resource")
-		tflog.Debug(ctx, fmt.Sprintf("Updating migration data for stack %q in organization %q: %+v", plan.Name.ValueString(), plan.Organization.ValueString(), newMigrationData))
+		tflog.Debug(ctx, fmt.Sprintf("Updating migration data for stack %q in organization %q", plan.Name.ValueString(), plan.Organization.ValueString()))
 		newMigrationHash, err := r.migrationHashService.GetMigrationHash(newMigrationData)
 		if err != nil {
 			tflog.Error(ctx, fmt.Sprintf("Failed to generate migration hash for stack %q in organization %q: %s", plan.Name.ValueString(), plan.Organization.ValueString(), err.Error()))
@@ -1191,4 +1172,67 @@ func validateStateData(state StackMigrationResourceModel) diag.Diagnostics {
 	}
 
 	return diags
+}
+
+func (r *stackMigrationResource) getWorkspaceToStackStateConversionMetaData(ctx context.Context, workspaceName string, organizationName string) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	// retrieve a state file no make `terraform state list` infallible
+	tflog.Debug(ctx, fmt.Sprintf("Retrieving workspace state file for workspace %q in organization %q", workspaceName, organizationName))
+	stateFilePath, err := r.tfeUtil.PullAndSaveWorkspaceStateData(organizationName, workspaceName, r.tfeClient)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to pull and save the workspace state data for organization %q and workspace %q: %s", organizationName, workspaceName, err.Error())
+		tflog.Error(ctx, errorMsg)
+		diags.AddError(
+			"Error Getting Workspace State Data",
+			errorMsg,
+		)
+		return diags
+	}
+	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved workspace state file for workspace %q in organization %q to path %s", workspaceName, organizationName, stateFilePath))
+
+	defer func() {
+		tflog.Debug(ctx, fmt.Sprintf("Deleting workspace state file for workspace %q in organization %q", workspaceName, organizationName))
+		if err := os.Remove(stateFilePath); err != nil {
+			tflog.Error(ctx, fmt.Sprintf("Failed to remove temporary state file %q: %s", stateFilePath, err.Error()))
+		}
+		tflog.Debug(ctx, fmt.Sprintf("Successfully deleted workspace state file for workspace %q in organization %q", workspaceName, organizationName))
+	}()
+
+	tflog.Debug(ctx, fmt.Sprintf("Retrieving state resources from workspace state file %s", stateFilePath))
+	resourcesFromWorkspaceState, err := r.tfstateUtil.ListAllResourcesFromWorkspaceStateWithStateFile(r.terraformConfigDirAbsPath, stateFilePath)
+	if err != nil {
+		errorMessage := fmt.Sprintf("Failed to list resources from the workspace state in the directory %q: %s", r.terraformConfigDirAbsPath, err.Error())
+		tflog.Error(ctx, errorMessage)
+		diags.AddError(
+			"Error Listing Resources from Workspace State",
+			errorMessage,
+		)
+		return diags
+	}
+	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved state resources from workspace state file %s", stateFilePath))
+
+	r.isStateModular = r.tfstateUtil.IsFullyModular(resourcesFromWorkspaceState)
+	tflog.Debug(ctx, fmt.Sprintf("Is workspace state modular: %t", r.isStateModular))
+
+	workspaceToStackAddressMapRequest := tfstateUtil.WorkspaceToStackAddressMapRequest{
+		StackSourceBundleAbsPath:    r.stackSourceBundleAbsPath,
+		TerraformConfigFilesAbsPath: r.terraformConfigDirAbsPath,
+		StateFilePath:               stateFilePath,
+	}
+
+	tflog.Debug(ctx, fmt.Sprintf("Retrieving workspace to stack address map for workspace %q in organization %q", workspaceName, organizationName))
+	workspaceStackAddressMap, err := r.tfstateUtil.WorkspaceToStackAddressMap(workspaceToStackAddressMapRequest)
+	if err != nil {
+		errorMessage := fmt.Sprintf("Failed to create workspace to stack map from the Terraform configuration directory %q and stack source bundle directory %q: %s", r.terraformConfigDirAbsPath, r.stackSourceBundleAbsPath, err.Error())
+		tflog.Error(ctx, errorMessage)
+		diags.AddError(
+			"Error Creating Workspace to Stack Map",
+			errorMessage,
+		)
+		return diags
+	}
+	r.workspaceToStackMap = workspaceStackAddressMap
+	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved workspace to stack address map for workspace %q in organization %q", workspaceName, organizationName))
+	return nil
 }
