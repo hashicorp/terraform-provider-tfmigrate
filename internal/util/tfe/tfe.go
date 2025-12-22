@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-
 	"io/fs"
 	"net/http"
 	"os"
@@ -412,13 +410,13 @@ func (u *tfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string,
 
 	return &tfe.StackDeploymentRun{
 		ID:                   latestDeploymentRun.Id,
-		Status:               latestDeploymentRun.Attributes.Status,
+		Status:               tfe.DeploymentRunStatus(latestDeploymentRun.Attributes.Status),
 		StackDeploymentGroup: stackDeploymentGroup,
 	}, nil
 }
 
 // ReadLatestDeploymentRunWithRelations retrieves the latest deployment run for a stack by its ID and deployment name,
-// including relationships specified bellow.
+// including relationships specified below.
 // - stack-deployment-group
 // - stack-configuration
 // - current-step
@@ -650,7 +648,7 @@ func (u *tfeUtil) StackConfigurationHasRunningDeploymentGroups(stackConfiguratio
 	// TODO: Currently only 20 deployments are supported meaning that this will have 20 deployment groups at most.
 	//  We need to handle pagination if the number of deployment groups exceeds 20.
 	for _, group := range stackDeploymentGroups.Items {
-		deploymentGroupStatus := tfe.DeploymentGroupStatus(group.Status)
+		deploymentGroupStatus := group.Status
 		if slices.Contains(stackConstants.RunningDeploymentGroupStatuses, deploymentGroupStatus) {
 			tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s has running deployment group %s with status %s", stackConfigurationId, group.ID, deploymentGroupStatus))
 			return true, nil
@@ -764,7 +762,7 @@ func (u *tfeUtil) WatchStackConfigurationUntilTerminalStatus(stackConfigurationI
 		return "", diags
 	}
 
-	return tfe.StackConfigurationStatus(stackConfiguration.Status), diags
+	return stackConfiguration.Status, diags
 }
 
 // handleCurrentConfigurationStatus handles the current status of a stack configuration and returns a string representation of the status.
@@ -777,14 +775,14 @@ func (u *tfeUtil) handleCurrentConfigurationStatus(stackConfigurationID string, 
 	// case tfe.StackConfigurationStatusConverging:
 	//	tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s is converging", stackConfigurationID))
 	//	return currentStatus.String(), diags
-	case tfe.StackConfigurationStatusErrored:
+	case tfe.StackConfigurationStatusFailed:
 		tflog.Error(u.ctx, fmt.Sprintf("Stack configuration %s errored", stackConfigurationID))
 		diags.AddError("Stack configuration errored", fmt.Sprintf("Stack configuration %s entered error state", stackConfigurationID))
 		return currentStatus.String(), diags
-	case tfe.StackConfigurationStatusCanceled:
-		tflog.Warn(u.ctx, fmt.Sprintf("Stack configuration %s was canceled", stackConfigurationID))
-		diags.AddWarning("Stack configuration canceled", fmt.Sprintf("Stack configuration %s was canceled", stackConfigurationID))
-		return currentStatus.String(), diags
+	// case tfe.StackConfigurationStatusCanceled:
+	//	tflog.Warn(u.ctx, fmt.Sprintf("Stack configuration %s was canceled", stackConfigurationID))
+	//	diags.AddWarning("Stack configuration canceled", fmt.Sprintf("Stack configuration %s was canceled", stackConfigurationID))
+	//	return currentStatus.String(), diags
 	default:
 		tflog.Debug(u.ctx, fmt.Sprintf("Stack configuration %s still in progress: %s", stackConfigurationID, currentStatus))
 		return "", diags
@@ -1009,12 +1007,7 @@ func (u *tfeUtil) getLatestDeploymentRunByDeploymentName(stackId string, deploym
 		return nil, fmt.Errorf("error reading latest deployment run for stack ID %s and deployment name %s, err: %v", stackId, deploymentName, err)
 	}
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			tflog.Error(u.ctx, fmt.Sprintf("Error closing response body for latest deployment run for stack ID %s and deployment name %s: %v", stackId, deploymentName, err))
-		}
-	}(response.Body)
+	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
 		tflog.Error(u.ctx, fmt.Sprintf("Error reading latest deployment run for stack ID %s and deployment name %s: received status code %d", stackId, deploymentName, response.StatusCode))

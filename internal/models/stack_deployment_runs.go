@@ -3,37 +3,33 @@ package models
 import "time"
 
 type StackDeploymentRun struct {
-	Id         string `json:"id"`
-	Type       string `json:"type"`
-	Attributes struct {
-		Status     string    `json:"status"`
-		Deployment string    `json:"deployment"`
-		CreatedAt  time.Time `json:"created-at"`
-		UpdatedAt  time.Time `json:"updated-at"`
-		PlanMode   string    `json:"plan-mode"`
-	} `json:"attributes"`
-	Relationships struct {
-		StackDeploymentGroup struct {
-			Data struct {
-				Id   string `json:"id"`
-				Type string `json:"type"`
-			} `json:"data"`
-		} `json:"stack-deployment-group"`
+	Id            string                           `json:"id"`
+	Type          string                           `json:"type"`
+	Attributes    StackDeploymentRunAttributes     `json:"attributes"`
+	Relationships *StackDeploymentRunRelationships `json:"relationships"`
+}
 
-		StackConfiguration struct {
-			Data struct {
-				Id   string `json:"id"`
-				Type string `json:"type"`
-			} `json:"data"`
-		} `json:"stack-configuration"`
+type StackDeploymentRunAttributes struct {
+	Status     string    `json:"status"`
+	Deployment string    `json:"deployment"`
+	CreatedAt  time.Time `json:"created-at"`
+	UpdatedAt  time.Time `json:"updated-at"`
+	PlanMode   string    `json:"plan-mode"`
+}
 
-		CurrentStep struct {
-			Data struct {
-				Id   string `json:"id"`
-				Type string `json:"type"`
-			} `json:"data"`
-		} `json:"current-step"`
-	} `json:"relationships"`
+type StackDeploymentRunRelationships struct {
+	StackDeploymentGroup *StackDeploymentRunRelationship `json:"stack-deployment-group,omitempty"`
+	StackConfiguration   *StackDeploymentRunRelationship `json:"stack-configuration,omitempty"`
+	CurrentStep          *StackDeploymentRunRelationship `json:"current-step,omitempty"`
+}
+
+type StackDeploymentRunRelationship struct {
+	Data *StackDeploymentRunRelationshipData `json:"data"`
+}
+
+type StackDeploymentRunRelationshipData struct {
+	Id   string `json:"id"`
+	Type string `json:"type"`
 }
 
 type StackDeploymentRuns struct {

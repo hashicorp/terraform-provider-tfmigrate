@@ -151,7 +151,7 @@ func (s *stackMigrationHashService) getMigrationDataForEachWorkspaceDeploymentPa
 	data.DeploymentName = deploymentName
 	data.DeploymentGroupData = StackDeploymentGroupData{
 		Id:     deploymentRun.StackDeploymentGroup.ID,
-		Status: tfe.DeploymentGroupStatus(deploymentRun.StackDeploymentGroup.Status),
+		Status: deploymentRun.StackDeploymentGroup.Status,
 	}
 
 	return data

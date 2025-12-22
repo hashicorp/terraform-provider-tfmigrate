@@ -25,7 +25,7 @@ func (r *stackMigrationResource) allowSourceBundleUpload(ctx context.Context, co
 		return true, nil
 	}
 
-	stackConfigurationStatus := tfe.StackConfigurationStatus(configuration.Status)
+	stackConfigurationStatus := configuration.Status
 
 	// handle completed status
 	if stackConfigurationStatus == tfe.StackConfigurationStatusCompleted {
@@ -119,15 +119,15 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 	state.TerraformConfigDir = types.StringValue(r.terraformConfigDirAbsPath)
 	state.WorkspaceDeploymentMapping = types.MapValueMust(types.StringType, migrationMapAsStateAttribute)
 
-	if configurationStatus == tfe.StackConfigurationStatusCanceled {
-		diags.AddWarning(
-			"Stack Configuration Canceled",
-			fmt.Sprintf("The current stack configuration %s has been canceled. No state would be uploaded", currentConfigurationId),
-		)
-		return false, state, diags
-	}
+	// if configurationStatus == tfe.StackConfigurationStatusCanceled {
+	//	diags.AddWarning(
+	//		"Stack Configuration Canceled",
+	//		fmt.Sprintf("The current stack configuration %s has been canceled. No state would be uploaded", currentConfigurationId),
+	//	)
+	//	return false, state, diags
+	//}
 
-	if configurationStatus == tfe.StackConfigurationStatusErrored {
+	if configurationStatus == tfe.StackConfigurationStatusFailed {
 		diags.Append(r.tfeUtil.ReadStackDiagnosticsByConfigID(currentConfigurationId, r.httpClient, r.tfeConfig)...)
 		return false, state, diags
 	}
@@ -455,6 +455,7 @@ func (r *stackMigrationResource) isCurrentStepAwaitingProviderAction(ctx context
 	var diags diag.Diagnostics
 
 	// read the latest deployment run for the deployment
+	tflog.Info(ctx, fmt.Sprintf("Reading latest deployment run for deployment %s in stack %s", deploymentName, r.existingStack.Name))
 	latestRun, err := r.tfeUtil.ReadLatestDeploymentRunWithRelations(r.existingStack.ID, deploymentName, r.httpClient, r.tfeConfig, r.tfeClient)
 	if err != nil {
 		diags.AddError(
@@ -467,8 +468,7 @@ func (r *stackMigrationResource) isCurrentStepAwaitingProviderAction(ctx context
 		return false, diags
 	}
 
-	// validate latestRun and its relationships
-	if latestRun == nil || &latestRun.Relationships == nil {
+	if latestRun == nil {
 		diags.AddError(
 			"Error Reading Deployment Group from Latest Deployment Run",
 			fmt.Sprintf("Could not read deployment group from latest deployment run for deployment %q in stack %q",
@@ -478,14 +478,26 @@ func (r *stackMigrationResource) isCurrentStepAwaitingProviderAction(ctx context
 		return false, diags
 	}
 
-	var currentStepId string
-
-	// validate the current step relationship
-	if &latestRun.Relationships.CurrentStep == nil ||
-		&latestRun.Relationships.CurrentStep.Data == nil ||
-		latestRun.Relationships.CurrentStep.Data.Id == "" {
+	// validate the latestRun and its relationships
+	latestRunRelationships := latestRun.Relationships
+	if latestRunRelationships == nil {
+		diags.AddError(
+			"Error Reading Deployment Group from Latest Deployment Run",
+			fmt.Sprintf("Could not read deployment group from latest deployment run for deployment %q in stack %q",
+				deploymentName,
+				r.existingStack.Name),
+		)
 		return false, diags
 	}
+
+	// validate the current step relationship
+	if latestRunRelationships.CurrentStep == nil ||
+		latestRunRelationships.CurrentStep.Data == nil ||
+		latestRunRelationships.CurrentStep.Data.Id == "" {
+		return false, diags
+	}
+
+	var currentStepId = latestRunRelationships.CurrentStep.Data.Id
 
 	// read the current step details
 	currentStep, err := r.tfeClient.StackDeploymentSteps.Read(ctx, currentStepId)
@@ -503,7 +515,7 @@ func (r *stackMigrationResource) isCurrentStepAwaitingProviderAction(ctx context
 
 	// validate current step details
 	if currentStep == nil || currentStep.ID == "" ||
-		//currentStep.OperationType== "" ||
+		currentStep.OperationType == "" ||
 		currentStep.Status == "" {
 		diags.AddError(
 			"Error Reading Current Deployment Step Details",
@@ -515,13 +527,13 @@ func (r *stackMigrationResource) isCurrentStepAwaitingProviderAction(ctx context
 		return false, diags
 	}
 
-	//currentStepOperationType := currentStep.OperationType
-	currentStepOperationType := ""
+	currentStepOperationType := currentStep.OperationType
 	currentStepStatus := currentStep.Status
 
 	// check if the current step is awaiting provider action
 	if (currentStepOperationType == "allow-import" && currentStepStatus == "pending_operator") ||
 		(currentStepOperationType == "import-state" && (currentStepStatus == "pending_operator" || currentStepStatus == "running")) {
+		tflog.Info(ctx, "================HELLO, SUJAY=======================================")
 		return true, diags
 	}
 

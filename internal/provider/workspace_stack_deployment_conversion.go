@@ -32,12 +32,14 @@ func (r *stackMigrationResource) uploadStackDeploymentsState(ctx context.Context
 }
 
 func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx context.Context, workspaceName string, deploymentName string) StackMigrationData {
+	tflog.Debug(ctx, fmt.Sprintf("Starting workspace state upload for workspace: %s, deployment: %s", workspaceName, deploymentName))
 	migrationData := StackMigrationData{
 		DeploymentName: deploymentName,
 	}
 	organizationName := r.existingOrganization.Name
 
 	// 1. Get the workspace
+	tflog.Debug(ctx, fmt.Sprintf("Fetching workspace: %s", workspaceName))
 	workspace, err := r.tfeUtil.ReadWorkspaceByName(organizationName, workspaceName, r.tfeClient)
 	if err != nil {
 		errorMessage := fmt.Sprintf("Error reading workspace name: %s, error: %v", workspaceName, err)
@@ -45,10 +47,13 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 		migrationData.FailureReason = errorMessage
 		return migrationData
 	}
+	tflog.Debug(ctx, fmt.Sprintf("Fetched workspace: %s", workspaceName))
 	migrationData.WorkspaceId = workspace.ID
 
 	// 2. Get the latest deployment runId for the deployment
+	tflog.Debug(ctx, fmt.Sprintf("Fetching latest deployment run for workspace: %s, deployment: %s", workspaceName, deploymentName))
 	continueToFetchDeploymentRunSteps, mostRecentDeploymentRun := r.getLatestDeploymentRun(ctx, deploymentName, &migrationData)
+	tflog.Debug(ctx, fmt.Sprintf("Fetched latest deployment run for workspace: %s, deployment: %s, continue: %t", workspaceName, deploymentName, continueToFetchDeploymentRunSteps))
 	if !continueToFetchDeploymentRunSteps {
 		return migrationData
 	}
@@ -57,8 +62,9 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 	// the handleDeploymentGroupTerminalState function
 	// returns false if the deployment group is already succeeded or abandoned
 	// and true if the deployment group is failed and a rerun is triggered
-	deploymentGroupStatus := tfe.DeploymentGroupStatus(mostRecentDeploymentRun.StackDeploymentGroup.Status)
+	deploymentGroupStatus := mostRecentDeploymentRun.StackDeploymentGroup.Status
 	continueOnImport := r.handleDeploymentGroupTerminalState(ctx, deploymentGroupStatus, &migrationData, mostRecentDeploymentRun.StackDeploymentGroup.ID, deploymentName)
+	tflog.Debug(ctx, fmt.Sprintf("Deployment group status: %s, continue on import: %t", deploymentGroupStatus, continueOnImport))
 	if !continueOnImport {
 		return migrationData
 	}
@@ -79,6 +85,7 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 	}
 
 	// 4. get the steps of the deployment run
+	tflog.Debug(ctx, fmt.Sprintf("Fetching deployment run steps for workspace: %s, deployment: %s", workspaceName, deploymentName))
 	deploymentRunSteps := r.fetchDeploymentRunStep(ctx, &migrationData, mostRecentDeploymentRun.ID, deploymentName)
 	if deploymentRunSteps == nil {
 		migrationData.DeploymentGroupData.Status = deploymentGroupStatus
@@ -86,12 +93,14 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 		migrationData.FailureReason = "Failed to fetch deployment run steps, This could be due to deployment run not being created properly, If the issue persists please check your deployment config or workspace state data and retry or reach out to support."
 		return migrationData
 	}
+	tflog.Debug(ctx, fmt.Sprintf("Fetched deployment run steps for workspace: %s, deployment: %s", workspaceName, deploymentName))
 
 	// 5. Validate an allow-import step
 	// validate if an allow-import step is present, in its steps
 	// also checks if we need to call advance on the allow-import step
 	allowImportStep, allowImport, callAdvanceOnAllowImport := r.handleDeploymentRunStepsAllowImport(ctx, deploymentRunSteps, deploymentName, &migrationData)
 	if !allowImport {
+		tflog.Error(ctx, fmt.Sprintf("No allow-import step found for deployment: %s, runId: %s", deploymentName, mostRecentDeploymentRun.ID))
 		return migrationData
 	}
 
@@ -106,9 +115,10 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 		tflog.Info(ctx, fmt.Sprintf("Advanced allow-import step stack: %s, deployment: %s", r.existingStack.ID, deploymentName))
 	}
 
-	tflog.Debug(ctx, fmt.Sprintf("Completed allow-import step for stack: %s, deployment: %s", r.existingStack.ID, deploymentName))
+	tflog.Debug(ctx, fmt.Sprintf("Completed allow-import step for stack: %s, deployment: %s, runId %s", r.existingStack.ID, deploymentName, mostRecentDeploymentRun.ID))
 
 	// 7. If the allow-import step is completed, check for an import-state step
+	tflog.Debug(ctx, fmt.Sprintf("Checking for import-state step for deployment: %s, runId %s", deploymentName, mostRecentDeploymentRun.ID))
 	importStateStep := r.getImportStateStep(deploymentRunSteps)
 	if importStateStep == nil {
 		errorMessage := fmt.Sprintf("No import-state step found for deployment: %s", deploymentName)
@@ -116,10 +126,10 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 		migrationData.FailureReason = errorMessage
 		return migrationData
 	}
-
-	tflog.Debug(ctx, fmt.Sprintf("Import-state step found for deployment: %s", deploymentName))
+	tflog.Debug(ctx, fmt.Sprintf("Found import-state step for deployment: %s, runId %s, stepId %s", deploymentName, mostRecentDeploymentRun.ID, importStateStep.Id))
 
 	// Re-fetch the import state step to get the latest status and links
+	tflog.Debug(ctx, fmt.Sprintf("Awaiting 5 seconds before re-fetching import-state step for deployment: %s, stepId %s", deploymentName, importStateStep.Id))
 	time.Sleep(5 * time.Second) // wait for 5 seconds before fetching the step again to allow TFE to process the allow-import step
 	readStepById, err := r.tfeUtil.ReadStepById(importStateStep.Id, r.tfeClient)
 	if err != nil {
@@ -129,7 +139,7 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 		return migrationData
 	}
 
-	importStateStep.Attributes.Status = readStepById.Status
+	importStateStep.Attributes.Status = string(readStepById.Status)
 	importStateStep.Attributes.CreatedAt = readStepById.CreatedAt
 	importStateStep.Attributes.UpdatedAt = readStepById.UpdatedAt
 	importStateStep.Links = readStepById.Links
@@ -170,10 +180,12 @@ func (r *stackMigrationResource) uploadWorkspaceStateToStackDeployment(ctx conte
 
 	// 9. Validate the import-state step status is pending_operator before advancing
 	if fetchImportStepAgain {
+		tflog.Debug(ctx, fmt.Sprintf("Awaiting 5 seconds before re-fetching import-state step for deployment: %s", deploymentName))
 		time.Sleep(5 * time.Second) // wait for 5 seconds before fetching the step again to allow TFE to process the state upload
 		tflog.Debug(ctx, fmt.Sprintf("Re-fetching import-state step to validate status for deployment: %s", deploymentName))
 		callAdvanceOnImportState = r.reFetchImportStateStepAndValidate(ctx, &migrationData, importStateStep.Id, deploymentName)
 		if !callAdvanceOnImportState {
+			tflog.Error(ctx, fmt.Sprintf("Failed to validate import-state step status for deployment: %s", deploymentName))
 			return migrationData
 		}
 	}
@@ -216,7 +228,7 @@ func (r *stackMigrationResource) syncDeploymentGroupDataAfterStateImport(ctx con
 			)
 			tflog.Error(ctx, migrationData.FailureReason)
 		} else {
-			status := tfe.DeploymentGroupStatus(latestDeploymentRun.StackDeploymentGroup.Status)
+			status := latestDeploymentRun.StackDeploymentGroup.Status
 			deploymentGroupId := latestDeploymentRun.StackDeploymentGroup.ID
 			tflog.Debug(ctx, fmt.Sprintf("Deployment group %s for deployment %s in stack %s is in %s status after state import advance.", deploymentGroupId, name, r.existingStack.Name, status))
 			migrationData.DeploymentGroupData.Status = status
@@ -356,14 +368,14 @@ func (r *stackMigrationResource) handleDeploymentGroupTerminalState(ctx context.
 			tflog.Error(ctx, errorMessage)
 			migrationData.FailureReason = errorMessage
 			return false
-		} else {
-			tflog.Warn(ctx, fmt.Sprintf("Deployment group %s for deployment %s is in abandoned state, rerunning the deployment-group, retry=%t", deploymentGroupId, deploymentName, r.retryAbandonedDeployments))
-			if err := r.tfeUtil.RerunDeploymentGroup(migrationData.DeploymentGroupData.Id, []string{deploymentName}, r.tfeClient); err != nil {
-				errorMessage := fmt.Sprintf("Error rerunning deployment group %s for deployment %s, error: %v", migrationData.DeploymentGroupData.Id, deploymentName, err)
-				tflog.Error(ctx, errorMessage)
-				migrationData.FailureReason = errorMessage
-				return false
-			}
+		}
+
+		tflog.Warn(ctx, fmt.Sprintf("Deployment group %s for deployment %s is in abandoned state, rerunning the deployment-group, retry=%t", deploymentGroupId, deploymentName, r.retryAbandonedDeployments))
+		if err := r.tfeUtil.RerunDeploymentGroup(migrationData.DeploymentGroupData.Id, []string{deploymentName}, r.tfeClient); err != nil {
+			errorMessage := fmt.Sprintf("Error rerunning deployment group %s for deployment %s, error: %v", migrationData.DeploymentGroupData.Id, deploymentName, err)
+			tflog.Error(ctx, errorMessage)
+			migrationData.FailureReason = errorMessage
+			return false
 		}
 	}
 
@@ -407,7 +419,7 @@ func (r *stackMigrationResource) getLatestDeploymentRun(ctx context.Context, dep
 	// populate the migration data with the deployment run details
 	migrationData.DeploymentGroupData = StackDeploymentGroupData{}
 	migrationData.DeploymentGroupData.Id = stateDeploymentRun.StackDeploymentGroup.ID
-	migrationData.DeploymentGroupData.Status = tfe.DeploymentGroupStatus(stateDeploymentRun.StackDeploymentGroup.Status)
+	migrationData.DeploymentGroupData.Status = stateDeploymentRun.StackDeploymentGroup.Status
 
 	if !r.deploymentStateImportMap[deploymentName] {
 		warningMessage := fmt.Sprintf("Deployemnt %s not marked for state import, no state will be imported", deploymentName)

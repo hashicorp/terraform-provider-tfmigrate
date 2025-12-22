@@ -12,10 +12,7 @@ const (
 
 var (
 	RunningDeploymentGroupStatuses = []tfe.DeploymentGroupStatus{
-		tfe.DeploymentGroupStatusPreDeploying,
 		tfe.DeploymentGroupStatusPending,
-		tfe.DeploymentGroupStatusPreDeployingPendingOperator,
-		tfe.DeploymentGroupStatusAcquiringLock,
 		tfe.DeploymentGroupStatusDeploying,
 	}
 
@@ -23,11 +20,9 @@ var (
 		tfe.StackConfigurationStatusPending,
 		tfe.StackConfigurationStatusQueued,
 		tfe.StackConfigurationStatusPreparing,
-		tfe.StackConfigurationStatusEnqueueing,
 	}
 
 	ErroredOrCancelledStackConfigurationStatuses = []tfe.StackConfigurationStatus{
-		tfe.StackConfigurationStatusErrored,
-		tfe.StackConfigurationStatusCanceled,
+		tfe.StackConfigurationStatusFailed,
 	}
 )
