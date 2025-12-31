@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	stackConstants "terraform-provider-tfmigrate/internal/constants/stack"
+	httpUtil "terraform-provider-tfmigrate/internal/util/net"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 
@@ -17,6 +18,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
+
+type DeploymentNameSymmetricDiffRequest struct {
+	DeploymentNamesFromConfig mapset.Set[string]
+	StackId                   string
+	StackConfigurationId      string
+	HttpClient                httpUtil.Client
+	Config                    *tfe.Config
+}
 
 // allowSourceBundleUpload checks if the stack configuration is in a state that allows uploading a new source bundle.
 func (r *stackMigrationResource) allowSourceBundleUpload(ctx context.Context, configuration *tfe.StackConfiguration) (bool, error) {
@@ -649,6 +658,35 @@ func (r *stackMigrationResource) uploadNewConfigAndGetSourceBundleHash(ctx conte
 		return nil, nil, diags
 	}
 	return &currentConfigurationId, &currentSourceBundleHash, diags
+}
+
+func (r *stackMigrationResource) CheckDeploymentNameDifferences(ctx context.Context, request DeploymentNameSymmetricDiffRequest) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	// read the deployment groups from the API
+	deploymentNamesByConfigId, err := r.tfeUtil.GetAllDeploymentNamesForAConfigId(request.StackId, request.StackConfigurationId, request.HttpClient, request.Config)
+	if err != nil {
+		err := fmt.Sprintf("error reading deployment names for stack %s and configuration %s, err : %w", request.StackId, request.StackConfigurationId, err)
+		tflog.Error(ctx, err)
+		diags.AddError(
+			"Error Reading Deployment Names from Stack Configuration",
+			err,
+		)
+		return false, diags
+	}
+
+	deploymentNameDiffExists := deploymentNamesByConfigId.SymmetricDifference(request.DeploymentNamesFromConfig).Cardinality() > 0
+
+	if deploymentNameDiffExists {
+		tflog.Info(ctx, fmt.Sprintf("Deployment names from stack config files %v do not match the deployment names from API response %v for stack %s and configurationId %s, deploymentNameDiffExists: %t",
+			request.DeploymentNamesFromConfig, deploymentNamesByConfigId, request.StackId, request.StackConfigurationId, deploymentNameDiffExists))
+	} else {
+		tflog.Info(ctx, fmt.Sprintf("Deployment names from stack config files %v match the deployment names from API response %v for stack %s and configurationId %s, deploymentNameDiffExists: %t",
+			request.DeploymentNamesFromConfig, deploymentNamesByConfigId, request.StackId, request.StackConfigurationId, deploymentNameDiffExists))
+	}
+
+	return deploymentNameDiffExists, diags
+
 }
 
 // prettyPrintJSON pretty prints a given interface as a JSON string.

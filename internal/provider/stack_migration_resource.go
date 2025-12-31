@@ -549,7 +549,7 @@ func (r *stackMigrationResource) Update(ctx context.Context, request resource.Up
 			plan.Name.ValueString(),
 			plan.ConfigurationDir.ValueString(),
 			migrationMapFromPlan,
-			true, false)
+			true, true)
 		if response.Diagnostics.Append(diags...); response.Diagnostics.HasError() {
 			return
 		}
@@ -782,6 +782,12 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 		return
 	}
 
+	stackName := r.existingStack.Name
+	organizationName := r.existingOrganization.Name
+	projectName := r.existingProject.Name
+	plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
+	plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
+
 	if r.existingStack.LatestStackConfiguration == nil {
 		// NOTE: if latestStackConfiguration is nil,
 		//  meaning the stack configuration has been deleted outside the resource
@@ -794,42 +800,47 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 
 		plan.CurrentConfigurationId = types.StringUnknown()
 		plan.CurrentConfigurationStatus = types.StringUnknown()
-		plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-		plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
 		plan.MigrationHash = types.StringUnknown()
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
-	} else if r.existingStack.LatestStackConfiguration.ID == "" || r.existingStack.LatestStackConfiguration.Status == "" {
+	}
+
+	// Current data
+	currentStackConfigID := r.existingStack.LatestStackConfiguration.ID
+	currentStackConfigStatus := r.existingStack.LatestStackConfiguration.Status
+
+	// State data
+	stateConfigurationId := state.CurrentConfigurationId.ValueString()
+	stateConfigurationStatus := state.CurrentConfigurationStatus.ValueString()
+
+	if currentStackConfigID == "" || string(currentStackConfigStatus) == "" {
 		// validate latestStackConfiguration in the existing stack
 		resp.Diagnostics.AddError(
 			"Invalid Stack Configuration State",
-			fmt.Sprintf(stackConstants.CurrentStackConfigIsNotValid, r.existingStack.Name, r.existingOrganization.Name, r.existingProject.Name),
+			fmt.Sprintf(stackConstants.CurrentStackConfigIsNotValid, stackName, organizationName, projectName),
 		)
 		return
 	}
 
+	plan.CurrentConfigurationId = types.StringValue(currentStackConfigID)
+
 	// handle configurationId changes
-	stateConfigurationId := state.CurrentConfigurationId.ValueString()
-	if stateConfigurationId != r.existingStack.LatestStackConfiguration.ID {
-		plan.CurrentConfigurationId = types.StringValue(r.existingStack.LatestStackConfiguration.ID)
+	if stateConfigurationId != currentStackConfigID {
 		plan.CurrentConfigurationStatus = types.StringUnknown()
-		plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-		plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
 		plan.MigrationHash = types.StringUnknown()
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
 	}
 
 	// handle configuration status changes
-	stateConfigurationStatus := state.CurrentConfigurationStatus.ValueString()
-	if stateConfigurationStatus != string(r.existingStack.LatestStackConfiguration.Status) {
+	if stateConfigurationStatus != currentStackConfigStatus.String() {
 		plan.CurrentConfigurationStatus = types.StringUnknown()
-		plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-		plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
 		plan.MigrationHash = types.StringUnknown()
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
 	}
+
+	plan.CurrentConfigurationStatus = types.StringValue(currentStackConfigStatus.String())
 
 	// NOTE:
 	//  Handle `tfe.StackConfigurationStatusErrored`, `tfe.StackConfigurationStatusCanceled`.
@@ -842,8 +853,6 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 		plan.CurrentConfigurationId = types.StringUnknown()
 		plan.CurrentConfigurationStatus = types.StringUnknown()
 		plan.MigrationHash = types.StringUnknown()
-		plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-		plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
 	}
@@ -852,14 +861,14 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 	//  At this we are sure that neither the configuration ID nor status has changed.
 	//  and the configuration is still running from the last apply
 	if slices.Contains(stackConstants.RunningStackConfigurationStatuses,
-		r.existingStack.LatestStackConfiguration.Status) {
+		currentStackConfigStatus) {
 		// NOTE: If the configurationId and status are unchanged and configuration is running
 		//  check the following attributes for idempotency:
 		//  - source_bundle_hash
 		//  - terraform_config_hash
 		//  - workspace_deployment_mapping
 		if isIdempotentConfig, diags := r.isIdempotentConfig(plan, state,
-			currentSourceBundleHash, currentTerraformConfigHash); !isIdempotentConfig {
+			currentSourceBundleHash, currentTerraformConfigHash); !isIdempotentConfig || diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}
@@ -870,11 +879,6 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 		//  terminal status and the then state upload is performed and needs to be synced via update action
 		tflog.Debug(ctx,
 			"Prior stack configuration is still running, and no config changes detected, no re-upload needed, continuing to wait for the running configuration to reach terminal status and retry state migration afterwards")
-
-		plan.CurrentConfigurationId = types.StringValue(r.existingStack.LatestStackConfiguration.ID)
-		plan.CurrentConfigurationStatus = types.StringValue(string(r.existingStack.LatestStackConfiguration.Status))
-		plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-		plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
 		plan.MigrationHash = types.StringUnknown()
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
@@ -884,91 +888,78 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 	//  nor the configuration status from the last apply has not errored or cancelled and is not running,
 	//  now we need to check if there are any running deployment groups as the configuration status
 	//  is `tfe.StackConfigurationStatusCompleted`
-	hasRunningDeploymentGroups, err := r.tfeUtil.StackConfigurationHasRunningDeploymentGroups(r.existingStack.LatestStackConfiguration.ID, r.tfeClient)
+	hasRunningDeploymentGroups, err := r.tfeUtil.StackConfigurationHasRunningDeploymentGroups(currentStackConfigID, r.tfeClient)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Checking Running Deployment Groups",
-			fmt.Sprintf("Could not check running deployment groups for stack %q in organization %q and project %q: %s", r.existingStack.Name, r.existingOrganization.Name, r.existingProject.Name, err.Error()),
+			fmt.Sprintf("Could not check running deployment groups for stack %q in organization %q and project %q: %s", stackName, organizationName, projectName, err.Error()),
 		)
 		return
 	}
 
+	hasSourceConfigHashChanged := state.SourceBundleHash.ValueString() != currentSourceBundleHash
+	hasTerraformConfigHashChanged := state.TerraformConfigHash.ValueString() != currentTerraformConfigHash
+
 	// If there are no running deployment groups, we can proceed to re-uploading the configuration
 	if !hasRunningDeploymentGroups {
-		tflog.Debug(ctx, "No running deployment groups detected for the current stack configuration checking deployment group summary for failed deployment groups")
-		deploymentGroupSummaryList, err := r.tfeUtil.GetDeploymentGroupSummaryByConfigID(r.existingStack.LatestStackConfiguration.ID, r.tfeClient)
+		tflog.Debug(ctx, "No running deployment groups detected for the current stack configuration checking config file changes and deployment group summary for failed deployment groups")
+		// Get all the deployment groups summary for the latest stack configuration
+		stackDeploymentGroupSummaryListForTheLatestConfigurationId, err := r.tfeUtil.GetDeploymentGroupSummaryByConfigID(currentStackConfigID, r.tfeClient)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Getting Deployment Group Summary",
-				fmt.Sprintf("Could not get deployment group summary for stack %q in organization %q and project %q: %s", r.existingStack.Name, r.existingOrganization.Name, r.existingProject.Name, err.Error()),
+				fmt.Sprintf("Could not get deployment group summary for stack %q in organization %q and project %q: %s", stackName, organizationName, projectName, err.Error()),
 			)
 			return
 		}
+		successfulDeploymentGroupsCount, failedOrAbandonedDeploymentGroupsCount := getDeploymentGroupCountByTerminalStatus(stackDeploymentGroupSummaryListForTheLatestConfigurationId)
 
-		hasFailedDeploymentGroups := false
-		hasSourceConfigHashChanged := state.SourceBundleHash.ValueString() != currentSourceBundleHash
-		hasTerraformConfigHashChanged := state.TerraformConfigHash.ValueString() != currentTerraformConfigHash
-
-		for _, dgs := range deploymentGroupSummaryList.Items {
-			if dgs.StatusCounts.Failed > 0 {
-				hasFailedDeploymentGroups = true
-				break
-			}
+		// NOTE: All deployment groups have succeeded, neither the stack configuration files
+		//  nor the terraform configuration files have changed no modification of rescan is needed
+		//  NO-OP scenario
+		if successfulDeploymentGroupsCount == len(migrationMapFromPlan) && !hasSourceConfigHashChanged && !hasTerraformConfigHashChanged {
+			tflog.Debug(ctx, "All deployment groups have succeeded and no configuration changes detected, no resource update needed")
+			plan.MigrationHash = state.MigrationHash
+			resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+			return
 		}
 
-		if hasFailedDeploymentGroups {
-			if hasSourceConfigHashChanged || hasTerraformConfigHashChanged {
-				// NOTE: If there are failed deployment groups and either the source bundle hash or terraform config
-				//  hash has changed, we proceed to re-upload the configuration and state migration
-				tflog.Debug(ctx,
-					"Failed deployment groups detected with configuration changes, proceeding to upload updated configuration")
-				plan.CurrentConfigurationId = types.StringUnknown()
-				plan.CurrentConfigurationStatus = types.StringUnknown()
-				plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-				plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
-				plan.MigrationHash = types.StringUnknown()
-				resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
-				return
-			} else {
-				// NOTE: If there are failed deployment groups but neither the source bundle hash nor terraform
-				//  config hash has changed, we do not proceed to re-uploading the configuration rather we just retry
-				//  the failed deployment groups and sync the migration_hash
-				tflog.Debug(ctx, "Failed deployment groups detected without configuration changes, no configuration upload needed, failed deployment groups will be retried")
-				plan.CurrentConfigurationId = types.StringValue(r.existingStack.LatestStackConfiguration.ID)
-				plan.CurrentConfigurationStatus = types.StringValue(string(r.existingStack.LatestStackConfiguration.Status))
-				plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-				plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
-				plan.MigrationHash = types.StringUnknown()
-				resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
-				return
-			}
-
-		} else {
-			// NOTE: If there are no failed deployment groups and since there are no running deployment groups as well
-			//  and if either the source bundle hash or terraform config hash has changed,
-			//  we proceed to re-uploading the configuration
-			if hasSourceConfigHashChanged || hasTerraformConfigHashChanged {
-				tflog.Debug(ctx, "No Failed deployment groups detected with configuration changes, proceeding to upload updated configuration")
-				plan.CurrentConfigurationId = types.StringUnknown()
-				plan.CurrentConfigurationStatus = types.StringUnknown()
-				plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-				plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
-				plan.MigrationHash = types.StringUnknown()
-				resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
-				return
-			} else {
-				// NOTE: All deployment groups have succeeded and there are no configuration changes,
-				//  no re-upload needed
-				tflog.Debug(ctx, "All deployment groups have succeeded and no configuration changes detected, no resource update needed")
-				plan.CurrentConfigurationId = types.StringValue(r.existingStack.LatestStackConfiguration.ID)
-				plan.CurrentConfigurationStatus = types.StringValue(string(r.existingStack.LatestStackConfiguration.Status))
-				plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-				plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
-				plan.MigrationHash = state.MigrationHash
-				resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
-				return
-			}
+		// NOTE: All deployment groups in the stack configuration have reached terminal status and based on the following data
+		//  - whether the stack configuration files have changed
+		//  - whether the terraform configuration files have changed
+		//  - number of failed or abandoned deployment groups.
+		//  We have the following options to choose form:
+		//  - if the stack configuration files have changed --> then we need to trigger a new source bundle upload
+		//  - if the terraform configuration files have changed --> then we need to trigger a source bundle upload
+		//  - if all deployment groups have failed --> then we need to trigger a new source bundle upload
+		//  - if all the deployment groups have succeeded and either the stack configuration files or the terraform configuration files have changed --> then we need to trigger a new source bundle upload
+		//  - if the deployment groups have one or more failed or abandoned deployments and neither the stack configuration files nor the terraform configuration files have changed --> then we just retry the failed deployment groups without re-uploading the configuration files
+		hasAllDeploymentsHaveFailed := failedOrAbandonedDeploymentGroupsCount == len(migrationMapFromPlan)
+		if hasSourceConfigHashChanged ||
+			hasTerraformConfigHashChanged ||
+			hasAllDeploymentsHaveFailed {
+			logEntry := fmt.Sprintf("New source bundle upload condition has been met, triggering a new source bundle upload stack %q in organization %q and project %q. hasSourceConfigHashChanged:%t, hasTerraformConfigHashChanged:%t, failedOrAbandonedDeploymentGroupsCount:%d, migrationMapSize: %d, hasAllDeploymentsHaveFailed %t",
+				stackName, organizationName, projectName, hasSourceConfigHashChanged, hasTerraformConfigHashChanged, failedOrAbandonedDeploymentGroupsCount, len(migrationMapFromPlan), hasAllDeploymentsHaveFailed)
+			tflog.Debug(ctx, logEntry)
+			plan.CurrentConfigurationId = types.StringUnknown()
+			plan.CurrentConfigurationStatus = types.StringUnknown()
+			plan.MigrationHash = types.StringUnknown()
+			resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+			return
 		}
+
+		// NOTE: At this we are sure of the following:
+		//  - The latest stack configuration is not running, has not errored or cancelled but completed
+		//  - Neither stack configuration files nor terraform configuration files have changed
+		//  - All deployment groups in the stack configuration have reached terminal status but have one or more failed or abandoned deployment groups but not all of them has failed or abandoned
+		//  So we have one of the following options to choose from:
+		//  - We need to retry the failed or abandoned deployment groups without re-uploading the configuration files.
+
+		tflog.Debug(ctx, "Failed deployment groups detected without configuration changes, no configuration upload needed, failed deployment groups will be retried")
+		plan.MigrationHash = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+
 	}
 
 	// NOTE: If there are running deployment groups, check for idempotency
@@ -982,7 +973,7 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 	//  Here we need to check for idempotency if there are running deployment groups as the
 	//  prior configuration is `tfe.StackConfigurationStatusCompleted`
 	if isIdempotentConfig, diags := r.isIdempotentConfig(plan, state, currentSourceBundleHash,
-		currentTerraformConfigHash); !isIdempotentConfig {
+		currentTerraformConfigHash); !isIdempotentConfig || diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}
@@ -1006,20 +997,21 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 	if migrationDataFromState, err = r.migrationHashService.GetMigrationData(state.MigrationHash.ValueString()); err != nil {
 		resp.Diagnostics.AddError(
 			"Error Getting Migration Data from State",
-			fmt.Sprintf("Could not get migration data from state for stack %q in organization %q: %s", r.existingStack.Name, r.existingOrganization.Name, err.Error()),
+			fmt.Sprintf("Could not get migration data from state for stack %q in organization %q and project %s: %s", stackName, organizationName, projectName, err.Error()),
 		)
 		return
 	}
 
 	stackMigrationTrackRequest := StackMigrationTrackRequest{
 		MigrationMap: migrationMap,
-		OrgName:      r.existingOrganization.Name,
+		OrgName:      organizationName,
 		StackId:      r.existingStack.ID,
 	}
+
 	if currentMigrationData, err = r.migrationHashService.GenerateMigrationData(stackMigrationTrackRequest); err != nil {
 		resp.Diagnostics.AddError(
 			"Error Generating Migration Data",
-			fmt.Sprintf("Could not generate migration data for stack %q in organization %q: %s", r.existingStack.Name, r.existingOrganization.Name, err.Error()),
+			fmt.Sprintf("Could not generate migration data for stack %q in organization %q and project %s: %s", stackName, organizationName, projectName, err.Error()),
 		)
 		return
 	}
@@ -1035,10 +1027,6 @@ func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.Mo
 	if workspacesToBeRetried.Cardinality() > 0 {
 		// If there is a partial failure, no changes are allowed
 		tflog.Debug(ctx, "Partial deployment group failures detected with running deployment groups and no configuration changes, no configuration upload needed, failed deployment groups will be retried")
-		plan.CurrentConfigurationId = types.StringValue(r.existingStack.LatestStackConfiguration.ID)
-		plan.CurrentConfigurationStatus = types.StringValue(string(r.existingStack.LatestStackConfiguration.Status))
-		plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
-		plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
 		plan.MigrationHash = types.StringUnknown()
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
@@ -1236,4 +1224,21 @@ func (r *stackMigrationResource) getWorkspaceToStackStateConversionMetaData(ctx 
 	r.workspaceToStackMap = workspaceStackAddressMap
 	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved workspace to stack address map for workspace %q in organization %q", workspaceName, organizationName))
 	return nil
+}
+
+func getDeploymentGroupCountByTerminalStatus(list *tfe.StackDeploymentGroupSummaryList) (int, int) {
+	successfulDeploymentGroupCount := 0
+	failedDeploymentGroupCount := 0
+
+	for _, deploymentGroupSummary := range list.Items {
+		deploymentGroupStatus := tfe.DeploymentGroupStatus(deploymentGroupSummary.Status)
+		switch deploymentGroupStatus {
+		case tfe.DeploymentGroupStatusSucceeded:
+			successfulDeploymentGroupCount++
+		case tfe.DeploymentGroupStatusFailed, tfe.DeploymentGroupStatusAbandoned:
+			failedDeploymentGroupCount++
+		}
+
+	}
+	return successfulDeploymentGroupCount, failedDeploymentGroupCount
 }

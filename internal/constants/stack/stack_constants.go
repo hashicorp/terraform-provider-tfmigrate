@@ -25,4 +25,10 @@ var (
 	ErroredOrCancelledStackConfigurationStatuses = []tfe.StackConfigurationStatus{
 		tfe.StackConfigurationStatusFailed,
 	}
+
+	TerminalStackDeploymentGroupStatuses = []tfe.DeploymentGroupStatus{
+		tfe.DeploymentGroupStatusFailed,
+		tfe.DeploymentGroupStatusAbandoned,
+		tfe.DeploymentGroupStatusSucceeded,
+	}
 )
