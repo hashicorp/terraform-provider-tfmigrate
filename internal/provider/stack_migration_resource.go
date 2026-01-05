@@ -473,14 +473,6 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 	updatedState.TerraformConfigDir = state.TerraformConfigDir
 	updatedState.TerraformConfigHash = types.StringValue(terraformConfigHash)
 	updatedState.WorkspaceDeploymentMapping = state.WorkspaceDeploymentMapping
-
-	data, _ := r.migrationHashService.GetMigrationData(migrationHash)
-	diags.AddWarning(
-		"Migration Data Retrieved",
-		prettyPrintJSON(data),
-	)
-	response.Diagnostics.Append(diags...)
-
 	// save the updated state
 	response.Diagnostics.Append(response.State.Set(ctx, &updatedState)...)
 

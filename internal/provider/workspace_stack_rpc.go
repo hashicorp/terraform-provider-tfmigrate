@@ -103,21 +103,21 @@ func (r *stackMigrationResource) convertWorkspaceStateAndUpload(ctx context.Cont
 
 	defer func() {
 
-		// TODO: [Start] remove the following code after debugging is complete
-		//  copy the file to /Users/sujaysamanta/Workspace/Cursor-AI/terraform-stacks-migration-test/converetd-stack-state before deletion for debugging
-		tflog.Info(ctx, fmt.Sprintf("Copying stack state file for debugging, workspaceId %s", workspaceId))
-		debugDir := "/Users/sujaysamanta/Workspace/Cursor-AI/terraform-stacks-migration-test/converetd-stack-state"
-		debugFilePath := filepath.Join(debugDir, filepath.Base(tempFilePath))
-		if input, err := os.ReadFile(tempFilePath); err != nil {
-			tflog.Error(ctx, fmt.Sprintf("Failed to read temporary file for debugging copy %s: %v", tempFilePath, err))
-		} else {
-			tflog.Debug(ctx, fmt.Sprintf("Copying stack state file for debugging, workspaceId %s from %s to path %s", workspaceId, tempFilePath, debugFilePath))
-			if err := os.WriteFile(debugFilePath, input, os.ModePerm); err != nil {
-				tflog.Error(ctx, fmt.Sprintf("Failed to write temporary file for debugging copy %s: %v", debugFilePath, err))
-			}
-		}
-		tflog.Debug(ctx, fmt.Sprintf("Copied stack state file for debugging, workspaceId %s from %s to path %s", workspaceId, tempFilePath, debugFilePath))
-		// TODO: [End] remove the above code after debugging is complete
+		// commented code kept here for debugging purposes
+		// copy the file to /Users/sujaysamanta/Workspace/Cursor-AI/terraform-stacks-migration-test/converetd-stack-state before deletion for debugging
+		// tflog.Info(ctx, fmt.Sprintf("Copying stack state file for debugging, workspaceId %s", workspaceId))
+		// debugDir := "/Users/sujaysamanta/Workspace/Cursor-AI/terraform-stacks-migration-test/converetd-stack-state"
+		// debugFilePath := filepath.Join(debugDir, filepath.Base(tempFilePath))
+		// if input, err := os.ReadFile(tempFilePath); err != nil {
+		//	tflog.Error(ctx, fmt.Sprintf("Failed to read temporary file for debugging copy %s: %v", tempFilePath, err))
+		// } else {
+		//	tflog.Debug(ctx, fmt.Sprintf("Copying stack state file for debugging, workspaceId %s from %s to path %s", workspaceId, tempFilePath, debugFilePath))
+		//	if err := os.WriteFile(debugFilePath, input, os.ModePerm); err != nil {
+		//		tflog.Error(ctx, fmt.Sprintf("Failed to write temporary file for debugging copy %s: %v", debugFilePath, err))
+		//	}
+		//}
+		// tflog.Debug(ctx, fmt.Sprintf("Copied stack state file for debugging, workspaceId %s from %s to path %s", workspaceId, tempFilePath, debugFilePath))
+		// remove the above code after debugging is complete
 
 		// Clean up the temporary file after upload
 		if err := os.Remove(tempFilePath); err != nil {

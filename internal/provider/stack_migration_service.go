@@ -128,16 +128,8 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 	state.TerraformConfigDir = types.StringValue(r.terraformConfigDirAbsPath)
 	state.WorkspaceDeploymentMapping = types.MapValueMust(types.StringType, migrationMapAsStateAttribute)
 
-	// if configurationStatus == tfe.StackConfigurationStatusCanceled {
-	//	diags.AddWarning(
-	//		"Stack Configuration Canceled",
-	//		fmt.Sprintf("The current stack configuration %s has been canceled. No state would be uploaded", currentConfigurationId),
-	//	)
-	//	return false, state, diags
-	//}
-
 	if configurationStatus == tfe.StackConfigurationStatusFailed {
-		diags.Append(r.tfeUtil.ReadStackDiagnosticsByConfigID(currentConfigurationId, r.httpClient, r.tfeConfig)...)
+		diags.Append(r.tfeUtil.ReadStackDiagnosticsByConfigID(currentConfigurationId, r.tfeClient)...)
 		return false, state, diags
 	}
 
@@ -160,12 +152,6 @@ func (r *stackMigrationResource) applyStackConfiguration(ctx context.Context, or
 	}
 
 	state.MigrationHash = types.StringValue(hash)
-
-	data, _ := r.migrationHashService.GetMigrationData(hash)
-	diags.AddWarning(
-		"Migration Data Retrieved",
-		prettyPrintJSON(data),
-	)
 
 	return true, state, diags
 }
@@ -465,7 +451,7 @@ func (r *stackMigrationResource) isCurrentStepAwaitingProviderAction(ctx context
 
 	// read the latest deployment run for the deployment
 	tflog.Info(ctx, fmt.Sprintf("Reading latest deployment run for deployment %s in stack %s", deploymentName, r.existingStack.Name))
-	latestRun, err := r.tfeUtil.ReadLatestDeploymentRunWithRelations(r.existingStack.ID, deploymentName, r.httpClient, r.tfeConfig, r.tfeClient)
+	latestRun, err := r.tfeUtil.ReadLatestDeploymentRunWithRelations(r.existingStack.ID, deploymentName, r.httpClient, r.tfeConfig)
 	if err != nil {
 		diags.AddError(
 			"Error Reading Latest Deployment Run",

@@ -137,7 +137,7 @@ func (s *stackMigrationHashService) getMigrationDataForEachWorkspaceDeploymentPa
 	data.WorkspaceId = workspace.ID
 
 	// 2. Read the stack deployment run by the deployment name and stack id to validate the deployment received with the corresponding workspace exists in TFE.
-	deploymentRun, err := s.tfeUtil.ReadLatestDeploymentRun(request.StackId, deploymentName, s.httpClient, s.config, s.tfeClient)
+	deploymentRun, err := s.tfeUtil.ReadLatestDeploymentRunByDeploymentName(request.StackId, deploymentName, s.httpClient, s.config, s.tfeClient)
 	if err != nil || deploymentRun == nil {
 		data.FailureReason = fmt.Sprintf("Error reading deployment data name: %s, error: %v", deploymentName, err)
 		return data

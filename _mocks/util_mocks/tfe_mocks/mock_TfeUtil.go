@@ -369,29 +369,29 @@ func (_c *MockTfeUtil_PullAndSaveWorkspaceStateData_Call) RunAndReturn(run func(
 	return _c
 }
 
-// ReadDeploymentRunSteps provides a mock function with given fields: deploymentRunId, httpClient, tfeConfig
-func (_m *MockTfeUtil) ReadDeploymentRunSteps(deploymentRunId string, httpClient net.Client, tfeConfig *tfe.Config) ([]models.StackDeploymentStep, error) {
-	ret := _m.Called(deploymentRunId, httpClient, tfeConfig)
+// ReadDeploymentRunSteps provides a mock function with given fields: deploymentRunId, tfeClient
+func (_m *MockTfeUtil) ReadDeploymentRunSteps(deploymentRunId string, tfeClient *tfe.Client) ([]*tfe.StackDeploymentStep, error) {
+	ret := _m.Called(deploymentRunId, tfeClient)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ReadDeploymentRunSteps")
 	}
 
-	var r0 []models.StackDeploymentStep
+	var r0 []*tfe.StackDeploymentStep
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, net.Client, *tfe.Config) ([]models.StackDeploymentStep, error)); ok {
-		return rf(deploymentRunId, httpClient, tfeConfig)
+	if rf, ok := ret.Get(0).(func(string, *tfe.Client) ([]*tfe.StackDeploymentStep, error)); ok {
+		return rf(deploymentRunId, tfeClient)
 	}
-	if rf, ok := ret.Get(0).(func(string, net.Client, *tfe.Config) []models.StackDeploymentStep); ok {
-		r0 = rf(deploymentRunId, httpClient, tfeConfig)
+	if rf, ok := ret.Get(0).(func(string, *tfe.Client) []*tfe.StackDeploymentStep); ok {
+		r0 = rf(deploymentRunId, tfeClient)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]models.StackDeploymentStep)
+			r0 = ret.Get(0).([]*tfe.StackDeploymentStep)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string, net.Client, *tfe.Config) error); ok {
-		r1 = rf(deploymentRunId, httpClient, tfeConfig)
+	if rf, ok := ret.Get(1).(func(string, *tfe.Client) error); ok {
+		r1 = rf(deploymentRunId, tfeClient)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -406,35 +406,34 @@ type MockTfeUtil_ReadDeploymentRunSteps_Call struct {
 
 // ReadDeploymentRunSteps is a helper method to define mock.On call
 //   - deploymentRunId string
-//   - httpClient net.Client
-//   - tfeConfig *tfe.Config
-func (_e *MockTfeUtil_Expecter) ReadDeploymentRunSteps(deploymentRunId interface{}, httpClient interface{}, tfeConfig interface{}) *MockTfeUtil_ReadDeploymentRunSteps_Call {
-	return &MockTfeUtil_ReadDeploymentRunSteps_Call{Call: _e.mock.On("ReadDeploymentRunSteps", deploymentRunId, httpClient, tfeConfig)}
+//   - tfeClient *tfe.Client
+func (_e *MockTfeUtil_Expecter) ReadDeploymentRunSteps(deploymentRunId interface{}, tfeClient interface{}) *MockTfeUtil_ReadDeploymentRunSteps_Call {
+	return &MockTfeUtil_ReadDeploymentRunSteps_Call{Call: _e.mock.On("ReadDeploymentRunSteps", deploymentRunId, tfeClient)}
 }
 
-func (_c *MockTfeUtil_ReadDeploymentRunSteps_Call) Run(run func(deploymentRunId string, httpClient net.Client, tfeConfig *tfe.Config)) *MockTfeUtil_ReadDeploymentRunSteps_Call {
+func (_c *MockTfeUtil_ReadDeploymentRunSteps_Call) Run(run func(deploymentRunId string, tfeClient *tfe.Client)) *MockTfeUtil_ReadDeploymentRunSteps_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(net.Client), args[2].(*tfe.Config))
+		run(args[0].(string), args[1].(*tfe.Client))
 	})
 	return _c
 }
 
-func (_c *MockTfeUtil_ReadDeploymentRunSteps_Call) Return(_a0 []models.StackDeploymentStep, _a1 error) *MockTfeUtil_ReadDeploymentRunSteps_Call {
+func (_c *MockTfeUtil_ReadDeploymentRunSteps_Call) Return(_a0 []*tfe.StackDeploymentStep, _a1 error) *MockTfeUtil_ReadDeploymentRunSteps_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockTfeUtil_ReadDeploymentRunSteps_Call) RunAndReturn(run func(string, net.Client, *tfe.Config) ([]models.StackDeploymentStep, error)) *MockTfeUtil_ReadDeploymentRunSteps_Call {
+func (_c *MockTfeUtil_ReadDeploymentRunSteps_Call) RunAndReturn(run func(string, *tfe.Client) ([]*tfe.StackDeploymentStep, error)) *MockTfeUtil_ReadDeploymentRunSteps_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// ReadLatestDeploymentRun provides a mock function with given fields: stackId, deploymentName, httpClient, config, tfeClient
-func (_m *MockTfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName string, httpClient net.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error) {
+// ReadLatestDeploymentRunByDeploymentName provides a mock function with given fields: stackId, deploymentName, httpClient, config, tfeClient
+func (_m *MockTfeUtil) ReadLatestDeploymentRunByDeploymentName(stackId string, deploymentName string, httpClient net.Client, config *tfe.Config, tfeClient *tfe.Client) (*tfe.StackDeploymentRun, error) {
 	ret := _m.Called(stackId, deploymentName, httpClient, config, tfeClient)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ReadLatestDeploymentRun")
+		panic("no return value specified for ReadLatestDeploymentRunByDeploymentName")
 	}
 
 	var r0 *tfe.StackDeploymentRun
@@ -459,41 +458,41 @@ func (_m *MockTfeUtil) ReadLatestDeploymentRun(stackId string, deploymentName st
 	return r0, r1
 }
 
-// MockTfeUtil_ReadLatestDeploymentRun_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReadLatestDeploymentRun'
-type MockTfeUtil_ReadLatestDeploymentRun_Call struct {
+// MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReadLatestDeploymentRunByDeploymentName'
+type MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call struct {
 	*mock.Call
 }
 
-// ReadLatestDeploymentRun is a helper method to define mock.On call
+// ReadLatestDeploymentRunByDeploymentName is a helper method to define mock.On call
 //   - stackId string
 //   - deploymentName string
 //   - httpClient net.Client
 //   - config *tfe.Config
 //   - tfeClient *tfe.Client
-func (_e *MockTfeUtil_Expecter) ReadLatestDeploymentRun(stackId interface{}, deploymentName interface{}, httpClient interface{}, config interface{}, tfeClient interface{}) *MockTfeUtil_ReadLatestDeploymentRun_Call {
-	return &MockTfeUtil_ReadLatestDeploymentRun_Call{Call: _e.mock.On("ReadLatestDeploymentRun", stackId, deploymentName, httpClient, config, tfeClient)}
+func (_e *MockTfeUtil_Expecter) ReadLatestDeploymentRunByDeploymentName(stackId interface{}, deploymentName interface{}, httpClient interface{}, config interface{}, tfeClient interface{}) *MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call {
+	return &MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call{Call: _e.mock.On("ReadLatestDeploymentRunByDeploymentName", stackId, deploymentName, httpClient, config, tfeClient)}
 }
 
-func (_c *MockTfeUtil_ReadLatestDeploymentRun_Call) Run(run func(stackId string, deploymentName string, httpClient net.Client, config *tfe.Config, tfeClient *tfe.Client)) *MockTfeUtil_ReadLatestDeploymentRun_Call {
+func (_c *MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call) Run(run func(stackId string, deploymentName string, httpClient net.Client, config *tfe.Config, tfeClient *tfe.Client)) *MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(string), args[1].(string), args[2].(net.Client), args[3].(*tfe.Config), args[4].(*tfe.Client))
 	})
 	return _c
 }
 
-func (_c *MockTfeUtil_ReadLatestDeploymentRun_Call) Return(_a0 *tfe.StackDeploymentRun, _a1 error) *MockTfeUtil_ReadLatestDeploymentRun_Call {
+func (_c *MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call) Return(_a0 *tfe.StackDeploymentRun, _a1 error) *MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockTfeUtil_ReadLatestDeploymentRun_Call) RunAndReturn(run func(string, string, net.Client, *tfe.Config, *tfe.Client) (*tfe.StackDeploymentRun, error)) *MockTfeUtil_ReadLatestDeploymentRun_Call {
+func (_c *MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call) RunAndReturn(run func(string, string, net.Client, *tfe.Config, *tfe.Client) (*tfe.StackDeploymentRun, error)) *MockTfeUtil_ReadLatestDeploymentRunByDeploymentName_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// ReadLatestDeploymentRunWithRelations provides a mock function with given fields: stackId, deploymentName, httpClient, config, tfeClient
-func (_m *MockTfeUtil) ReadLatestDeploymentRunWithRelations(stackId string, deploymentName string, httpClient net.Client, config *tfe.Config, tfeClient *tfe.Client) (*models.StackDeploymentRun, error) {
-	ret := _m.Called(stackId, deploymentName, httpClient, config, tfeClient)
+// ReadLatestDeploymentRunWithRelations provides a mock function with given fields: stackId, deploymentName, httpClient, config
+func (_m *MockTfeUtil) ReadLatestDeploymentRunWithRelations(stackId string, deploymentName string, httpClient net.Client, config *tfe.Config) (*models.StackDeploymentRun, error) {
+	ret := _m.Called(stackId, deploymentName, httpClient, config)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ReadLatestDeploymentRunWithRelations")
@@ -501,19 +500,19 @@ func (_m *MockTfeUtil) ReadLatestDeploymentRunWithRelations(stackId string, depl
 
 	var r0 *models.StackDeploymentRun
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string, net.Client, *tfe.Config, *tfe.Client) (*models.StackDeploymentRun, error)); ok {
-		return rf(stackId, deploymentName, httpClient, config, tfeClient)
+	if rf, ok := ret.Get(0).(func(string, string, net.Client, *tfe.Config) (*models.StackDeploymentRun, error)); ok {
+		return rf(stackId, deploymentName, httpClient, config)
 	}
-	if rf, ok := ret.Get(0).(func(string, string, net.Client, *tfe.Config, *tfe.Client) *models.StackDeploymentRun); ok {
-		r0 = rf(stackId, deploymentName, httpClient, config, tfeClient)
+	if rf, ok := ret.Get(0).(func(string, string, net.Client, *tfe.Config) *models.StackDeploymentRun); ok {
+		r0 = rf(stackId, deploymentName, httpClient, config)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*models.StackDeploymentRun)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string, net.Client, *tfe.Config, *tfe.Client) error); ok {
-		r1 = rf(stackId, deploymentName, httpClient, config, tfeClient)
+	if rf, ok := ret.Get(1).(func(string, string, net.Client, *tfe.Config) error); ok {
+		r1 = rf(stackId, deploymentName, httpClient, config)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -531,14 +530,13 @@ type MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call struct {
 //   - deploymentName string
 //   - httpClient net.Client
 //   - config *tfe.Config
-//   - tfeClient *tfe.Client
-func (_e *MockTfeUtil_Expecter) ReadLatestDeploymentRunWithRelations(stackId interface{}, deploymentName interface{}, httpClient interface{}, config interface{}, tfeClient interface{}) *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call {
-	return &MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call{Call: _e.mock.On("ReadLatestDeploymentRunWithRelations", stackId, deploymentName, httpClient, config, tfeClient)}
+func (_e *MockTfeUtil_Expecter) ReadLatestDeploymentRunWithRelations(stackId interface{}, deploymentName interface{}, httpClient interface{}, config interface{}) *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call {
+	return &MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call{Call: _e.mock.On("ReadLatestDeploymentRunWithRelations", stackId, deploymentName, httpClient, config)}
 }
 
-func (_c *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call) Run(run func(stackId string, deploymentName string, httpClient net.Client, config *tfe.Config, tfeClient *tfe.Client)) *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call {
+func (_c *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call) Run(run func(stackId string, deploymentName string, httpClient net.Client, config *tfe.Config)) *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(net.Client), args[3].(*tfe.Config), args[4].(*tfe.Client))
+		run(args[0].(string), args[1].(string), args[2].(net.Client), args[3].(*tfe.Config))
 	})
 	return _c
 }
@@ -548,7 +546,7 @@ func (_c *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call) Return(_a0 *mod
 	return _c
 }
 
-func (_c *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call) RunAndReturn(run func(string, string, net.Client, *tfe.Config, *tfe.Client) (*models.StackDeploymentRun, error)) *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call {
+func (_c *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call) RunAndReturn(run func(string, string, net.Client, *tfe.Config) (*models.StackDeploymentRun, error)) *MockTfeUtil_ReadLatestDeploymentRunWithRelations_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -733,17 +731,17 @@ func (_c *MockTfeUtil_ReadStackByName_Call) RunAndReturn(run func(string, string
 	return _c
 }
 
-// ReadStackDiagnosticsByConfigID provides a mock function with given fields: stackConfigId, httpClient, config
-func (_m *MockTfeUtil) ReadStackDiagnosticsByConfigID(stackConfigId string, httpClient net.Client, config *tfe.Config) diag.Diagnostics {
-	ret := _m.Called(stackConfigId, httpClient, config)
+// ReadStackDiagnosticsByConfigID provides a mock function with given fields: stackConfigId, client
+func (_m *MockTfeUtil) ReadStackDiagnosticsByConfigID(stackConfigId string, client *tfe.Client) diag.Diagnostics {
+	ret := _m.Called(stackConfigId, client)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ReadStackDiagnosticsByConfigID")
 	}
 
 	var r0 diag.Diagnostics
-	if rf, ok := ret.Get(0).(func(string, net.Client, *tfe.Config) diag.Diagnostics); ok {
-		r0 = rf(stackConfigId, httpClient, config)
+	if rf, ok := ret.Get(0).(func(string, *tfe.Client) diag.Diagnostics); ok {
+		r0 = rf(stackConfigId, client)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(diag.Diagnostics)
@@ -760,15 +758,14 @@ type MockTfeUtil_ReadStackDiagnosticsByConfigID_Call struct {
 
 // ReadStackDiagnosticsByConfigID is a helper method to define mock.On call
 //   - stackConfigId string
-//   - httpClient net.Client
-//   - config *tfe.Config
-func (_e *MockTfeUtil_Expecter) ReadStackDiagnosticsByConfigID(stackConfigId interface{}, httpClient interface{}, config interface{}) *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call {
-	return &MockTfeUtil_ReadStackDiagnosticsByConfigID_Call{Call: _e.mock.On("ReadStackDiagnosticsByConfigID", stackConfigId, httpClient, config)}
+//   - client *tfe.Client
+func (_e *MockTfeUtil_Expecter) ReadStackDiagnosticsByConfigID(stackConfigId interface{}, client interface{}) *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call {
+	return &MockTfeUtil_ReadStackDiagnosticsByConfigID_Call{Call: _e.mock.On("ReadStackDiagnosticsByConfigID", stackConfigId, client)}
 }
 
-func (_c *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call) Run(run func(stackConfigId string, httpClient net.Client, config *tfe.Config)) *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call {
+func (_c *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call) Run(run func(stackConfigId string, client *tfe.Client)) *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(net.Client), args[2].(*tfe.Config))
+		run(args[0].(string), args[1].(*tfe.Client))
 	})
 	return _c
 }
@@ -778,7 +775,56 @@ func (_c *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call) Return(_a0 diag.Diagn
 	return _c
 }
 
-func (_c *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call) RunAndReturn(run func(string, net.Client, *tfe.Config) diag.Diagnostics) *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call {
+func (_c *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call) RunAndReturn(run func(string, *tfe.Client) diag.Diagnostics) *MockTfeUtil_ReadStackDiagnosticsByConfigID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ReadStackStepDiagnosticsByStepID provides a mock function with given fields: stepId, client
+func (_m *MockTfeUtil) ReadStackStepDiagnosticsByStepID(stepId string, client *tfe.Client) diag.Diagnostics {
+	ret := _m.Called(stepId, client)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReadStackStepDiagnosticsByStepID")
+	}
+
+	var r0 diag.Diagnostics
+	if rf, ok := ret.Get(0).(func(string, *tfe.Client) diag.Diagnostics); ok {
+		r0 = rf(stepId, client)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(diag.Diagnostics)
+		}
+	}
+
+	return r0
+}
+
+// MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReadStackStepDiagnosticsByStepID'
+type MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call struct {
+	*mock.Call
+}
+
+// ReadStackStepDiagnosticsByStepID is a helper method to define mock.On call
+//   - stepId string
+//   - client *tfe.Client
+func (_e *MockTfeUtil_Expecter) ReadStackStepDiagnosticsByStepID(stepId interface{}, client interface{}) *MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call {
+	return &MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call{Call: _e.mock.On("ReadStackStepDiagnosticsByStepID", stepId, client)}
+}
+
+func (_c *MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call) Run(run func(stepId string, client *tfe.Client)) *MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(*tfe.Client))
+	})
+	return _c
+}
+
+func (_c *MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call) Return(_a0 diag.Diagnostics) *MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call) RunAndReturn(run func(string, *tfe.Client) diag.Diagnostics) *MockTfeUtil_ReadStackStepDiagnosticsByStepID_Call {
 	_c.Call.Return(run)
 	return _c
 }
