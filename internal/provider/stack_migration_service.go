@@ -666,7 +666,7 @@ func (r *stackMigrationResource) CheckDeploymentNameDifferences(ctx context.Cont
 	// read the deployment groups from the API
 	deploymentNamesByConfigId, err := r.tfeUtil.GetAllDeploymentNamesForAConfigId(request.StackId, request.StackConfigurationId, request.HttpClient, request.Config)
 	if err != nil {
-		err := fmt.Sprintf("error reading deployment names for stack %s and configuration %s, err : %w", request.StackId, request.StackConfigurationId, err)
+		err := fmt.Sprintf("error reading deployment names for stack %s and configuration %s, err : %q", request.StackId, request.StackConfigurationId, err)
 		tflog.Error(ctx, err)
 		diags.AddError(
 			"Error Reading Deployment Names from Stack Configuration",
