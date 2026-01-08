@@ -68,31 +68,57 @@ func (r *stackMigrationResource) convertWorkspaceStateAndUpload(ctx context.Cont
 
 	// If the state is fully modular, use the module address map, otherwise use the absolute resource address map
 	if r.isStateModular {
+		tflog.Info(ctx, fmt.Sprintf("Workspace state is fully modular, using module address map for migration %v", r.workspaceToStackMap))
 		stateConversionRequest.ModuleAddressMap = r.workspaceToStackMap
 	} else {
+		tflog.Info(ctx, fmt.Sprintf("Workspace state is not fully modular, using absolute resource address map for migration %v", r.workspaceToStackMap))
 		stateConversionRequest.AbsoluteResourceAddressMap = r.workspaceToStackMap
 	}
 
+	tflog.Info(ctx, fmt.Sprintf("Converting workspace state to stack state, workspaceId %s", workspaceId))
 	stackState, err := convertTerraformWorkspaceToStackData(stateConversionRequest)
 	if err != nil {
-		diags.AddError("Failed to convert workspace state to stack state", fmt.Sprintf("Error converting workspace state: %v", err))
+		diags.AddError("Failed to convert workspace state to stack state", fmt.Sprintf("Error converting workspace state: %s", err.Error()))
+		return diags
 	}
+	tflog.Debug(ctx, fmt.Sprintf("Successfully converted workspace state to stack state, workspaceId %s", workspaceId))
 
 	// Marshal to protobuf binary
+	tflog.Info(ctx, fmt.Sprintf("Marshaling stack state to binary, workspaceId %s", workspaceId))
 	data, err := proto.Marshal(stackState)
 	if err != nil {
 		diags.AddError("Failed to marshal stack state", fmt.Sprintf("Error marshaling stack state: %v", err))
 		return diags
 	}
+	tflog.Debug(ctx, fmt.Sprintf("Successfully marshaled stack-state to binary, workspaceId %s", workspaceId))
 
 	// Write the data to a temporary file
+	tflog.Info(ctx, fmt.Sprintf("Writing stack state to temporary file, workspaceId %s", workspaceId))
 	tempFilePath, err := writeFileToTempDir(data, workspaceId)
 	if err != nil {
 		diags.AddError("Failed to write stack state to temporary file", fmt.Sprintf("Error writing stack state to temporary file: %v", err))
 		return diags
 	}
+	tflog.Debug(ctx, fmt.Sprintf("Successfully wrote stack state to temporary file, workspaceId %s, path %s", workspaceId, tempFilePath))
 
 	defer func() {
+
+		// commented code kept here for debugging purposes
+		// copy the file to /Users/sujaysamanta/Workspace/Cursor-AI/terraform-stacks-migration-test/converetd-stack-state before deletion for debugging
+		// tflog.Info(ctx, fmt.Sprintf("Copying stack state file for debugging, workspaceId %s", workspaceId))
+		// debugDir := "/Users/sujaysamanta/Workspace/Cursor-AI/terraform-stacks-migration-test/converetd-stack-state"
+		// debugFilePath := filepath.Join(debugDir, filepath.Base(tempFilePath))
+		// if input, err := os.ReadFile(tempFilePath); err != nil {
+		//	tflog.Error(ctx, fmt.Sprintf("Failed to read temporary file for debugging copy %s: %v", tempFilePath, err))
+		// } else {
+		//	tflog.Debug(ctx, fmt.Sprintf("Copying stack state file for debugging, workspaceId %s from %s to path %s", workspaceId, tempFilePath, debugFilePath))
+		//	if err := os.WriteFile(debugFilePath, input, os.ModePerm); err != nil {
+		//		tflog.Error(ctx, fmt.Sprintf("Failed to write temporary file for debugging copy %s: %v", debugFilePath, err))
+		//	}
+		//}
+		// tflog.Debug(ctx, fmt.Sprintf("Copied stack state file for debugging, workspaceId %s from %s to path %s", workspaceId, tempFilePath, debugFilePath))
+		// remove the above code after debugging is complete
+
 		// Clean up the temporary file after upload
 		if err := os.Remove(tempFilePath); err != nil {
 			tflog.Error(ctx, fmt.Sprintf("Failed to remove temporary file %s: %v", tempFilePath, err))
@@ -100,7 +126,9 @@ func (r *stackMigrationResource) convertWorkspaceStateAndUpload(ctx context.Cont
 	}()
 
 	// Upload the stack state file to the TFE workspace
+	tflog.Info(ctx, fmt.Sprintf("Uploading stack state file for workspace %s", workspaceId))
 	if uploadDiags := r.uploadStackStateFile(ctx, tempFilePath, uploadUrl); uploadDiags.HasError() {
+		tflog.Error(ctx, fmt.Sprintf("Failed to upload stack state file for workspace %s, diags %v", workspaceId, uploadDiags.Errors()))
 		diags.Append(uploadDiags...)
 	}
 	tflog.Info(ctx, fmt.Sprintf("Uploaded stack state file for workspace %s", workspaceId))
@@ -324,6 +352,7 @@ func (r *stackMigrationResource) uploadStackStateFile(ctx context.Context, fileP
 	}(file)
 
 	if err := r.tfeClient.StackConfigurations.UploadTarGzip(ctx, uploadUrl, file); err != nil {
+		tflog.Error(ctx, fmt.Sprintf("Failed to upload stack state file %s, url %s: %v", filePath, uploadUrl, err))
 		diags.AddError("Failed to upload stack state file", fmt.Sprintf("Error uploading stack state file to %s: %v", uploadUrl, err))
 		return diags
 	}
