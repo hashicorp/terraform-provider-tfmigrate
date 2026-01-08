@@ -16,12 +16,9 @@ This function takes a migration hash string of stack migration as input and deco
 locals {
   stack_deployment_details = (
     tfmigrate_stack_migration.stack_migration.migration_hash != "" ?
-    jsondecode(
-      provider::tfmigrate::decode_stacks_migration_hash_to_json(
-        tfmigrate_stack_migration.stack_migration.migration_hash
-      )
-    ) :
-    null
+    provider::tfmigrate::decode_stacks_migration_hash_to_json(
+      tfmigrate_stack_migration.stack_migration.migration_hash
+    ) : null
   )
 }
 
