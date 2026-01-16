@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"terraform-provider-tfmigrate/internal/constants"
+	stackConstants "terraform-provider-tfmigrate/internal/constants/stack"
 	httpUtil "terraform-provider-tfmigrate/internal/util/net"
 	tfeUtil "terraform-provider-tfmigrate/internal/util/tfe"
 
@@ -21,6 +23,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	tfstateUtil "github.com/hashicorp/terraform-migrate-utility/tfstateutil"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 
@@ -122,6 +125,9 @@ const (
 	// errFailedToGetStateValues is the error message when the state values cannot be retrieved.
 	errFailedToGetStateValues = "Failed to get state values"
 
+	// errFailedToGetPlanValues is the error message when the plan values cannot be retrieved.
+	errFailedToGetPlanValues = "Failed to get plan values"
+
 	stackDeploymentHclFileExt = `.tfdeploy.hcl`
 )
 
@@ -154,7 +160,7 @@ type StackMigrationResourceModel struct {
 
 // stackMigrationResource implements the resource.Resource interface for managing stack migrations in HCP Terraform.
 type stackMigrationResource struct {
-	deploymentStateImportMap  map[string]bool                     // deploymentStateImportMap is a map that tracks if a deployment has import attribute set to true that indicates the deployment's state could be imported from the TFE API.
+	deploymentStateImportMap  map[string]bool                     // deploymentStateImportMap is a map that tracks if a deployment has an import attribute set to true that indicates the deployment's state could be imported from the TFE API.
 	existingOrganization      *tfe.Organization                   // an existingOrganization is the organization in which the stack exists.
 	existingProject           *tfe.Project                        // an existingProject is the project in which the stack exists.
 	existingStack             *tfe.Stack                          // an existingStack is the stack to which the workspace will be migrated.
@@ -162,8 +168,8 @@ type stackMigrationResource struct {
 	httpClient                httpUtil.Client                     // httpClient is the HTTP client used to make requests to the TFE API configured with TLS settings and retry logic.
 	isStateModular            bool                                // isStateModular indicates whether the state is modular or not. If true, the state is modular, and the stack migration resource will use the modular update strategy.
 	migrationHashService      StackMigrationHashService           // migrationHashService is the service used to generate and manage migration hash for stack migrations.
+	retryAbandonedDeployments bool                                // retryAbandonedDeployments indicates whether to retry deployments by generating a new deployment run set to true during update action only
 	stackSourceBundleAbsPath  string                              // stackSourceBundleAbsPath is the absolute path to the stack source bundle directory containing the stack configuration files.
-	stateFile                 string                              // stateFile is the path to the state file used by terraform state list command.
 	terraformConfigDirAbsPath string                              // terraformConfigDirAbsPath is the absolute path to the Terraform configuration directory containing the Terraform configuration files.
 	tfeClient                 *tfe.Client                         // tfeClient is the TFE client used to interact with the HCP Terraform API.
 	tfeConfig                 *tfe.Config                         // tfeConfig is the TFE client configuration used to create the TFE client.
@@ -324,50 +330,18 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 		migrationMap[key] = value.(types.String).ValueString()
 	}
 
-	// retrieve a state file no make `terraform state list` infallible
-	stateFilePath, err := r.tfeUtil.PullAndSaveWorkspaceStateData(plan.Organization.ValueString(), maps.Keys(migrationMap)[0], r.tfeClient)
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error Getting Workspace State Data",
-			fmt.Sprintf("Failed to pull and save the workspace state data for organization %q and workspace %q: %s", plan.Organization.ValueString(), maps.Keys(migrationMap)[0], err.Error()),
-		)
+	tflog.Debug(ctx, fmt.Sprintf("Retrieving workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+		plan.Organization.ValueString(), maps.Keys(migrationMap)[0], migrationMap))
+	response.Diagnostics.Append(r.getWorkspaceToStackStateConversionMetaData(ctx, maps.Keys(migrationMap)[0], plan.Organization.ValueString())...)
+	if response.Diagnostics.HasError() {
+		tflog.Error(ctx, fmt.Sprintf("Failed to retrieve workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+			plan.Organization.ValueString(), maps.Keys(migrationMap)[0], migrationMap))
 		return
 	}
-	r.stateFile = stateFilePath
-
-	defer func() {
-		if err := os.Remove(stateFilePath); err != nil {
-			tflog.Error(ctx, fmt.Sprintf("Failed to remove temporary state file %q: %s", stateFilePath, err.Error()))
-		}
-	}()
-
-	resourcesFromWorkspaceState, err := r.tfstateUtil.ListAllResourcesFromWorkspaceStateWithStateFile(r.terraformConfigDirAbsPath, stateFilePath)
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error Listing Resources from Workspace State",
-			fmt.Sprintf("Failed to list resources from the workspace state in the directory %q: %s", r.terraformConfigDirAbsPath, err.Error()),
-		)
-		return
-	}
-
-	r.isStateModular = r.tfstateUtil.IsFullyModular(resourcesFromWorkspaceState)
-
-	workspaceToStackAddressMapRequest := tfstateUtil.WorkspaceToStackAddressMapRequest{
-		StackSourceBundleAbsPath:    r.stackSourceBundleAbsPath,
-		TerraformConfigFilesAbsPath: r.terraformConfigDirAbsPath,
-		StateFilePath:               stateFilePath,
-	}
-
-	workspaceStackAddressMap, err := r.tfstateUtil.WorkspaceToStackAddressMap(workspaceToStackAddressMapRequest)
-
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error Creating Workspace to Stack Map",
-			fmt.Sprintf("Failed to create workspace to stack map from the Terraform configuration directory %q and stack source bundle directory %q: %s", r.terraformConfigDirAbsPath, r.stackSourceBundleAbsPath, err.Error()),
-		)
-		return
-	}
-	r.workspaceToStackMap = workspaceStackAddressMap
+	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+		plan.Organization.ValueString(), maps.Keys(migrationMap)[0], migrationMap))
+	tflog.Debug(ctx, fmt.Sprintf("Is workspace state fully modular: %v", r.isStateModular))
+	tflog.Debug(ctx, fmt.Sprintf("Workspace to Stacks State resource mapping: %v", r.workspaceToStackMap))
 
 	// retrieve the required values from the plan
 	// organizationName, projectName, stackName, stackConfigDirectory, and migrationMap.
@@ -378,9 +352,9 @@ func (r *stackMigrationResource) Create(ctx context.Context, request resource.Cr
 
 	// start the stack migration process
 	tflog.Info(ctx, "Starting to apply stack migration configuration to a new stack migration resource")
-	saveState, state, diags := r.applyStackConfiguration(ctx, organizationName, projectName, stackName, stackConfigDirectory, migrationMap)
+	saveState, state, diags := r.applyStackConfiguration(ctx, organizationName, projectName, stackName, stackConfigDirectory, migrationMap, true, true)
 	response.Diagnostics.Append(diags...)
-	if response.Diagnostics.HasError() && !saveState {
+	if response.Diagnostics.HasError() || response.Diagnostics.WarningsCount() > 0 && !saveState {
 		return
 	}
 
@@ -459,6 +433,7 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 		return
 	}
 
+	// calculate the hash of the Terraform configuration files in the directory
 	terraformConfigHash, err := r.tfeUtil.CalculateConfigFileHash(state.TerraformConfigDir.ValueString())
 	if err != nil {
 		response.Diagnostics.AddError(
@@ -468,32 +443,10 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 		return
 	}
 
-	workspaceDeploymentMap := map[string]string{}
-	mapConversionDiags := state.WorkspaceDeploymentMapping.ElementsAs(ctx, &workspaceDeploymentMap, false)
-	if mapConversionDiags.HasError() {
-		response.Diagnostics.Append(mapConversionDiags...)
-		return
-	}
-
-	if len(workspaceDeploymentMap) == 0 {
-		response.Diagnostics.AddError(
-			"Error Reading Workspace Deployment Mapping",
-			"The workspace_deployment_mapping attribute is empty. This attribute must contain a mapping of workspace names to stack deployment names.")
-		return
-	}
-
-	// get the latest deployment groups and status for each deployment in the workspaceDeploymentMap
-	stackMigrationData, err := r.migrationHashService.GenerateMigrationData(StackMigrationTrackRequest{
-		OrgName:      r.existingOrganization.Name,
-		StackId:      r.existingStack.ID,
-		MigrationMap: workspaceDeploymentMap,
-	})
-
-	if err != nil {
-		response.Diagnostics.AddError(
-			"Error Generating Migration Data",
-			fmt.Sprintf("Could not generate migration data for stack %q in organization %q: %s", r.existingStack.Name, r.existingOrganization.Name, err.Error()),
-		)
+	// retrieve the current migration data from the existing state
+	stackMigrationData, diags := r.getCurrentMigrationDataFromExistingState(ctx, state.WorkspaceDeploymentMapping)
+	if diags.HasError() {
+		response.Diagnostics.Append(diags...)
 		return
 	}
 
@@ -511,7 +464,7 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 	updatedState := StackMigrationResourceModel{}
 	updatedState.ConfigurationDir = state.ConfigurationDir
 	updatedState.CurrentConfigurationId = types.StringValue(r.existingStack.LatestStackConfiguration.ID)
-	updatedState.CurrentConfigurationStatus = types.StringValue(r.existingStack.LatestStackConfiguration.Status)
+	updatedState.CurrentConfigurationStatus = types.StringValue(string(r.existingStack.LatestStackConfiguration.Status))
 	updatedState.MigrationHash = types.StringValue(migrationHash)
 	updatedState.Name = types.StringValue(r.existingStack.Name)
 	updatedState.Organization = types.StringValue(r.existingOrganization.Name)
@@ -520,7 +473,6 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 	updatedState.TerraformConfigDir = state.TerraformConfigDir
 	updatedState.TerraformConfigHash = types.StringValue(terraformConfigHash)
 	updatedState.WorkspaceDeploymentMapping = state.WorkspaceDeploymentMapping
-
 	// save the updated state
 	response.Diagnostics.Append(response.State.Set(ctx, &updatedState)...)
 
@@ -529,48 +481,129 @@ func (r *stackMigrationResource) Read(ctx context.Context, request resource.Read
 
 // Update is called when the resource is updated, it applies the stack configuration files to an existing stack migration resource and updates the state with the new values.
 func (r *stackMigrationResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
-	/*
-		var plan, state StackMigrationResourceModel
+	var plan, state, newState StackMigrationResourceModel
+	r.tfeUtil.UpdateContext(ctx)
+	r.httpClient.UpdateContext(ctx)
+	r.migrationHashService.UpdateContext(ctx)
+
+	// Retrieve values from the plan
+	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
+	if response.Diagnostics.HasError() {
+		tflog.Error(ctx, "Failed to get plan values")
+		return
+	}
+
+	// Retrieve values from the state
+	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
+	if response.Diagnostics.HasError() {
+		tflog.Error(ctx, errFailedToGetStateValues)
+		return
+	}
+
+	// Retrieve the migration map from the plan
+	migrationMapFromPlan := make(map[string]string)
+	for key, value := range plan.WorkspaceDeploymentMapping.Elements() {
+		migrationMapFromPlan[key] = value.(types.String).ValueString()
+	}
+
+	r.stackSourceBundleAbsPath = plan.ConfigurationDir.ValueString()
+	r.terraformConfigDirAbsPath = plan.TerraformConfigDir.ValueString()
+
+	// Fetch workspace to stack state conversion metadata
+	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Retrieving workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+		plan.Organization.ValueString(), maps.Keys(migrationMapFromPlan)[0], migrationMapFromPlan))
+	if response.Diagnostics.Append(r.getWorkspaceToStackStateConversionMetaData(ctx, maps.Keys(migrationMapFromPlan)[0], plan.Organization.ValueString())...); response.Diagnostics.HasError() {
+		tflog.Error(ctx, fmt.Sprintf("[Update-Action] Failed to retrieve workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+			plan.Organization.ValueString(), maps.Keys(migrationMapFromPlan)[0], migrationMapFromPlan))
+		return
+	}
+	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Successfully retrieved workspace state to stack state conversion metadata for organization %q and workspace %q and migration map %v",
+		plan.Organization.ValueString(), maps.Keys(migrationMapFromPlan)[0], migrationMapFromPlan))
+	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Is workspace state fully modular: %v", r.isStateModular))
+	tflog.Debug(ctx, fmt.Sprintf("[Update-Action] Workspace to Stacks State resource mapping: %v", r.workspaceToStackMap))
+
+	// Starting to update the state of the existing stack migration resource by uploading the configuration files
+	tflog.Info(ctx, "[Update-Action] Starting to apply stack migration configuration to an existing stack migration resource")
+
+	isNewState := false
+	isNewHash := false
+	if plan.CurrentConfigurationId.IsUnknown() {
+		//NOTE: this section handles
+		// new configuration upload
+		// workspace state conversion
+		// and state upload during an update action
+
 		var diags diag.Diagnostics
-		r.tfeUtil.UpdateContext(ctx)
-
-		// Retrieve values from the plan
-		response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
-		if response.Diagnostics.HasError() {
-			tflog.Error(ctx, "Failed to get plan values")
+		_, newState, diags = r.applyStackConfiguration(
+			ctx,
+			plan.Organization.ValueString(),
+			plan.Project.ValueString(),
+			plan.Name.ValueString(),
+			plan.ConfigurationDir.ValueString(),
+			migrationMapFromPlan,
+			true, true)
+		if response.Diagnostics.Append(diags...); response.Diagnostics.HasError() {
 			return
 		}
+		isNewState = true
+	} else if !plan.TerraformConfigHash.IsUnknown() && !plan.SourceBundleHash.IsUnknown() && plan.MigrationHash.IsUnknown() {
 
-		// Retrieve values from the state
-		response.Diagnostics.Append(request.State.Get(ctx, &state)...)
-		if response.Diagnostics.HasError() {
-			tflog.Error(ctx, errFailedToGetStateValues)
-			return
-		}
-
-		if plan.SourceBundleHash.IsUnknown() &&
-			plan.CurrentConfigurationId.IsUnknown() &&
-			plan.CurrentConfigurationStatus.IsUnknown() {
-			var newState StackMigrationResourceModel
-			// update the state of the existing stack migration resource by uploading the configuration files
-			tflog.Info(ctx, "Starting to apply stack migration configuration to an existing stack migration resource")
-			newState, diags = r.applyStackConfiguration(ctx, plan.Organization.ValueString(), plan.Project.ValueString(), plan.Name.ValueString(), plan.ConfigurationDir.ValueString())
+		// NOTE: this section handles update of deployment group data for an existing configuration
+		//  also retries failed deployments
+		r.retryAbandonedDeployments = true
+		tflog.Info(ctx, "Updating existing stack migration resource by retrying to upload state to the failed/retryable deployments")
+		tflog.Debug(ctx, fmt.Sprintf("Validating precondition before re-attempting state upload for retryable/failed deployments for stack %q in organization %q: %+v", plan.Name.ValueString(), plan.Organization.ValueString(), state.WorkspaceDeploymentMapping))
+		if diags := r.createActionPreconditions(
+			ctx,
+			plan.Organization.ValueString(),
+			plan.Project.ValueString(),
+			plan.Name.ValueString(),
+			plan.ConfigurationDir.ValueString(),
+			migrationMapFromPlan,
+		); diags.HasError() {
 			response.Diagnostics.Append(diags...)
-			if response.Diagnostics.HasError() {
-				return
-			}
-			// update plan with the new state
-			plan.ConfigurationDir = newState.ConfigurationDir
-			plan.CurrentConfigurationId = newState.CurrentConfigurationId
-			plan.CurrentConfigurationStatus = newState.CurrentConfigurationStatus
-			plan.SourceBundleHash = newState.SourceBundleHash
-			tflog.Info(ctx, "Successfully applied stack migration configuration to an existing stack migration resource")
+			return
 		}
+		tflog.Info(ctx, "Successfully validated precondition before re-attempting state upload for retryable/failed deployments for stack migration resource")
+		tflog.Info(ctx, "Starting to re-attempt state upload for retryable/failed deployments for stack migration resource")
+		newMigrationData := r.uploadStackDeploymentsState(ctx, migrationMapFromPlan)
+		tflog.Info(ctx, "Successfully re-attempted state upload for retryable/failed deployments for stack migration resource")
+		tflog.Debug(ctx, fmt.Sprintf("Updating migration data for stack %q in organization %q", plan.Name.ValueString(), plan.Organization.ValueString()))
+		newMigrationHash, err := r.migrationHashService.GetMigrationHash(newMigrationData)
+		if err != nil {
+			tflog.Error(ctx, fmt.Sprintf("Failed to generate migration hash for stack %q in organization %q: %s", plan.Name.ValueString(), plan.Organization.ValueString(), err.Error()))
+			response.Diagnostics.AddError(
+				"Error calculating migration hash",
+				fmt.Sprintf("Failed to calculate migration hash: %s", err.Error()),
+			)
+		}
+		plan.MigrationHash = types.StringValue(newMigrationHash)
+		isNewHash = true
+		tflog.Info(ctx, "Successfully updated plan data with a new migration hash for existing stack migration resource")
+	}
 
-		response.Diagnostics.Append(response.State.Set(ctx, plan)...)
-	*/
+	if isNewState {
+		plan.CurrentConfigurationId = newState.CurrentConfigurationId
+		plan.CurrentConfigurationStatus = newState.CurrentConfigurationStatus
+		plan.Name = newState.Name
+		plan.Organization = newState.Organization
+		plan.Project = newState.Project
+		plan.SourceBundleHash = newState.SourceBundleHash
+		plan.TerraformConfigHash = newState.TerraformConfigHash
+		plan.ConfigurationDir = newState.ConfigurationDir
+		plan.TerraformConfigDir = newState.TerraformConfigDir
+		plan.WorkspaceDeploymentMapping = newState.WorkspaceDeploymentMapping
+		plan.MigrationHash = newState.MigrationHash
+		tflog.Info(ctx, "Successfully updated plan data with new stack configuration details for existing stack migration resource")
+	}
 
-	panic("Implement me")
+	if !isNewHash && !isNewState {
+		tflog.Info(ctx, "No parameters changed that require stack configuration update or migration hash recalculation, skipping update operation for existing stack migration resource")
+		response.Diagnostics.Append(response.State.Set(ctx, &plan)...)
+		return
+	}
+
+	response.Diagnostics.Append(response.State.Set(ctx, plan)...)
 }
 
 // Delete is called when the resource is deleted, since the stack migration resource does not support deletion, it logs a warning and adds a warning to the response diagnostics.
@@ -668,92 +701,331 @@ func (r *stackMigrationResource) Configure(ctx context.Context, configureRequest
 }
 
 // ModifyPlan is called to modify the plan before it is applied. It checks the current state and modifies the plan based on the existing state and the update strategy.
-// func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-//	// If this is a destroy operation, no modifications needed
-//	if req.Plan.Raw.IsNull() {
-//		return
-//	}
-//
-//	// If this is a create operation, the state will be empty
-//	if req.State.Raw.IsNull() {
-//		tflog.Debug(ctx, "No existing state found, skipping plan modifications for create operation")
-//		return
-//	}
-//
-//	panic("Implement me")
-//
-//	/*
-//
-//		// If this is an update operation, we need to ensure the plan matches the state
-//
-//		var plan, state StackMigrationResourceModel
-//		r.tfeUtil.UpdateContext(ctx)
-//
-//		// Retrieve values from the plan
-//		resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-//		if resp.Diagnostics.HasError() {
-//			tflog.Error(ctx, "Failed to get plan values")
-//			return
-//		}
-//
-//		// Retrieve values from the state
-//		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-//		if resp.Diagnostics.HasError() {
-//			tflog.Error(ctx, errFailedToGetStateValues)
-//			return
-//		}
-//
-//		tflog.Debug(ctx, "Modifying plan for stack migration resource")
-//
-//		// check stack preconditions before proceeding with the update strategy
-//		resp.Diagnostics.Append(r.createActionPreconditions(plan.Organization.ValueString(), plan.Project.ValueString(), plan.Name.ValueString())...)
-//		if resp.Diagnostics.HasError() {
-//			tflog.Error(ctx, fmt.Sprintf("Preconditions for resource update failed: %s", plan.Name.ValueString()))
-//			return
-//		}
-//
-//		// Calculate the hash of the configuration files in the directory
-//		currentSourceBundleHash, err := r.tfeUtil.CalculateConfigFileHash(plan.ConfigurationDir.ValueString())
-//		if err != nil {
-//			resp.Diagnostics.AddError(
-//				configHasErrSummary,
-//				fmt.Sprintf(configHashErrDetails, plan.ConfigurationDir.ValueString(), err.Error()),
-//			)
-//			tflog.Error(ctx, fmt.Sprintf("Failed to calculate the hash of the configuration files in the directory %s: %s", plan.ConfigurationDir.ValueString(), err.Error()))
-//			return
-//		}
-//
-//		configFileChanged := false
-//		sourceBundleUploadAllowed := false
-//		resourceUpdateStrategy := stackConstants.UnknownStackPlanUpdateStrategy
-//		var diags diag.Diagnostics
-//
-//		// determine if the configuration files have changed
-//		configFileChanged = state.SourceBundleHash.ValueString() != currentSourceBundleHash
-//
-//		// determine if the source bundle upload is allowed
-//		if sourceBundleUploadAllowed, err = r.allowSourceBundleUpload(ctx, r.existingStack.LatestStackConfiguration); err != nil {
-//			tflog.Error(ctx, fmt.Sprintf(errDiagDetailsSourceBundleUploadChk, r.existingStack.Name, err.Error()))
-//			resp.Diagnostics.AddError(errDiagSummarySourceBundleUploadChk,
-//				fmt.Sprintf(errDiagDetailsSourceBundleUploadChk, r.existingStack.Name, err.Error()))
-//			return
-//		}
-//
-//		// Determine the update strategy based on the plan and state
-//		resourceUpdateStrategy, diags = r.determineStackMigrationUpdateStrategy(ctx, &plan, &state, configFileChanged, sourceBundleUploadAllowed)
-//		resp.Diagnostics.Append(diags...)
-//		if resp.Diagnostics.HasError() || resourceUpdateStrategy == stackConstants.UnknownStackPlanUpdateStrategy {
-//			tflog.Error(ctx, fmt.Sprintf("Failed to determine update strategy for stack migration resource: %s", plan.Name.ValueString()))
-//			return
-//		}
-//
-//		tflog.Debug(ctx, fmt.Sprintf("Determined update strategy: %s for stack migration resource: %s", resourceUpdateStrategy.String(), plan.Name.ValueString()))
-//
-//		if modifyPlanForStrategy(ctx, resourceUpdateStrategy, &plan) {
-//			resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
-//			return
-//		}*/
-//}
+func (r *stackMigrationResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	tflog.Debug(ctx, "Starting ModifyPlan operation for stack migration resource")
+	var plan StackMigrationResourceModel
+	var state StackMigrationResourceModel
+	var err error
+
+	// If this is a destroy operation, no modifications needed
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	// If this is a create operation, the state will be empty
+	if req.State.Raw.IsNull() {
+		tflog.Debug(ctx, "No existing state found, skipping plan modifications for create operation")
+		return
+	}
+
+	r.tfeUtil.UpdateContext(ctx)
+	r.httpClient.UpdateContext(ctx)
+	r.migrationHashService.UpdateContext(ctx)
+	r.stackSourceBundleAbsPath = plan.ConfigurationDir.ValueString()
+	r.terraformConfigDirAbsPath = plan.TerraformConfigDir.ValueString()
+
+	// Retrieve values from the plan
+	if resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...); resp.Diagnostics.HasError() {
+		tflog.Error(ctx, errFailedToGetPlanValues)
+		return
+	}
+
+	// Retrieve values from the state
+	if resp.Diagnostics.Append(req.State.Get(ctx, &state)...); resp.Diagnostics.HasError() {
+		tflog.Error(ctx, errFailedToGetStateValues)
+		return
+	}
+
+	// validate all the fields in the state are non-empty strings
+	if resp.Diagnostics.Append(validateStateData(state)...); resp.Diagnostics.HasError() {
+		return
+	}
+
+	migrationMapFromPlan := map[string]string{}
+	for k, v := range plan.WorkspaceDeploymentMapping.Elements() {
+		migrationMapFromPlan[k] = v.(types.String).ValueString()
+	}
+
+	// validate action preconditions
+	if resp.Diagnostics.Append(
+		r.createActionPreconditions(ctx, plan.Organization.ValueString(), plan.Project.ValueString(), plan.Name.ValueString(), plan.ConfigurationDir.ValueString(), migrationMapFromPlan)...); resp.Diagnostics.HasError() {
+		return
+	}
+
+	// get the current configurationHash
+	currentSourceBundleHash, err := r.tfeUtil.CalculateConfigFileHash(plan.ConfigurationDir.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			configHasErrSummary,
+			fmt.Sprintf(configHashErrDetails, plan.ConfigurationDir.ValueString(), err.Error()),
+		)
+		tflog.Error(ctx, fmt.Sprintf("Failed to calculate the hash of the configuration files in the directory %s: %s", plan.ConfigurationDir.ValueString(), err.Error()))
+		return
+	}
+
+	// get the current terraform configuration hash
+	currentTerraformConfigHash, err := r.tfeUtil.CalculateConfigFileHash(plan.TerraformConfigDir.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			configHasErrSummary,
+			fmt.Sprintf(configHashErrDetails, plan.TerraformConfigDir.ValueString(), err.Error()),
+		)
+		tflog.Error(ctx, fmt.Sprintf("Failed to calculate the hash of the Terraform configuration files in the directory %s: %s", plan.TerraformConfigDir.ValueString(), err.Error()))
+		return
+	}
+
+	stackName := r.existingStack.Name
+	organizationName := r.existingOrganization.Name
+	projectName := r.existingProject.Name
+	plan.SourceBundleHash = types.StringValue(currentSourceBundleHash)
+	plan.TerraformConfigHash = types.StringValue(currentTerraformConfigHash)
+
+	if r.existingStack.LatestStackConfiguration == nil {
+		// NOTE: if latestStackConfiguration is nil,
+		//  meaning the stack configuration has been deleted outside the resource
+		//  In this case we modify the attributes as follows
+		//   - current_configuration_id = unknown
+		//   - current_configuration_status = unknown
+		//   - migration_hash = unknown
+		//   - source_bundle_hash = currentSourceBundleHash
+		//   - terraform_config_hash = currentTerraformConfigHash
+
+		plan.CurrentConfigurationId = types.StringUnknown()
+		plan.CurrentConfigurationStatus = types.StringUnknown()
+		plan.MigrationHash = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+	}
+
+	// Current data
+	currentStackConfigID := r.existingStack.LatestStackConfiguration.ID
+	currentStackConfigStatus := r.existingStack.LatestStackConfiguration.Status
+
+	// State data
+	stateConfigurationId := state.CurrentConfigurationId.ValueString()
+	stateConfigurationStatus := state.CurrentConfigurationStatus.ValueString()
+
+	if currentStackConfigID == "" || string(currentStackConfigStatus) == "" {
+		// validate latestStackConfiguration in the existing stack
+		resp.Diagnostics.AddError(
+			"Invalid Stack Configuration State",
+			fmt.Sprintf(stackConstants.CurrentStackConfigIsNotValid, stackName, organizationName, projectName),
+		)
+		return
+	}
+
+	plan.CurrentConfigurationId = types.StringValue(currentStackConfigID)
+
+	// handle configurationId changes
+	if stateConfigurationId != currentStackConfigID {
+		plan.CurrentConfigurationStatus = types.StringUnknown()
+		plan.MigrationHash = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+	}
+
+	// handle configuration status changes
+	if stateConfigurationStatus != currentStackConfigStatus.String() {
+		plan.CurrentConfigurationStatus = types.StringUnknown()
+		plan.MigrationHash = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+	}
+
+	plan.CurrentConfigurationStatus = types.StringValue(currentStackConfigStatus.String())
+
+	// NOTE:
+	//  Handle `tfe.StackConfigurationStatusErrored`, `tfe.StackConfigurationStatusCanceled`.
+	//  At this we are sure that neither the configuration ID nor status has changed.
+	//  and the configuration has either errored, cancelled from the last apply
+	if slices.Contains(stackConstants.ErroredOrCancelledStackConfigurationStatuses,
+		tfe.StackConfigurationStatus(state.CurrentConfigurationStatus.ValueString())) {
+		// If the prior configuration is in an errored or canceled state, any changes are allowed.
+		tflog.Debug(ctx, "Prior stack configuration is in an errored or cancelled state, allowing all changes")
+		plan.CurrentConfigurationId = types.StringUnknown()
+		plan.CurrentConfigurationStatus = types.StringUnknown()
+		plan.MigrationHash = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+	}
+
+	// NOTE: Handle `tfe.StackConfigurationStatusRunning`
+	//  At this we are sure that neither the configuration ID nor status has changed.
+	//  and the configuration is still running from the last apply
+	if slices.Contains(stackConstants.RunningStackConfigurationStatuses,
+		currentStackConfigStatus) {
+		// NOTE: If the configurationId and status are unchanged and configuration is running
+		//  check the following attributes for idempotency:
+		//  - source_bundle_hash
+		//  - terraform_config_hash
+		//  - workspace_deployment_mapping
+		if isIdempotentConfig, diags := r.isIdempotentConfig(plan, state,
+			currentSourceBundleHash, currentTerraformConfigHash); !isIdempotentConfig || diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+
+		// NOTE: If the config is idempotent, we set the plan attributes to the existing state values
+		//  except for migration_hash which is set to unknown because the underlying
+		//  deployment groups will have changed statuses once the current running configuration reaches
+		//  terminal status and the then state upload is performed and needs to be synced via update action
+		tflog.Debug(ctx,
+			"Prior stack configuration is still running, and no config changes detected, no re-upload needed, continuing to wait for the running configuration to reach terminal status and retry state migration afterwards")
+		plan.MigrationHash = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+	}
+
+	// Note: At this point we are sure that neither the configuration ID nor status has changed,
+	//  nor the configuration status from the last apply has not errored or cancelled and is not running,
+	//  now we need to check if there are any running deployment groups as the configuration status
+	//  is `tfe.StackConfigurationStatusCompleted`
+	hasRunningDeploymentGroups, err := r.tfeUtil.StackConfigurationHasRunningDeploymentGroups(currentStackConfigID, r.tfeClient)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Checking Running Deployment Groups",
+			fmt.Sprintf("Could not check running deployment groups for stack %q in organization %q and project %q: %s", stackName, organizationName, projectName, err.Error()),
+		)
+		return
+	}
+
+	hasSourceConfigHashChanged := state.SourceBundleHash.ValueString() != currentSourceBundleHash
+	hasTerraformConfigHashChanged := state.TerraformConfigHash.ValueString() != currentTerraformConfigHash
+
+	// If there are no running deployment groups, we can proceed to re-uploading the configuration
+	if !hasRunningDeploymentGroups {
+		tflog.Debug(ctx, "No running deployment groups detected for the current stack configuration checking config file changes and deployment group summary for failed deployment groups")
+		// Get all the deployment groups summary for the latest stack configuration
+		stackDeploymentGroupSummaryListForTheLatestConfigurationId, err := r.tfeUtil.GetDeploymentGroupSummaryByConfigID(currentStackConfigID, r.tfeClient)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Getting Deployment Group Summary",
+				fmt.Sprintf("Could not get deployment group summary for stack %q in organization %q and project %q: %s", stackName, organizationName, projectName, err.Error()),
+			)
+			return
+		}
+		successfulDeploymentGroupsCount, failedOrAbandonedDeploymentGroupsCount := getDeploymentGroupCountByTerminalStatus(stackDeploymentGroupSummaryListForTheLatestConfigurationId)
+
+		// NOTE: All deployment groups have succeeded, neither the stack configuration files
+		//  nor the terraform configuration files have changed no modification of rescan is needed
+		//  NO-OP scenario
+		if successfulDeploymentGroupsCount == len(migrationMapFromPlan) && !hasSourceConfigHashChanged && !hasTerraformConfigHashChanged {
+			tflog.Debug(ctx, "All deployment groups have succeeded and no configuration changes detected, no resource update needed")
+			plan.MigrationHash = state.MigrationHash
+			resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+			return
+		}
+
+		// NOTE: All deployment groups in the stack configuration have reached terminal status and based on the following data
+		//  - whether the stack configuration files have changed
+		//  - whether the terraform configuration files have changed
+		//  - number of failed or abandoned deployment groups.
+		//  We have the following options to choose form:
+		//  - if the stack configuration files have changed --> then we need to trigger a new source bundle upload
+		//  - if the terraform configuration files have changed --> then we need to trigger a source bundle upload
+		//  - if all deployment groups have failed --> then we need to trigger a new source bundle upload
+		//  - if all the deployment groups have succeeded and either the stack configuration files or the terraform configuration files have changed --> then we need to trigger a new source bundle upload
+		//  - if the deployment groups have one or more failed or abandoned deployments and neither the stack configuration files nor the terraform configuration files have changed --> then we just retry the failed deployment groups without re-uploading the configuration files
+		hasAllDeploymentsHaveFailed := failedOrAbandonedDeploymentGroupsCount == len(migrationMapFromPlan)
+		if hasSourceConfigHashChanged ||
+			hasTerraformConfigHashChanged ||
+			hasAllDeploymentsHaveFailed {
+			logEntry := fmt.Sprintf("New source bundle upload condition has been met, triggering a new source bundle upload stack %q in organization %q and project %q. hasSourceConfigHashChanged:%t, hasTerraformConfigHashChanged:%t, failedOrAbandonedDeploymentGroupsCount:%d, migrationMapSize: %d, hasAllDeploymentsHaveFailed %t",
+				stackName, organizationName, projectName, hasSourceConfigHashChanged, hasTerraformConfigHashChanged, failedOrAbandonedDeploymentGroupsCount, len(migrationMapFromPlan), hasAllDeploymentsHaveFailed)
+			tflog.Debug(ctx, logEntry)
+			plan.CurrentConfigurationId = types.StringUnknown()
+			plan.CurrentConfigurationStatus = types.StringUnknown()
+			plan.MigrationHash = types.StringUnknown()
+			resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+			return
+		}
+
+		// NOTE: At this we are sure of the following:
+		//  - The latest stack configuration is not running, has not errored or cancelled but completed
+		//  - Neither stack configuration files nor terraform configuration files have changed
+		//  - All deployment groups in the stack configuration have reached terminal status but have one or more failed or abandoned deployment groups but not all of them has failed or abandoned
+		//  So we have one of the following options to choose from:
+		//  - We need to retry the failed or abandoned deployment groups without re-uploading the configuration files.
+
+		tflog.Debug(ctx, "Failed deployment groups detected without configuration changes, no configuration upload needed, failed deployment groups will be retried")
+		plan.MigrationHash = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+
+	}
+
+	// NOTE: If there are running deployment groups, check for idempotency
+	//  of the following attributes:
+	//  - source_bundle_hash
+	//  - terraform_config_hash
+	//  - workspace_deployment_mapping
+	//  We repeat the idempotency check here because if the configurationID and status are unchanged the
+	//  prior idempotency check would have been skipped.
+	//  This is because the prior idempotency check is only done when the configuration is in running state.
+	//  Here we need to check for idempotency if there are running deployment groups as the
+	//  prior configuration is `tfe.StackConfigurationStatusCompleted`
+	if isIdempotentConfig, diags := r.isIdempotentConfig(plan, state, currentSourceBundleHash,
+		currentTerraformConfigHash); !isIdempotentConfig || diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	// NOTE: At this point we are sure that neither the configuration ID nor status has changed,
+	//  nor the configuration status from the last apply has not errored or cancelled and is not running and,
+	//  there are running deployment groups, and the configuration is idempotent.
+	//  Now we need to check the deployment statuses to determine if there are any failed deployments
+	//  that need to be retried without re-uploading the configuration.
+
+	// Get a migration map from the state
+	deploymentMappingElements := state.WorkspaceDeploymentMapping.Elements()
+	migrationMap := make(map[string]string, len(deploymentMappingElements))
+	for key, value := range deploymentMappingElements {
+		migrationMap[key] = value.(types.String).ValueString()
+	}
+
+	var migrationDataFromState map[string]StackMigrationData
+	var currentMigrationData map[string]StackMigrationData
+
+	if migrationDataFromState, err = r.migrationHashService.GetMigrationData(state.MigrationHash.ValueString()); err != nil {
+		resp.Diagnostics.AddError(
+			"Error Getting Migration Data from State",
+			fmt.Sprintf("Could not get migration data from state for stack %q in organization %q and project %s: %s", stackName, organizationName, projectName, err.Error()),
+		)
+		return
+	}
+
+	stackMigrationTrackRequest := StackMigrationTrackRequest{
+		MigrationMap: migrationMap,
+		OrgName:      organizationName,
+		StackId:      r.existingStack.ID,
+	}
+
+	if currentMigrationData, err = r.migrationHashService.GenerateMigrationData(stackMigrationTrackRequest); err != nil {
+		resp.Diagnostics.AddError(
+			"Error Generating Migration Data",
+			fmt.Sprintf("Could not generate migration data for stack %q in organization %q and project %s: %s", stackName, organizationName, projectName, err.Error()),
+		)
+		return
+	}
+
+	workspacesToBeRetried, diags := r.getWorkspacesForDeploymentRetry(ctx, currentMigrationData, migrationDataFromState)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	tflog.Debug(ctx, fmt.Sprintf("=====Deployment Status Diff: %+v======", workspacesToBeRetried))
+
+	if workspacesToBeRetried.Cardinality() > 0 {
+		// If there is a partial failure, no changes are allowed
+		tflog.Debug(ctx, "Partial deployment group failures detected with running deployment groups and no configuration changes, no configuration upload needed, failed deployment groups will be retried")
+		plan.MigrationHash = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		return
+	}
+
+	tflog.Debug(ctx, "Completed ModifyPlan operation for stack migration resource")
+}
 
 // Metadata returns the metadata for the stack migration resource.
 func (r *stackMigrationResource) Metadata(_ context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
@@ -862,4 +1134,103 @@ func getImportBlockData(body hcl.Body) (bool, error) {
 		return false, fmt.Errorf("failed to get import value: %v", diags.Error())
 	}
 	return importValue.True(), nil
+}
+
+func validateStateData(state StackMigrationResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if (state.ConfigurationDir.ValueString() == "") ||
+		(state.CurrentConfigurationId.ValueString() == "") ||
+		(state.CurrentConfigurationStatus.ValueString() == "") ||
+		(state.MigrationHash.ValueString() == "") ||
+		(state.SourceBundleHash.ValueString() == "") ||
+		(state.TerraformConfigDir.ValueString() == "") ||
+		(state.TerraformConfigHash.ValueString() == "") ||
+		(state.WorkspaceDeploymentMapping.IsNull() || state.WorkspaceDeploymentMapping.IsUnknown() || len(state.WorkspaceDeploymentMapping.Elements()) == 0) {
+		diags.AddError(
+			"Invalid State Values",
+			"One or more required state values are empty or null. Please ensure all required state values are set by running a `terraform refresh` operation before updating the resource.",
+		)
+	}
+
+	return diags
+}
+
+func (r *stackMigrationResource) getWorkspaceToStackStateConversionMetaData(ctx context.Context, workspaceName string, organizationName string) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	// retrieve a state file no make `terraform state list` infallible
+	tflog.Debug(ctx, fmt.Sprintf("Retrieving workspace state file for workspace %q in organization %q", workspaceName, organizationName))
+	stateFilePath, err := r.tfeUtil.PullAndSaveWorkspaceStateData(organizationName, workspaceName, r.tfeClient)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to pull and save the workspace state data for organization %q and workspace %q: %s", organizationName, workspaceName, err.Error())
+		tflog.Error(ctx, errorMsg)
+		diags.AddError(
+			"Error Getting Workspace State Data",
+			errorMsg,
+		)
+		return diags
+	}
+	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved workspace state file for workspace %q in organization %q to path %s", workspaceName, organizationName, stateFilePath))
+
+	defer func() {
+		tflog.Debug(ctx, fmt.Sprintf("Deleting workspace state file for workspace %q in organization %q", workspaceName, organizationName))
+		if err := os.Remove(stateFilePath); err != nil {
+			tflog.Error(ctx, fmt.Sprintf("Failed to remove temporary state file %q: %s", stateFilePath, err.Error()))
+		}
+		tflog.Debug(ctx, fmt.Sprintf("Successfully deleted workspace state file for workspace %q in organization %q", workspaceName, organizationName))
+	}()
+
+	tflog.Debug(ctx, fmt.Sprintf("Retrieving state resources from workspace state file %s", stateFilePath))
+	resourcesFromWorkspaceState, err := r.tfstateUtil.ListAllResourcesFromWorkspaceStateWithStateFile(r.terraformConfigDirAbsPath, stateFilePath)
+	if err != nil {
+		errorMessage := fmt.Sprintf("Failed to list resources from the workspace state in the directory %q: %s", r.terraformConfigDirAbsPath, err.Error())
+		tflog.Error(ctx, errorMessage)
+		diags.AddError(
+			"Error Listing Resources from Workspace State",
+			errorMessage,
+		)
+		return diags
+	}
+	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved state resources from workspace state file %s", stateFilePath))
+
+	r.isStateModular = r.tfstateUtil.IsFullyModular(resourcesFromWorkspaceState)
+	tflog.Debug(ctx, fmt.Sprintf("Is workspace state modular: %t", r.isStateModular))
+
+	workspaceToStackAddressMapRequest := tfstateUtil.WorkspaceToStackAddressMapRequest{
+		StackSourceBundleAbsPath:    r.stackSourceBundleAbsPath,
+		TerraformConfigFilesAbsPath: r.terraformConfigDirAbsPath,
+		StateFilePath:               stateFilePath,
+	}
+
+	tflog.Debug(ctx, fmt.Sprintf("Retrieving workspace to stack address map for workspace %q in organization %q", workspaceName, organizationName))
+	workspaceStackAddressMap, err := r.tfstateUtil.WorkspaceToStackAddressMap(workspaceToStackAddressMapRequest)
+	if err != nil {
+		errorMessage := fmt.Sprintf("Failed to create workspace to stack map from the Terraform configuration directory %q and stack source bundle directory %q: %s", r.terraformConfigDirAbsPath, r.stackSourceBundleAbsPath, err.Error())
+		tflog.Error(ctx, errorMessage)
+		diags.AddError(
+			"Error Creating Workspace to Stack Map",
+			errorMessage,
+		)
+		return diags
+	}
+	r.workspaceToStackMap = workspaceStackAddressMap
+	tflog.Debug(ctx, fmt.Sprintf("Successfully retrieved workspace to stack address map for workspace %q in organization %q", workspaceName, organizationName))
+	return nil
+}
+
+func getDeploymentGroupCountByTerminalStatus(list *tfe.StackDeploymentGroupSummaryList) (int, int) {
+	successfulDeploymentGroupCount := 0
+	failedDeploymentGroupCount := 0
+
+	for _, deploymentGroupSummary := range list.Items {
+		deploymentGroupStatus := tfe.DeploymentGroupStatus(deploymentGroupSummary.Status)
+		switch deploymentGroupStatus {
+		case tfe.DeploymentGroupStatusSucceeded:
+			successfulDeploymentGroupCount++
+		case tfe.DeploymentGroupStatusFailed, tfe.DeploymentGroupStatusAbandoned:
+			failedDeploymentGroupCount++
+		}
+
+	}
+	return successfulDeploymentGroupCount, failedDeploymentGroupCount
 }

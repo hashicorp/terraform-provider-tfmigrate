@@ -16,6 +16,7 @@ import (
 	tfeUtil "terraform-provider-tfmigrate/internal/util/tfe"
 	gitUtil "terraform-provider-tfmigrate/internal/util/vcs/git"
 
+	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	gitRemoteSvcProvider "terraform-provider-tfmigrate/internal/util/vcs/git/remote_svc_provider"
@@ -31,7 +32,8 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ provider.Provider = &tfmProvider{}
+	_ provider.Provider              = &tfmProvider{}
+	_ provider.ProviderWithFunctions = &tfmProvider{}
 )
 
 const (
@@ -265,6 +267,13 @@ func (p *tfmProvider) Resources(_ context.Context) []func() resource.Resource {
 		NewDirectoryActionResource,
 		NewStateMigrationResource,
 		NewStackMigrationResource,
+	}
+}
+
+// Functions defines the functions implemented in the provider.
+func (p *tfmProvider) Functions(_ context.Context) []func() function.Function {
+	return []func() function.Function{
+		NewDecodeStackMigrationHashToJson,
 	}
 }
 
