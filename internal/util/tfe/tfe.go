@@ -381,7 +381,16 @@ func (u *tfeUtil) ReadLatestDeploymentRunByDeploymentName(stackId string, deploy
 		return nil, err
 	}
 
-	deploymentGroupId := latestDeploymentRun.Relationships.StackDeploymentGroup.Data.Id
+	deploymentGroupId := ""
+	if latestDeploymentRun != nil && latestDeploymentRun.Relationships != nil &&
+		latestDeploymentRun.Relationships.StackDeploymentGroup != nil &&
+		latestDeploymentRun.Relationships.StackDeploymentGroup.Data != nil &&
+		latestDeploymentRun.Relationships.StackDeploymentGroup.Data.Id != "" {
+		deploymentGroupId = latestDeploymentRun.Relationships.StackDeploymentGroup.Data.Id
+	} else {
+		tflog.Error(u.ctx, fmt.Sprintf("No deployment group found for latest deployment %s", deploymentName))
+		return nil, fmt.Errorf("no deployment group found for latest deployment run ID %s", deploymentName)
+	}
 
 	// Read the stack deployment group to get the latest deployment groupId for the stack deployment run
 	stackDeploymentGroup, err := tfeClient.StackDeploymentGroups.Read(u.ctx, deploymentGroupId)
