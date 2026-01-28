@@ -1,3 +1,20 @@
+## 2.0.0-beta3 (28th Jan 2026)
+
+### NOTES
+
+**Beta Release Update for HCP Terraform Stacks Migration:**
+
+- modified `import` attribute for stack deployment block to `migrate`
+
+## 2.0.0-rc1 (19th Jan 2026)
+
+### NOTES
+
+**Release Candidate 1 for HCP Terraform Stacks Migration:**
+
+This release adds a retry mechanism to improve the reliability of the `tfmigrate_stack_migration` resource, which facilitates migrating HCP Terraform Workspaces to HCP Terraform Stacks. 
+Additional details will be shared at GA. For more information, see the documentation [here](https://registry.terraform.io/providers/hashicorp/tfmigrate/latest/docs/resources/stack_migration).
+
 ## 2.0.0-beta1 (6th Nov 2025)
 
 ### NOTES

@@ -1117,7 +1117,7 @@ func (r *stackMigrationResource) getAllDeployments(filePath string) (mapset.Set[
 
 func getImportBlockData(body hcl.Body) (bool, error) {
 	attrs, diags := body.JustAttributes()
-	attr, ok := attrs["import"]
+	attr, ok := attrs["migrate"]
 	if !ok {
 		return false, nil
 	}
