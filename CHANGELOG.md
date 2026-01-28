@@ -1,4 +1,4 @@
-## 2.0.0-beta2 (28th Jan 2026)
+## 2.0.0-beta3 (28th Jan 2026)
 
 ### NOTES
 
