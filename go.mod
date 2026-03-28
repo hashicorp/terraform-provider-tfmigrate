@@ -6,7 +6,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/go-git/go-git/v5 v5.16.4
 	github.com/go-http-utils/headers v0.0.0-20181008091004-fed159eddc2a
-	github.com/hashicorp/go-tfe v1.99.0
+	github.com/hashicorp/go-tfe v1.101.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/terraform-exec v0.24.0
 	github.com/hashicorp/terraform-migrate-utility v0.0.3
